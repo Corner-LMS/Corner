@@ -1,0 +1,92 @@
+/* src/pages/TeacherDashboard.css */
+
+.teacher-dashboard {
+    display: flex;
+}
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+}
+
+.add-course-section {
+    display: flex;
+    align-items: center;
+    /* Vertically center elements */
+    gap: 20px;
+    /* Increased gap between elements */
+    flex-wrap: wrap;
+    /* Allow wrapping for smaller screens */
+    margin-bottom: 20px;
+    /* Space below the add course section */
+}
+
+.add-course-section input,
+.add-course-section textarea,
+.add-course-section button {
+    height: 40px;
+    /* Uniform height */
+    min-width: 100px;
+    /* Minimum width to ensure consistency */
+}
+
+.add-course-section input,
+.add-course-section textarea {
+    flex-grow: 1;
+    /* Allow inputs to grow and fill available space */
+}
+
+.add-course-section button {
+    min-width: 150px;
+    /* Set a minimum width for the button */
+    padding: 0 20px;
+    /* Horizontal padding for button */
+}
+
+.add-course-section textarea {
+    resize: none;
+    /* Prevent resizing of the textarea */
+}
+.add-course-section .d-flex {
+    gap: 20px;
+    /* Ensure the gap is applied for both mobile and desktop views */
+}
+
+.add-course-section .form-control {
+    min-width: 250px;
+    height: 40px;
+}
+
+.add-course-section button {
+    min-width: 150px;
+    height: 40px;
+}
+
+.add-course-section .d-flex.flex-column {
+    gap: 15px;
+    /* Vertical gap for small screens */
+}
+
+.add-course-section .d-flex.flex-md-row {
+    gap: 20px;
+    /* Horizontal gap for medium and large screens */
+}
+
+.courses-container {
+    margin-top: 20px;
+}
+
+.teacher-dashboard .main-content {
+    background-color: #f8f9fa;
+    /* Light gray background */
+    overflow-y: auto;
+}
+
+.teacher-dashboard .courses-section .card-text {
+    color: #6c757d;
+    /* Muted text color */
+    font-size: 0.9rem;
+}
+.custom-navbar {
+    background-color: #011936;
+}

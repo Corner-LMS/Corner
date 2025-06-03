@@ -1,0 +1,31 @@
+.course-card {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 10px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.course-card h3 {
+    margin: 0;
+    font-size: 20px;
+    color: #333;
+}
+
+.course-card .details-link {
+    margin-top: 10px;
+    display: inline-block;
+    text-decoration: none;
+    color: #007bff;
+    font-size: 16px;
+}
+
+.course-card-button {
+    margin-top: 10px;
+    width: 100%;
+}
+
+.course-card .details-link:hover {
+    text-decoration: underline;
+}

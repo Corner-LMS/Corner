@@ -1,0 +1,76 @@
+/* For centering the button inside its container */
+button.btn-primary {
+    background-color: #26547c;
+    /* Set your preferred color */
+    color: white;
+    padding: 8px 5rem;
+    /* Adjust the padding to make it a comfortable size */
+    border-radius: 4px;
+    /* Rounded corners */
+    border: none;
+    font-size: 1.2rem;
+    transition: background-color 0.3s ease;
+    margin-top: 1rem;
+}
+
+button.btn-primary:hover {
+    background-color: #0056b3;
+    /* A darker shade on hover */
+}
+
+form.d-flex {
+    justify-content: center;
+    align-items: center;
+    /* Centers the form vertically */
+    width: 100%;
+    /* Ensures the form is centered horizontally */
+}
+.quill-editor {
+    margin-bottom: 20px;
+    margin-top: 1.2rem;
+    padding: 10px;
+    /* Adds spacing inside the editor */
+    border-radius: 5px;
+    /* Optional, smooths the corners */
+    border: 1px solid #ccc;
+    /* Adjust the spacing as needed */
+}
+/* .textarea-style {
+    width: 100%;
+   tarea */
+/* }  */
+
+.quill-editor .ql-container {
+    border: none;
+    font-size: 14px;
+}
+
+.quill-editor .ql-toolbar {
+    border: none;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.quill-editor .ql-editor {
+    padding: 12px 15px;
+    min-height: 100px;
+}
+
+.quill-editor .ql-editor.ql-blank::before {
+    font-style: normal;
+    color: #9ca3af;
+}
+
+.ql-snow .ql-toolbar button:hover,
+.ql-snow .ql-toolbar button.ql-active {
+    color: #e11d48;
+}
+
+.ql-snow .ql-toolbar button:hover .ql-stroke,
+.ql-snow .ql-toolbar button.ql-active .ql-stroke {
+    stroke: #e11d48;
+}
+
+.ql-snow .ql-toolbar button:hover .ql-fill,
+.ql-snow .ql-toolbar button.ql-active .ql-fill {
+    fill: #e11d48;
+}

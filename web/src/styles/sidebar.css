@@ -1,0 +1,160 @@
+/* Sidebar container */
+.sidebar {
+    width: 150px;
+    /* Adjust width as necessary */
+    background-color: #011936;
+    /* Black background */
+    color: #fff;
+    /* White text */
+    height: 100vh;
+    /* Full height of the screen */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+/* Logo section */
+.sidebar .logo img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    /* Circular logo */
+    margin-bottom: 20px;
+}
+
+/* Menu items container */
+.sidebar .menu {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    /* gap: 15px; */
+}
+
+/* Individual menu item */
+.sidebar .menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    justify-content: space-between;
+    color: #fff;
+    padding: 10px;
+    width: 100%;
+    cursor: pointer;
+}
+
+.sidebar .menu-item:hover {
+    color: #011936;
+    background-color: #fff;
+}
+/* .sidebar .menu-item:active {
+   
+} */
+ /* Active menu item */
+ .sidebar .menu-item.active {
+     color: #011936;
+     background-color: #fff;
+     font-weight: bold;
+     text-decoration: none;
+ }
+
+
+/* Icons (adjust classes as needed) */
+.sidebar .menu-item i {
+    font-size: 1.2rem;
+    margin-bottom: 5px;
+}
+
+/* Menu item text */
+.sidebar .menu-item span {
+    font-size: 1.5rem;
+}
+
+.sidebar .dashboard-icon {
+    width: 24px;
+    height: 24px;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 4px;
+    padding: 2px;
+}
+
+.sidebar .dashboard-icon div {
+    background-color: currentColor;
+    border-radius: 3px;
+}
+
+/* Make top-left square larger */
+.sidebar .dashboard-icon div:first-child {
+    grid-row: span 2;
+    grid-column: span 2;
+}
+
+/* Smaller squares */
+.sidebar .dashboard-icon div:not(:first-child) {
+    grid-row: span 1;
+    grid-column: span 1;
+}
+/* Custom styles for modal */
+.modal-content {
+    background-color: #011936;
+    /* Dark background color for contrast */
+    color: #ffffff;
+    /* White text color */
+    border-radius: 8px;
+    /* Optional: Round the corners for aesthetics */
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ffffff;
+    /* Optional: Add a subtle border */
+}
+
+.modal-title {
+    color: #012340;
+    /* Ensure title is visible */
+}
+
+.modal-body {
+    background-color: #011936;
+    /* Same as modal content */
+    color: #ffffff;
+    /* Ensure body text is visible */
+}
+
+.modal-footer {
+    border-top: 1px solid #ffffff;
+    /* Optional: Add a subtle border */
+}
+
+.btn-primary {
+    background-color: #0056b3;
+    /* Custom button color */
+    border-color: #0056b3;
+    /* Match border with button */
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    /* Secondary button color */
+    border-color: #6c757d;
+    /* Match border with button */
+}
+.close:hover {
+    background-color: red;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover {
+    opacity: 0.9;
+    /* Slight */
+}
