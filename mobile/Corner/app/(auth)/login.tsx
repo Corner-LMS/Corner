@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
-import { login } from './index';
+import { login } from './useAuth';
 import { router } from 'expo-router';
 
 export default function Login() {
@@ -11,7 +11,7 @@ export default function Login() {
     const handleLogin = async () => {
         try {
             await login(email, password);
-            router.replace('/(tabs)');
+            router.replace('/role');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
         }
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     backButtonText: {
-        color: '#007AFF',
+        color: '#81171b',
         fontSize: 16,
         fontWeight: '600',
     },
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     button: {
-        backgroundColor: '#007AFF',
+        backgroundColor: '#81171b',
         padding: 15,
         borderRadius: 10,
         alignItems: 'center',
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     linkText: {
-        color: '#007AFF',
+        color: '#81171b',
         fontSize: 16,
     },
 });
