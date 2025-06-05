@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
-import { auth } from '../firebase/config';
-import { createCourse } from '../(auth)/useCourses';
+import { auth } from './firebase/config';
+import { createCourse } from './(auth)/useCourses';
 import { router } from 'expo-router';
 
 export default function CreateCourseScreen() {
     const [name, setName] = useState('');
     const [desc, setDesc] = useState('');
     const [code, setCode] = useState('');
+    const [instructorName, setInstructorName] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     const handleCreate = async () => {
@@ -17,9 +18,15 @@ export default function CreateCourseScreen() {
                 setError('No teacher ID found');
                 return;
             }
-            const { code } = await createCourse(name, desc, teacherId);
+            if (!instructorName.trim()) {
+                setError('Please enter your name');
+                return;
+            }
+            const { code } = await createCourse(name, desc, teacherId, instructorName);
             setCode(code);
-            router.replace('/(tabs)');
+            setTimeout(() => {
+                router.replace('/(tabs)');
+            }, 2000);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
         }
@@ -40,11 +47,19 @@ export default function CreateCourseScreen() {
                 <Text style={styles.title}>Create a Course</Text>
                 <TextInput
                     style={styles.input}
+                    placeholder="Your Name"
+                    placeholderTextColor="#666"
+                    value={instructorName}
+                    onChangeText={setInstructorName}
+                />
+                <TextInput
+                    style={styles.input}
                     placeholder="Course Name"
                     placeholderTextColor="#666"
                     value={name}
                     onChangeText={setName}
                 />
+
                 <TextInput
                     style={[styles.input, styles.textArea]}
                     placeholder="Description (optional)"

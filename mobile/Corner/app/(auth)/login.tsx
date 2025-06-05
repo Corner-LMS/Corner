@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { login } from './useAuth';
 import { router } from 'expo-router';
+import { auth } from '../firebase/config';
+import { doc } from 'firebase/firestore';
+import { getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -11,7 +15,24 @@ export default function Login() {
     const handleLogin = async () => {
         try {
             await login(email, password);
-            router.replace('/role');
+            const userId = auth.currentUser?.uid;
+            if (!userId) {
+                throw new Error('User not found');
+            }
+            // fetch role from Firestore
+            const userDoc = await getDoc(doc(db, "users", userId));
+            const userData = userDoc.data();
+            if (!userData) {
+                throw new Error('User data not found');
+            }
+            const role = userData.role;
+            if (role === 'student') {
+                router.replace('/');
+            } else if (role === 'teacher') {
+                router.replace('/(tabs)');
+            } else {
+                router.replace('/');
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
         }

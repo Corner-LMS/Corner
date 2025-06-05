@@ -1,8 +1,38 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { auth } from '../firebase/config';
 
 export default function Profile() {
     const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState(auth.currentUser);
+
+    useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+            setUser(user);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const handleLogout = async () => {
+        try {
+            await auth.signOut();
+            router.replace('/(auth)/login');
+        } catch (error) {
+            console.error('Error signing out:', error);
+        }
+    };
+
+    if (loading) {
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color="#81171b" />
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -11,19 +41,30 @@ export default function Profile() {
                 <Text style={styles.subtitle}>A better way for students and teachers to connect.</Text>
 
                 <View style={styles.buttonContainer}>
-                    <TouchableOpacity
-                        style={styles.button}
-                        onPress={() => router.push('/(auth)/login')}
-                    >
-                        <Text style={styles.buttonText}>Log In</Text>
-                    </TouchableOpacity>
+                    {user ? (
+                        <TouchableOpacity
+                            style={[styles.button, styles.secondaryButton]}
+                            onPress={handleLogout}
+                        >
+                            <Text style={[styles.buttonText, styles.secondaryButtonText]}>Log Out</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <>
+                            <TouchableOpacity
+                                style={styles.button}
+                                onPress={() => router.push('/(auth)/login')}
+                            >
+                                <Text style={styles.buttonText}>Log In</Text>
+                            </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.button, styles.secondaryButton]}
-                        onPress={() => router.push('/(auth)/signup')}
-                    >
-                        <Text style={[styles.buttonText, styles.secondaryButtonText]}>Sign Up</Text>
-                    </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.button, styles.secondaryButton]}
+                                onPress={() => router.push('/(auth)/signup')}
+                            >
+                                <Text style={[styles.buttonText, styles.secondaryButtonText]}>Sign Up</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </View>
             </View>
         </View>
@@ -78,5 +119,11 @@ const styles = StyleSheet.create({
     },
     secondaryButtonText: {
         color: '#81171b',
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#fff',
     },
 });
