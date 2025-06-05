@@ -89,7 +89,20 @@ export default function DashboardScreen() {
 
           {role === 'student' && studentCourses.length > 0 ? (
             studentCourses.map((course) => (
-              <View key={course.id} style={styles.courseBox}>
+              <TouchableOpacity
+                key={course.id}
+                style={styles.courseBox}
+                onPress={() => router.push({
+                  pathname: '/course-detail',
+                  params: {
+                    courseId: course.id,
+                    courseName: course.name,
+                    courseCode: course.code,
+                    instructorName: course.instructorName,
+                    role: role
+                  }
+                })}
+              >
                 <Text style={styles.courseName}>{course.name}</Text>
                 <View style={styles.courseDetail}>
                   <Text style={styles.courseLabel}>Course Code:</Text>
@@ -111,11 +124,24 @@ export default function DashboardScreen() {
                     {new Date(course.joinedAt).toLocaleDateString()}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           ) : role === 'teacher' && courses.length > 0 ? (
             courses.map((course) => (
-              <View key={course.id} style={styles.courseBox}>
+              <TouchableOpacity
+                key={course.id}
+                style={styles.courseBox}
+                onPress={() => router.push({
+                  pathname: '/course-detail',
+                  params: {
+                    courseId: course.id,
+                    courseName: course.name,
+                    courseCode: course.code,
+                    instructorName: course.instructorName,
+                    role: role
+                  }
+                })}
+              >
                 <Text style={styles.courseName}>{course.name}</Text>
                 <View style={styles.courseDetail}>
                   <Text style={styles.courseLabel}>Course Code:</Text>
@@ -135,7 +161,7 @@ export default function DashboardScreen() {
                     {new Date(course.createdAt).toLocaleDateString()}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           ) : (
             <View style={styles.noCourseBox}>

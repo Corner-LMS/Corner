@@ -22,5 +22,15 @@ export async function saveUserRole(role: string) {
     await setDoc(doc(db, "users", user.uid), {
         role,
         email: user.email,
-    });
+    }, { merge: true });
+}
+
+export async function saveUserName(name: string) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No user logged in");
+
+    await setDoc(doc(db, "users", user.uid), {
+        name,
+        email: user.email,
+    }, { merge: true });
 }

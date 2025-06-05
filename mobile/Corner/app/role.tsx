@@ -1,19 +1,30 @@
-import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
-import { saveUserRole } from './(auth)/useAuth';
+import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Pressable, TextInput } from 'react-native';
+import { saveUserRole, saveUserName } from './(auth)/useAuth';
 import { router } from 'expo-router';
+import { useState } from 'react';
 
 export default function RoleSelectionScreen() {
+    const [name, setName] = useState('');
     const selectRole = async (role: 'student' | 'teacher') => {
+        if (!name.trim()) {
+            alert('Please enter your name before selecting a role.');
+            return;
+        }
+
         try {
+            await saveUserName(name.trim());
             await saveUserRole(role);
             if (role === 'teacher') {
-                router.replace('/(tabs)/create-course');
+                router.replace('/create-course');
             } else {
                 router.replace('/(tabs)');
             }
         } catch (err) {
             console.error(err);
         }
+    };
+    const handleNameChange = (text: string) => {
+        setName(text);
     };
 
     return (
@@ -28,6 +39,12 @@ export default function RoleSelectionScreen() {
                 <Text style={styles.backButtonText}>← Back</Text>
             </Pressable>
             <View style={styles.content}>
+                <TextInput
+                    style={styles.nameInput}
+                    placeholder="Enter your name"
+                    value={name}
+                    onChangeText={handleNameChange}
+                />
                 <Text style={styles.title}>I am a...</Text>
                 <View style={styles.buttonContainer}>
                     <TouchableOpacity
@@ -102,5 +119,13 @@ const styles = StyleSheet.create({
     },
     secondaryButtonText: {
         color: '#81171b',
+    },
+    nameInput: {
+        width: '100%',
+        height: 40,
+        borderWidth: 1,
+        borderColor: '#81171b',
+        borderRadius: 10,
+        padding: 10,
     },
 });

@@ -26,7 +26,8 @@ export default function RootLayout() {
         <Stack.Screen name="role" options={{ headerShown: false }} />
         <Stack.Screen name="create-course" options={{ headerShown: false }} />
         <Stack.Screen name="join-course" options={{ headerShown: false }} />
-        
+        <Stack.Screen name="course-detail" options={{ headerShown: false }} />
+        <Stack.Screen name="discussion-detail" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
