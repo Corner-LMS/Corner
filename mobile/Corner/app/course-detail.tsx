@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from './firebase/config';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 interface Announcement {
     id: string;
@@ -13,6 +13,7 @@ interface Announcement {
     createdAt: any;
     authorName: string;
     authorRole: string;
+    authorId: string;
 }
 
 interface Discussion {
@@ -23,12 +24,16 @@ interface Discussion {
     authorName: string;
     authorRole: string;
     replies: number;
+    authorId: string;
     isAnonymous?: boolean;
 }
 
 export default function CourseDetailScreen() {
     const params = useLocalSearchParams();
-    const { courseId, courseName, courseCode, instructorName, role } = params;
+    const { courseId, courseName, courseCode, instructorName, role, isArchived } = params;
+
+    // Check if course is archived
+    const courseIsArchived = isArchived === 'true';
 
     const [activeTab, setActiveTab] = useState<'announcements' | 'discussions'>('announcements');
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -38,6 +43,7 @@ export default function CourseDetailScreen() {
     const [newContent, setNewContent] = useState('');
     const [loading, setLoading] = useState(false);
     const [isAnonymous, setIsAnonymous] = useState(false);
+    const [editingItem, setEditingItem] = useState<{ id: string, type: 'announcement' | 'discussion', title: string, content: string } | null>(null);
 
     useEffect(() => {
         if (!courseId) return;
@@ -80,6 +86,11 @@ export default function CourseDetailScreen() {
         if (!newTitle.trim() || !newContent.trim()) {
             Alert.alert('Error', 'Please fill in both title and content.');
             return;
+        }
+
+        // If editing, use update function instead
+        if (editingItem) {
+            return handleUpdate();
         }
 
         setLoading(true);
@@ -139,6 +150,77 @@ export default function CourseDetailScreen() {
         }
     };
 
+    const handleDelete = async (itemId: string, type: 'announcement' | 'discussion') => {
+        Alert.alert(
+            'Delete',
+            `Are you sure you want to delete this ${type}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteDoc(doc(db, 'courses', courseId as string, `${type}s`, itemId));
+                            Alert.alert('Success', `${type} deleted successfully`);
+                        } catch (error) {
+                            console.error('Error deleting:', error);
+                            Alert.alert('Error', 'Failed to delete. Please try again.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleEdit = (item: any, type: 'announcement' | 'discussion') => {
+        setEditingItem({
+            id: item.id,
+            type: type,
+            title: item.title,
+            content: item.content
+        });
+        setNewTitle(item.title);
+        setNewContent(item.content);
+        setShowCreateForm(true);
+    };
+
+    const handleUpdate = async () => {
+        if (!editingItem || !newTitle.trim() || !newContent.trim()) {
+            Alert.alert('Error', 'Please fill in both title and content.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const collectionName = `${editingItem.type}s`;
+            await updateDoc(doc(db, 'courses', courseId as string, collectionName, editingItem.id), {
+                title: newTitle.trim(),
+                content: newContent.trim(),
+                updatedAt: serverTimestamp()
+            });
+
+            setNewTitle('');
+            setNewContent('');
+            setEditingItem(null);
+            setShowCreateForm(false);
+            Alert.alert('Success', `${editingItem.type} updated successfully!`);
+        } catch (error) {
+            console.error('Error updating:', error);
+            Alert.alert('Error', 'Failed to update. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetForm = () => {
+        setNewTitle('');
+        setNewContent('');
+        setEditingItem(null);
+        setIsAnonymous(false);
+        setShowCreateForm(false);
+    };
+
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'Just now';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -160,7 +242,8 @@ export default function CourseDetailScreen() {
                 discussionId: discussion.id,
                 discussionTitle: discussion.title,
                 courseName: courseName,
-                role: role
+                role: role,
+                isArchived: courseIsArchived ? 'true' : 'false'
             }
         });
     };
@@ -176,11 +259,30 @@ export default function CourseDetailScreen() {
                     <View key={announcement.id} style={styles.postCard}>
                         <View style={styles.postHeader}>
                             <Text style={styles.postTitle}>{announcement.title}</Text>
-                            <View style={[
-                                styles.roleTag,
-                                announcement.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
-                            ]}>
-                                <Text style={styles.roleTagText}>{announcement.authorRole}</Text>
+                            <View style={styles.postHeaderRight}>
+                                <View style={[
+                                    styles.roleTag,
+                                    announcement.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                ]}>
+                                    <Text style={styles.roleTagText}>{announcement.authorRole}</Text>
+                                </View>
+                                {/* Show edit/delete only for author and if not archived */}
+                                {auth.currentUser?.uid === announcement.authorId && !courseIsArchived && (
+                                    <View style={styles.actionButtons}>
+                                        <TouchableOpacity
+                                            style={styles.editButton}
+                                            onPress={() => handleEdit(announcement, 'announcement')}
+                                        >
+                                            <Ionicons name="pencil" size={16} color="#666" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.deleteButton}
+                                            onPress={() => handleDelete(announcement.id, 'announcement')}
+                                        >
+                                            <Ionicons name="trash" size={16} color="#d32f2f" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                             </View>
                         </View>
                         <Text style={styles.postContent}>{announcement.content}</Text>
@@ -188,6 +290,12 @@ export default function CourseDetailScreen() {
                             <Text style={styles.postAuthor}>By {announcement.authorName}</Text>
                             <Text style={styles.postDate}>{formatDate(announcement.createdAt)}</Text>
                         </View>
+                        {courseIsArchived && (
+                            <View style={styles.archivedNotice}>
+                                <Ionicons name="archive" size={14} color="#666" />
+                                <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
+                            </View>
+                        )}
                     </View>
                 ))
             )}
@@ -205,18 +313,44 @@ export default function CourseDetailScreen() {
                     <TouchableOpacity
                         key={discussion.id}
                         style={styles.postCard}
-                        onPress={() => handleDiscussionPress(discussion)}
+                        onPress={() => !courseIsArchived && handleDiscussionPress(discussion)}
+                        disabled={courseIsArchived}
                     >
                         <View style={styles.postHeader}>
                             <Text style={styles.postTitle}>{discussion.title}</Text>
-                            <View style={[
-                                styles.roleTag,
-                                discussion.isAnonymous ? styles.studentTag :
-                                    discussion.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
-                            ]}>
-                                <Text style={styles.roleTagText}>
-                                    {discussion.authorRole}
-                                </Text>
+                            <View style={styles.postHeaderRight}>
+                                <View style={[
+                                    styles.roleTag,
+                                    discussion.isAnonymous ? styles.studentTag :
+                                        discussion.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                ]}>
+                                    <Text style={styles.roleTagText}>
+                                        {discussion.authorRole}
+                                    </Text>
+                                </View>
+                                {/* Show edit/delete only for author and if not archived */}
+                                {auth.currentUser?.uid === discussion.authorId && !courseIsArchived && (
+                                    <View style={styles.actionButtons}>
+                                        <TouchableOpacity
+                                            style={styles.editButton}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                handleEdit(discussion, 'discussion');
+                                            }}
+                                        >
+                                            <Ionicons name="pencil" size={16} color="#666" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.deleteButton}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(discussion.id, 'discussion');
+                                            }}
+                                        >
+                                            <Ionicons name="trash" size={16} color="#d32f2f" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                             </View>
                         </View>
                         <Text style={styles.postContent}>{discussion.content}</Text>
@@ -228,8 +362,14 @@ export default function CourseDetailScreen() {
                             <Text style={styles.repliesCount}>
                                 <Ionicons name="chatbubble-outline" size={14} color="#666" /> {discussion.replies} replies
                             </Text>
-                            <Ionicons name="chevron-forward" size={16} color="#666" />
+                            {!courseIsArchived && <Ionicons name="chevron-forward" size={16} color="#666" />}
                         </View>
+                        {courseIsArchived && (
+                            <View style={styles.archivedNotice}>
+                                <Ionicons name="archive" size={14} color="#666" />
+                                <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 ))
             )}
@@ -245,8 +385,10 @@ export default function CourseDetailScreen() {
             >
                 <ScrollView style={styles.formScrollView} showsVerticalScrollIndicator={false}>
                     <View style={styles.formHeader}>
-                        <Text style={styles.formTitle}>Create {activeTab === 'announcements' ? 'Announcement' : 'Discussion'}</Text>
-                        <TouchableOpacity onPress={() => setShowCreateForm(false)}>
+                        <Text style={styles.formTitle}>
+                            {editingItem ? 'Edit' : 'Create'} {activeTab === 'announcements' ? 'Announcement' : 'Discussion'}
+                        </Text>
+                        <TouchableOpacity onPress={resetForm}>
                             <Ionicons name="close" size={24} color="#81171b" />
                         </TouchableOpacity>
                     </View>
@@ -289,7 +431,7 @@ export default function CourseDetailScreen() {
                         disabled={loading}
                     >
                         <Text style={styles.createButtonText}>
-                            {loading ? 'Creating...' : 'Create'}
+                            {loading ? (editingItem ? 'Updating...' : 'Creating...') : (editingItem ? 'Update' : 'Create')}
                         </Text>
                     </TouchableOpacity>
                 </ScrollView>
@@ -304,7 +446,14 @@ export default function CourseDetailScreen() {
                     <Ionicons name="arrow-back" size={24} color="#81171b" />
                 </Pressable>
                 <View style={styles.headerInfo}>
-                    <Text style={styles.headerTitle}>{courseName}</Text>
+                    <View style={styles.headerTitleRow}>
+                        <Text style={styles.headerTitle}>{courseName}</Text>
+                        {courseIsArchived && (
+                            <View style={styles.archivedBadge}>
+                                <Ionicons name="archive" size={16} color="#fff" />
+                            </View>
+                        )}
+                    </View>
                     <Text style={styles.headerSubtitle}>{courseCode} • {instructorName}</Text>
                 </View>
             </View>
@@ -332,8 +481,8 @@ export default function CourseDetailScreen() {
                 <>
                     {activeTab === 'announcements' ? renderAnnouncements() : renderDiscussions()}
 
-                    {/* Only teachers can create announcements, both can create discussions */}
-                    {(activeTab === 'discussions' || role === 'teacher') && (
+                    {/* Only show FAB if not archived and user can create content */}
+                    {!courseIsArchived && (activeTab === 'discussions' || role === 'teacher') && (
                         <TouchableOpacity
                             style={styles.fab}
                             onPress={() => setShowCreateForm(true)}
@@ -365,10 +514,20 @@ const styles = StyleSheet.create({
     headerInfo: {
         flex: 1,
     },
+    headerTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     headerTitle: {
         fontSize: 20,
         fontWeight: 'bold',
         color: '#333',
+    },
+    archivedBadge: {
+        backgroundColor: '#81171b',
+        padding: 5,
+        borderRadius: 5,
+        marginLeft: 5,
     },
     headerSubtitle: {
         fontSize: 14,
@@ -455,7 +614,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#81171b',
     },
     studentTag: {
-        backgroundColor: '#2196F3',
+        backgroundColor: '#D65108',
     },
     anonymousTag: {
         backgroundColor: '#666',
@@ -554,5 +713,29 @@ const styles = StyleSheet.create({
     },
     formScrollView: {
         flex: 1,
+    },
+    postHeaderRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    editButton: {
+        padding: 5,
+    },
+    deleteButton: {
+        padding: 5,
+    },
+    archivedNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 5,
+    },
+    archivedNoticeText: {
+        fontSize: 12,
+        color: '#666',
+        marginLeft: 5,
     },
 }); 

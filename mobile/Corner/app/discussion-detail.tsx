@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from './firebase/config';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
 
 interface Comment {
     id: string;
@@ -29,13 +29,17 @@ interface Discussion {
 
 export default function DiscussionDetailScreen() {
     const params = useLocalSearchParams();
-    const { courseId, discussionId, discussionTitle, courseName, role } = params;
+    const { courseId, discussionId, discussionTitle, courseName, role, isArchived } = params;
+
+    // Check if course is archived
+    const courseIsArchived = isArchived === 'true';
 
     const [discussion, setDiscussion] = useState<Discussion | null>(null);
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(false);
     const [isAnonymousComment, setIsAnonymousComment] = useState(false);
+    const [editingComment, setEditingComment] = useState<{ id: string, content: string } | null>(null);
 
     useEffect(() => {
         if (!courseId || !discussionId) return;
@@ -72,10 +76,83 @@ export default function DiscussionDetailScreen() {
         };
     }, [courseId, discussionId]);
 
+    const handleDeleteComment = async (commentId: string) => {
+        Alert.alert(
+            'Delete Comment',
+            'Are you sure you want to delete this comment?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string, 'comments', commentId));
+
+                            // Update replies count
+                            await updateDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string), {
+                                replies: increment(-1)
+                            });
+
+                            Alert.alert('Success', 'Comment deleted successfully');
+                        } catch (error) {
+                            console.error('Error deleting comment:', error);
+                            Alert.alert('Error', 'Failed to delete comment. Please try again.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleEditComment = (comment: Comment) => {
+        setEditingComment({
+            id: comment.id,
+            content: comment.content
+        });
+        setNewComment(comment.content);
+    };
+
+    const handleUpdateComment = async () => {
+        if (!editingComment || !newComment.trim()) {
+            Alert.alert('Error', 'Please enter a comment.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await updateDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string, 'comments', editingComment.id), {
+                content: newComment.trim(),
+                updatedAt: serverTimestamp()
+            });
+
+            setNewComment('');
+            setEditingComment(null);
+            setIsAnonymousComment(false);
+            Alert.alert('Success', 'Comment updated successfully!');
+        } catch (error) {
+            console.error('Error updating comment:', error);
+            Alert.alert('Error', 'Failed to update comment. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetCommentForm = () => {
+        setNewComment('');
+        setEditingComment(null);
+        setIsAnonymousComment(false);
+    };
+
     const handleAddComment = async () => {
         if (!newComment.trim()) {
             Alert.alert('Error', 'Please enter a comment.');
             return;
+        }
+
+        // If editing, use update function instead
+        if (editingComment) {
+            return handleUpdateComment();
         }
 
         setLoading(true);
@@ -187,61 +264,107 @@ export default function DiscussionDetailScreen() {
                         comments.map((comment) => (
                             <View key={comment.id} style={styles.commentCard}>
                                 <View style={styles.commentHeader}>
-                                    <Text style={styles.commentAuthor}>{comment.authorName}</Text>
-                                    <View style={[
-                                        styles.commentRoleTag,
-                                        comment.isAnonymous ? styles.studentTag :
-                                            comment.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
-                                    ]}>
-                                        <Text style={styles.commentRoleText}>
-                                            {comment.authorRole}
-                                        </Text>
+                                    <View style={styles.commentAuthorSection}>
+                                        <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+                                        <View style={[
+                                            styles.commentRoleTag,
+                                            comment.isAnonymous ? styles.studentTag :
+                                                comment.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                        ]}>
+                                            <Text style={styles.commentRoleText}>
+                                                {comment.authorRole}
+                                            </Text>
+                                        </View>
                                     </View>
+                                    {/* Show edit/delete only for comment author and if not archived */}
+                                    {auth.currentUser?.uid === comment.authorId && !courseIsArchived && (
+                                        <View style={styles.commentActions}>
+                                            <TouchableOpacity
+                                                style={styles.editButton}
+                                                onPress={() => handleEditComment(comment)}
+                                            >
+                                                <Ionicons name="pencil" size={14} color="#666" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={styles.deleteButton}
+                                                onPress={() => handleDeleteComment(comment.id)}
+                                            >
+                                                <Ionicons name="trash" size={14} color="#d32f2f" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
                                 </View>
                                 <Text style={styles.commentContent}>{comment.content}</Text>
                                 <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
+                                {courseIsArchived && (
+                                    <View style={styles.archivedNotice}>
+                                        <Ionicons name="archive" size={12} color="#666" />
+                                        <Text style={styles.archivedNoticeText}>Read only - Course archived</Text>
+                                    </View>
+                                )}
                             </View>
                         ))
                     )}
                 </View>
             </ScrollView>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.commentInputContainer}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-            >
-                {/* Anonymity option for students */}
-                {role === 'student' && (
-                    <View style={styles.anonymityOption}>
-                        <Text style={styles.anonymityLabel}>Comment anonymously</Text>
-                        <Switch
-                            value={isAnonymousComment}
-                            onValueChange={setIsAnonymousComment}
-                            trackColor={{ false: '#e0e0e0', true: '#81171b' }}
-                            thumbColor={isAnonymousComment ? '#fff' : '#f4f3f4'}
-                        />
-                    </View>
-                )}
+            {!courseIsArchived && (
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.commentInputContainer}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                >
+                    {/* Anonymity option for students */}
+                    {role === 'student' && (
+                        <View style={styles.anonymityOption}>
+                            <Text style={styles.anonymityLabel}>Comment anonymously</Text>
+                            <Switch
+                                value={isAnonymousComment}
+                                onValueChange={setIsAnonymousComment}
+                                trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                                thumbColor={isAnonymousComment ? '#fff' : '#f4f3f4'}
+                            />
+                        </View>
+                    )}
 
-                <View style={styles.commentInputRow}>
-                    <TextInput
-                        style={styles.commentInput}
-                        placeholder="Add a comment..."
-                        value={newComment}
-                        onChangeText={setNewComment}
-                        multiline
-                        placeholderTextColor="#666"
-                    />
-                    <TouchableOpacity
-                        style={[styles.sendButton, loading && styles.buttonDisabled]}
-                        onPress={handleAddComment}
-                        disabled={loading || !newComment.trim()}
-                    >
-                        <Ionicons name="send" size={20} color="#fff" />
-                    </TouchableOpacity>
+                    <View style={styles.commentInputRow}>
+                        <TextInput
+                            style={styles.commentInput}
+                            placeholder={editingComment ? "Edit your comment..." : "Add a comment..."}
+                            value={newComment}
+                            onChangeText={setNewComment}
+                            multiline
+                            placeholderTextColor="#666"
+                        />
+                        {editingComment && (
+                            <TouchableOpacity
+                                style={styles.cancelButton}
+                                onPress={resetCommentForm}
+                            >
+                                <Ionicons name="close" size={20} color="#666" />
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                            style={[styles.sendButton, loading && styles.buttonDisabled]}
+                            onPress={handleAddComment}
+                            disabled={loading || !newComment.trim()}
+                        >
+                            {editingComment ? (
+                                <Ionicons name="checkmark" size={20} color="#fff" />
+                            ) : (
+                                <Ionicons name="send" size={20} color="#fff" />
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            )}
+
+            {courseIsArchived && (
+                <View style={styles.archivedBanner}>
+                    <Ionicons name="archive" size={20} color="#666" />
+                    <Text style={styles.archivedBannerText}>This course is archived - Comments are disabled</Text>
                 </View>
-            </KeyboardAvoidingView>
+            )}
         </SafeAreaView>
     );
 }
@@ -303,10 +426,10 @@ const styles = StyleSheet.create({
         marginLeft: 10,
     },
     teacherTag: {
-        backgroundColor: '#1e40af',
+        backgroundColor: '#81171b',
     },
     studentTag: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#D65108',
     },
     roleTagText: {
         fontSize: 12,
@@ -360,7 +483,12 @@ const styles = StyleSheet.create({
     commentHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 8,
+    },
+    commentAuthorSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     commentAuthor: {
         fontSize: 14,
@@ -433,5 +561,41 @@ const styles = StyleSheet.create({
     },
     anonymousTag: {
         backgroundColor: '#666',
+    },
+    commentActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 10,
+    },
+    editButton: {
+        padding: 5,
+    },
+    deleteButton: {
+        padding: 5,
+    },
+    cancelButton: {
+        padding: 5,
+    },
+    archivedNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 5,
+    },
+    archivedNoticeText: {
+        fontSize: 12,
+        color: '#666',
+        marginLeft: 5,
+    },
+    archivedBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#e0e0e0',
+    },
+    archivedBannerText: {
+        fontSize: 14,
+        color: '#666',
+        marginLeft: 10,
     },
 }); 
