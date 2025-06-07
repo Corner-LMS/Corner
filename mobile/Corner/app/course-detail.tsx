@@ -5,6 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from './firebase/config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { notificationHelpers } from '../services/notificationHelpers';
 
 interface Announcement {
     id: string;
@@ -135,7 +136,29 @@ export default function CourseDetailScreen() {
                 postData.isAnonymous = false;
             }
 
-            await addDoc(collection(db, 'courses', courseId as string, collectionName), postData);
+            const docRef = await addDoc(collection(db, 'courses', courseId as string, collectionName), postData);
+
+            // Trigger notifications based on content type
+            try {
+                if (activeTab === 'announcements' && role === 'teacher') {
+                    // Notify students of new announcement (teachers only)
+                    const announcementData = {
+                        id: docRef.id,
+                        title: newTitle.trim(),
+                        content: newContent.trim(),
+                        authorName: authorName
+                    };
+                    await notificationHelpers.notifyStudentsOfAnnouncement(courseId as string, announcementData, user.uid);
+                    console.log('Announcement notification triggered');
+                } else if (activeTab === 'discussions') {
+                    // Check for discussion milestone (every 10 posts)
+                    await notificationHelpers.checkDiscussionMilestone(courseId as string, user.uid);
+                    console.log('Discussion milestone check triggered');
+                }
+            } catch (notificationError) {
+                console.error('Error sending notifications:', notificationError);
+                // Don't fail the main operation if notifications fail
+            }
 
             setNewTitle('');
             setNewContent('');

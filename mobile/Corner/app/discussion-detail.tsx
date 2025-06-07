@@ -5,6 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from './firebase/config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
+import { notificationHelpers } from '../services/notificationHelpers';
 
 interface Comment {
     id: string;
@@ -191,6 +192,15 @@ export default function DiscussionDetailScreen() {
             await updateDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string), {
                 replies: increment(1)
             });
+
+            // Check for reply notification trigger (when discussion reaches 3 replies)
+            try {
+                await notificationHelpers.checkDiscussionReplies(courseId as string, discussionId as string, user.uid);
+                console.log('Reply notification check triggered');
+            } catch (notificationError) {
+                console.error('Error checking reply notifications:', notificationError);
+                // Don't fail the main operation if notifications fail
+            }
 
             setNewComment('');
             setIsAnonymousComment(false);

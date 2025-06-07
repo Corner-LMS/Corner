@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import NotificationBadge from '../../components/NotificationBadge';
 
 export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
@@ -238,8 +239,17 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
-          <Text style={styles.title}>Welcome to Corner 🎓</Text>
-          <Text style={styles.role}>You are logged in as a {role}</Text>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Welcome to Corner 🎓</Text>
+              <Text style={styles.role}>You are logged in as a {role}</Text>
+            </View>
+            {role === 'student' && (
+              <NotificationBadge
+                size="large"
+              />
+            )}
+          </View>
 
           {role === 'student' && studentCourses.length > 0 ? (
             studentCourses.map((course) => (
@@ -405,18 +415,22 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
-    textAlign: 'center',
+    marginBottom: 8,
   },
   role: {
     fontSize: 18,
     color: '#666',
-    marginBottom: 30,
-    textAlign: 'center',
+    marginBottom: 10,
   },
   courseContainer: {
     marginBottom: 30,
