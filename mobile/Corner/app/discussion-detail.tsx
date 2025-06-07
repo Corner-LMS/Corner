@@ -262,58 +262,67 @@ export default function DiscussionDetailScreen() {
                 )}
 
                 <View style={styles.commentsSection}>
-                    <Text style={styles.commentsTitle}>
-                        Comments ({comments.length})
-                    </Text>
+                    <View style={styles.commentsSeparator}>
+                        <View style={styles.separatorLine} />
+                        <Text style={styles.commentsTitle}>
+                            Comments ({comments.length})
+                        </Text>
+                        <View style={styles.separatorLine} />
+                    </View>
 
                     {comments.length === 0 ? (
                         <View style={styles.emptyComments}>
                             <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
                         </View>
                     ) : (
-                        comments.map((comment) => (
-                            <View key={comment.id} style={styles.commentCard}>
-                                <View style={styles.commentHeader}>
-                                    <View style={styles.commentAuthorSection}>
-                                        <Text style={styles.commentAuthor}>{comment.authorName}</Text>
-                                        <View style={[
-                                            styles.commentRoleTag,
-                                            comment.isAnonymous ? styles.studentTag :
-                                                comment.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
-                                        ]}>
-                                            <Text style={styles.commentRoleText}>
-                                                {comment.authorRole}
-                                            </Text>
+                        <View style={styles.commentsContainer}>
+                            {comments.map((comment) => (
+                                <View key={comment.id} style={styles.commentWrapper}>
+                                    <View style={styles.commentIndentLine} />
+                                    <View style={styles.commentCard}>
+                                        <View style={styles.commentHeader}>
+                                            <View style={styles.commentAuthorSection}>
+                                                <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+                                                <View style={[
+                                                    styles.commentRoleTag,
+                                                    comment.isAnonymous ? styles.studentTag :
+                                                        comment.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                                ]}>
+                                                    <Text style={styles.commentRoleText}>
+                                                        {comment.authorRole}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            {/* Show edit/delete only for comment author and if not archived */}
+                                            {auth.currentUser?.uid === comment.authorId && !courseIsArchived && (
+                                                <View style={styles.commentActions}>
+                                                    <TouchableOpacity
+                                                        style={styles.editButton}
+                                                        onPress={() => handleEditComment(comment)}
+                                                    >
+                                                        <Ionicons name="pencil" size={14} color="#666" />
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        style={styles.deleteButton}
+                                                        onPress={() => handleDeleteComment(comment.id)}
+                                                    >
+                                                        <Ionicons name="trash" size={14} color="#d32f2f" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            )}
                                         </View>
+                                        <Text style={styles.commentContent}>{comment.content}</Text>
+                                        <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
+                                        {courseIsArchived && (
+                                            <View style={styles.archivedNotice}>
+                                                <Ionicons name="archive" size={12} color="#666" />
+                                                <Text style={styles.archivedNoticeText}>Read only - Course archived</Text>
+                                            </View>
+                                        )}
                                     </View>
-                                    {/* Show edit/delete only for comment author and if not archived */}
-                                    {auth.currentUser?.uid === comment.authorId && !courseIsArchived && (
-                                        <View style={styles.commentActions}>
-                                            <TouchableOpacity
-                                                style={styles.editButton}
-                                                onPress={() => handleEditComment(comment)}
-                                            >
-                                                <Ionicons name="pencil" size={14} color="#666" />
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={styles.deleteButton}
-                                                onPress={() => handleDeleteComment(comment.id)}
-                                            >
-                                                <Ionicons name="trash" size={14} color="#d32f2f" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
                                 </View>
-                                <Text style={styles.commentContent}>{comment.content}</Text>
-                                <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
-                                {courseIsArchived && (
-                                    <View style={styles.archivedNotice}>
-                                        <Ionicons name="archive" size={12} color="#666" />
-                                        <Text style={styles.archivedNoticeText}>Read only - Course archived</Text>
-                                    </View>
-                                )}
-                            </View>
-                        ))
+                            ))}
+                        </View>
                     )}
                 </View>
             </ScrollView>
@@ -382,75 +391,100 @@ export default function DiscussionDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#f8fafc',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 20,
+        paddingHorizontal: 24,
+        paddingVertical: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+        borderBottomColor: '#e2e8f0',
+        backgroundColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
     },
     backButton: {
-        marginRight: 15,
+        marginRight: 16,
+        padding: 8,
+        borderRadius: 12,
+        backgroundColor: 'rgba(129, 23, 27, 0.08)',
     },
     headerInfo: {
         flex: 1,
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 2,
+        fontSize: 15,
+        color: '#64748b',
+        marginTop: 4,
+        fontWeight: '500',
     },
     content: {
         flex: 1,
-        padding: 15,
+        padding: 20,
     },
     discussionCard: {
-        backgroundColor: '#f8f8f8',
-        padding: 20,
-        borderRadius: 10,
-        marginBottom: 20,
+        backgroundColor: '#fff',
+        padding: 24,
+        borderRadius: 16,
+        marginBottom: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
     },
     postHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 16,
     },
     discussionTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#1e293b',
         flex: 1,
+        letterSpacing: -0.5,
     },
     roleTag: {
         backgroundColor: '#81171b',
-        padding: 6,
-        borderRadius: 6,
-        marginLeft: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginLeft: 12,
+        shadowColor: '#81171b',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 2,
     },
     teacherTag: {
         backgroundColor: '#81171b',
     },
     studentTag: {
-        backgroundColor: '#D65108',
+        backgroundColor: '#d97706',
     },
     roleTagText: {
-        fontSize: 12,
+        fontSize: 13,
         color: '#fff',
-        fontWeight: '500',
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     discussionContent: {
-        fontSize: 16,
-        color: '#555',
-        lineHeight: 22,
-        marginBottom: 15,
+        fontSize: 17,
+        color: '#475569',
+        lineHeight: 26,
+        marginBottom: 20,
     },
     postMeta: {
         flexDirection: 'row',
@@ -458,154 +492,235 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     postAuthor: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#81171b',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     postDate: {
-        fontSize: 12,
-        color: '#666',
+        fontSize: 13,
+        color: '#94a3b8',
+        fontWeight: '500',
     },
     commentsSection: {
         flex: 1,
     },
+    commentsSeparator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    separatorLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#e2e8f0',
+    },
     commentsTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 15,
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        marginHorizontal: 12,
+        letterSpacing: -0.3,
     },
     emptyComments: {
-        padding: 20,
+        padding: 32,
         alignItems: 'center',
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
     },
     emptyText: {
-        fontSize: 16,
-        color: '#666',
+        fontSize: 17,
+        color: '#64748b',
         textAlign: 'center',
+        fontWeight: '500',
+        lineHeight: 24,
+    },
+    commentsContainer: {
+        flex: 1,
+    },
+    commentWrapper: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+        marginLeft: 40,
+    },
+    commentIndentLine: {
+        position: 'absolute',
+        left: -40,
+        top: 0,
+        bottom: 0,
+        width: 2,
+        backgroundColor: '#81171b',
+        opacity: 0.3,
     },
     commentCard: {
-        backgroundColor: '#f0f0f0',
-        padding: 15,
-        borderRadius: 8,
-        marginBottom: 10,
+        backgroundColor: '#fff',
+        padding: 20,
+        borderRadius: 14,
+        flex: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 3,
+        borderLeftWidth: 3,
+        borderLeftColor: '#f1f5f9',
     },
     commentHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 8,
+        marginBottom: 12,
     },
     commentAuthorSection: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     commentAuthor: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
-        color: '#333',
-        marginRight: 10,
+        color: '#1e293b',
+        marginRight: 12,
     },
     commentRoleTag: {
         backgroundColor: '#81171b',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
     },
     commentRoleText: {
-        fontSize: 10,
+        fontSize: 11,
         color: '#fff',
-        fontWeight: '500',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     commentContent: {
-        fontSize: 14,
-        color: '#555',
-        lineHeight: 20,
-        marginBottom: 8,
+        fontSize: 16,
+        color: '#475569',
+        lineHeight: 24,
+        marginBottom: 12,
     },
     commentDate: {
-        fontSize: 12,
-        color: '#666',
+        fontSize: 13,
+        color: '#94a3b8',
+        fontWeight: '500',
     },
     commentInputContainer: {
         borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
+        borderTopColor: '#e2e8f0',
         backgroundColor: '#fff',
-        padding: 15,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
     },
     commentInputRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
+        gap: 12,
     },
     commentInput: {
         flex: 1,
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
+        borderWidth: 2,
+        borderColor: '#e2e8f0',
         borderRadius: 20,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        marginRight: 10,
-        maxHeight: 100,
+        paddingHorizontal: 18,
+        paddingVertical: 14,
+        maxHeight: 120,
         fontSize: 16,
+        color: '#1e293b',
+        backgroundColor: '#f8fafc',
+        lineHeight: 22,
     },
     sendButton: {
         backgroundColor: '#81171b',
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#81171b',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 4,
     },
     buttonDisabled: {
         opacity: 0.5,
+        shadowOpacity: 0.1,
     },
     anonymityOption: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 16,
+        backgroundColor: '#f8fafc',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
     },
     anonymityLabel: {
-        fontSize: 14,
-        color: '#333',
-        marginRight: 10,
+        fontSize: 15,
+        color: '#1e293b',
+        marginRight: 12,
+        fontWeight: '500',
     },
     anonymousTag: {
-        backgroundColor: '#666',
+        backgroundColor: '#64748b',
     },
     commentActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginLeft: 10,
+        marginLeft: 12,
+        gap: 4,
     },
     editButton: {
-        padding: 5,
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f1f5f9',
     },
     deleteButton: {
-        padding: 5,
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#fef2f2',
     },
     cancelButton: {
-        padding: 5,
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f1f5f9',
     },
     archivedNotice: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 5,
+        marginTop: 8,
+        padding: 8,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
     },
     archivedNoticeText: {
         fontSize: 12,
-        color: '#666',
-        marginLeft: 5,
+        color: '#64748b',
+        marginLeft: 6,
+        fontWeight: '500',
     },
     archivedBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 10,
+        padding: 16,
         borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
+        borderTopColor: '#e2e8f0',
+        backgroundColor: '#f8fafc',
     },
     archivedBannerText: {
-        fontSize: 14,
-        color: '#666',
-        marginLeft: 10,
+        fontSize: 15,
+        color: '#64748b',
+        marginLeft: 12,
+        fontWeight: '500',
     },
 }); 

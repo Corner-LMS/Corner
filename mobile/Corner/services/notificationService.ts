@@ -18,7 +18,7 @@ Notifications.setNotificationHandler({
 });
 
 export interface NotificationData {
-    type: 'announcement' | 'discussion_milestone' | 'discussion_replies';
+    type: 'announcement' | 'discussion_milestone' | 'discussion_replies' | 'teacher_discussion_milestone';
     courseId: string;
     courseName: string;
     title: string;
@@ -97,7 +97,7 @@ class NotificationService {
             const data = response.notification.request.content.data;
 
             // Handle navigation based on notification type
-            if (data?.type === 'announcement' || data?.type === 'discussion_milestone' || data?.type === 'discussion_replies') {
+            if (data?.type === 'announcement' || data?.type === 'discussion_milestone' || data?.type === 'discussion_replies' || data?.type === 'teacher_discussion_milestone') {
                 // You can add navigation logic here
                 console.log('Navigate to course:', data.courseId);
             }

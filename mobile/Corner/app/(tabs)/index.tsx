@@ -240,15 +240,30 @@ export default function DashboardScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Welcome to Corner 🎓</Text>
-              <Text style={styles.role}>You are logged in as a {role}</Text>
+            <TouchableOpacity style={styles.menuButton} onPress={() => {/* TODO: Add menu functionality */ }}>
+              <Ionicons name="menu" size={24} color="#1e293b" />
+            </TouchableOpacity>
+
+            <View style={styles.logoContainer}>
+              <View style={styles.logoPlaceholder}>
+                <Text style={styles.logoText}>LOGO</Text>
+              </View>
             </View>
-            {role === 'student' && (
-              <NotificationBadge
-                size="large"
-              />
-            )}
+
+            <View style={styles.rightActions}>
+              <View style={styles.roleTag}>
+                <Text style={styles.roleTagText}>{role.charAt(0).toUpperCase()}</Text>
+              </View>
+              <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/notification-settings')}>
+                <Ionicons name="settings-outline" size={20} color="#64748b" />
+              </TouchableOpacity>
+              <NotificationBadge size="medium" />
+            </View>
+          </View>
+
+          <View style={styles.welcomeSection}>
+            <Text style={styles.welcomeText}>Welcome back! 👋</Text>
+            <Text style={styles.welcomeSubtext}>Here are your courses</Text>
           </View>
 
           {role === 'student' && studentCourses.length > 0 ? (
@@ -397,7 +412,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8fafc',
   },
   scrollView: {
     flex: 1,
@@ -409,107 +424,217 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f8fafc',
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 24,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  menuButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoPlaceholder: {
+    width: 50,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#81171b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#81171b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.2,
+  },
+  rightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 120,
+    justifyContent: 'flex-end',
+  },
+  roleTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  roleTagText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'capitalize',
+  },
+  settingsButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  courseContainer: {
+    marginBottom: 24,
+  },
+  courseBox: {
+    backgroundColor: '#fff',
+    padding: 24,
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
+    borderLeftWidth: 5,
+    borderLeftColor: '#81171b',
+  },
+  courseHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 20,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  role: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 10,
-  },
-  courseContainer: {
-    marginBottom: 30,
-  },
-  courseBox: {
-    backgroundColor: '#e0e0e0',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  courseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   courseName: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '700',
     color: '#81171b',
-    marginBottom: 15,
+    marginBottom: 0,
+    letterSpacing: -0.5,
+    flex: 1,
+    marginRight: 12,
   },
   courseDetail: {
-    marginBottom: 10,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   courseLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    fontSize: 15,
+    color: '#64748b',
+    marginBottom: 0,
+    marginRight: 8,
+    fontWeight: '600',
+    minWidth: 100,
   },
   courseValue: {
     fontSize: 16,
-    color: '#333',
+    color: '#1e293b',
+    fontWeight: '500',
+    flex: 1,
   },
   noCourseBox: {
-    backgroundColor: '#f8f8f8',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 30,
+    backgroundColor: '#fff',
+    padding: 32,
+    borderRadius: 16,
+    marginBottom: 32,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
   },
   noCourseText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 18,
+    color: '#64748b',
+    fontWeight: '500',
+    textAlign: 'center',
   },
   button: {
     backgroundColor: '#81171b',
-    padding: 15,
-    borderRadius: 10,
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
+    shadowColor: '#81171b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   fab: {
     position: 'absolute',
-    bottom: 100,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    bottom: 120,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#81171b',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
+    elevation: 8,
+    shadowColor: '#81171b',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 6,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
   },
   subtleActionButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    marginLeft: 4,
   },
   subtleActionsGroup: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 8,
+    alignItems: 'center',
+    flexShrink: 0,
+    minWidth: 80,
+  },
+  welcomeSection: {
+    marginBottom: 32,
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#81171b',
+    marginBottom: 8,
+  },
+  welcomeSubtext: {
+    fontSize: 18,
+    color: '#64748b',
+    fontWeight: '500',
   },
 });

@@ -14,7 +14,7 @@ import {
 import { notificationService, NotificationData } from './notificationService';
 
 export interface NotificationTrigger {
-    type: 'announcement' | 'discussion_milestone' | 'discussion_replies';
+    type: 'announcement' | 'discussion_milestone' | 'discussion_replies' | 'teacher_discussion_milestone';
     courseId: string;
     triggeredBy: string; // userId who triggered the notification
     metadata?: any;
@@ -30,12 +30,12 @@ interface StudentUser {
 class NotificationHelpers {
 
     // Update user's notification badge count
-    private async updateUserBadgeCount(userId: string, incrementBy: number = 1) {
+    private async updateUserBadgeCount(userId: string, incrementBy: number = 1, reset: boolean = false) {
         try {
             const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
-                'notificationData.unreadCount': incrementBy > 0 ?
-                    increment(incrementBy) : 0,
+                'notificationData.unreadCount': reset ? 0 :
+                    increment(incrementBy > 0 ? incrementBy : 0),
                 'notificationData.lastNotificationTime': new Date()
             });
         } catch (error) {
@@ -132,72 +132,154 @@ class NotificationHelpers {
 
             // Check if we hit a milestone (every 10 posts)
             if (totalDiscussions > 0 && totalDiscussions % 10 === 0) {
-                // Get all students in the course (except the one who just posted)
-                const students = await this.getStudentsInCourse(courseId, newPostAuthorId);
-
-                // Get course details
+                // Get course details first
                 const courseDoc = await getDoc(doc(db, 'courses', courseId));
                 const courseData = courseDoc.data();
                 const courseName = courseData?.name || 'Unknown Course';
 
-                const notificationData: NotificationData = {
-                    type: 'discussion_milestone',
-                    courseId: courseId,
-                    courseName: courseName,
-                    title: `Active Discussion in ${courseName}`,
-                    body: `${totalDiscussions} discussions and counting! Join the conversation.`,
-                    data: {
-                        type: 'discussion_milestone',
-                        courseId: courseId,
-                        courseName: courseName,
-                        discussionCount: totalDiscussions
-                    }
-                };
+                // Notify students (existing functionality)
+                await this.notifyStudentsOfDiscussionMilestone(courseId, newPostAuthorId, totalDiscussions, courseName);
 
-                // Send notifications to all students and update their badge counts
-                const notificationPromises = students.map(async (student: StudentUser) => {
-                    // Save notification to Firestore
-                    await addDoc(collection(db, 'notifications'), {
-                        userId: student.id,
-                        type: 'discussion_milestone',
-                        title: notificationData.title,
-                        body: notificationData.body,
-                        courseId: courseId,
-                        courseName: courseName,
-                        timestamp: serverTimestamp(),
-                        read: false,
-                        data: notificationData.data
-                    });
-
-                    // Update badge count
-                    await this.updateUserBadgeCount(student.id, 1);
-
-                    // Then send push notification if they have tokens
-                    if (student.expoPushTokens && student.expoPushTokens.length > 0) {
-                        return Promise.all(
-                            student.expoPushTokens.map((token: string) =>
-                                notificationService.sendPushNotification(token, notificationData)
-                            )
-                        );
-                    }
-                });
-
-                await Promise.all(notificationPromises);
-                console.log(`Sent milestone notifications to ${students.length} students`);
-
-                // Track notification
-                await this.logNotification({
-                    type: 'discussion_milestone',
-                    courseId: courseId,
-                    triggeredBy: newPostAuthorId,
-                    metadata: {
-                        milestone: totalDiscussions,
-                        studentCount: students.length
-                    }
-                });
+                // Notify teacher (new functionality)
+                await this.notifyTeacherOfDiscussionMilestone(courseId, courseData?.teacherId, totalDiscussions, courseName);
             }
         } catch (error) {
             console.error('Error checking discussion milestone:', error);
+        }
+    }
+
+    // Notify students of discussion milestone (extracted from checkDiscussionMilestone)
+    private async notifyStudentsOfDiscussionMilestone(courseId: string, newPostAuthorId: string, totalDiscussions: number, courseName: string) {
+        try {
+            // Get all students in the course (except the one who just posted)
+            const students = await this.getStudentsInCourse(courseId, newPostAuthorId);
+
+            const notificationData: NotificationData = {
+                type: 'discussion_milestone',
+                courseId: courseId,
+                courseName: courseName,
+                title: `Active Discussion in ${courseName}`,
+                body: `${totalDiscussions} discussions and counting! Join the conversation.`,
+                data: {
+                    type: 'discussion_milestone',
+                    courseId: courseId,
+                    courseName: courseName,
+                    discussionCount: totalDiscussions
+                }
+            };
+
+            // Send notifications to all students and update their badge counts
+            const notificationPromises = students.map(async (student: StudentUser) => {
+                // Save notification to Firestore
+                await addDoc(collection(db, 'notifications'), {
+                    userId: student.id,
+                    type: 'discussion_milestone',
+                    title: notificationData.title,
+                    body: notificationData.body,
+                    courseId: courseId,
+                    courseName: courseName,
+                    timestamp: serverTimestamp(),
+                    read: false,
+                    data: notificationData.data
+                });
+
+                // Update badge count
+                await this.updateUserBadgeCount(student.id, 1);
+
+                // Then send push notification if they have tokens
+                if (student.expoPushTokens && student.expoPushTokens.length > 0) {
+                    return Promise.all(
+                        student.expoPushTokens.map((token: string) =>
+                            notificationService.sendPushNotification(token, notificationData)
+                        )
+                    );
+                }
+            });
+
+            await Promise.all(notificationPromises);
+            console.log(`Sent milestone notifications to ${students.length} students`);
+
+            // Track notification
+            await this.logNotification({
+                type: 'discussion_milestone',
+                courseId: courseId,
+                triggeredBy: newPostAuthorId,
+                metadata: {
+                    milestone: totalDiscussions,
+                    studentCount: students.length,
+                    recipientType: 'students'
+                }
+            });
+        } catch (error) {
+            console.error('Error notifying students of discussion milestone:', error);
+        }
+    }
+
+    // Notify teacher of discussion milestone (new method)
+    private async notifyTeacherOfDiscussionMilestone(courseId: string, teacherId: string, totalDiscussions: number, courseName: string) {
+        try {
+            if (!teacherId) return;
+
+            // Get teacher details
+            const teacherDoc = await getDoc(doc(db, 'users', teacherId));
+            const teacherData = teacherDoc.data();
+
+            if (!teacherData) return;
+
+            const notificationData: NotificationData = {
+                type: 'teacher_discussion_milestone',
+                courseId: courseId,
+                courseName: courseName,
+                title: `Discussion Activity in ${courseName}`,
+                body: `Your course has reached ${totalDiscussions} discussions! Students are actively engaged.`,
+                data: {
+                    type: 'teacher_discussion_milestone',
+                    courseId: courseId,
+                    courseName: courseName,
+                    discussionCount: totalDiscussions
+                }
+            };
+
+            // Save notification to Firestore
+            await addDoc(collection(db, 'notifications'), {
+                userId: teacherId,
+                type: 'teacher_discussion_milestone',
+                title: notificationData.title,
+                body: notificationData.body,
+                courseId: courseId,
+                courseName: courseName,
+                timestamp: serverTimestamp(),
+                read: false,
+                data: notificationData.data
+            });
+
+            // Update badge count
+            await this.updateUserBadgeCount(teacherId, 1);
+
+            // Send push notification if they have tokens
+            if (teacherData.expoPushTokens && teacherData.expoPushTokens.length > 0) {
+                const notificationPromises = teacherData.expoPushTokens.map((token: string) =>
+                    notificationService.sendPushNotification(token, notificationData)
+                );
+
+                await Promise.all(notificationPromises);
+                console.log(`Sent discussion milestone notification to teacher: ${teacherData.name}`);
+            }
+
+            // Track notification
+            await this.logNotification({
+                type: 'teacher_discussion_milestone',
+                courseId: courseId,
+                triggeredBy: 'system',
+                metadata: {
+                    milestone: totalDiscussions,
+                    teacherId: teacherId,
+                    recipientType: 'teacher'
+                }
+            });
+
+        } catch (error) {
+            console.error('Error notifying teacher of discussion milestone:', error);
         }
     }
 
@@ -290,13 +372,18 @@ class NotificationHelpers {
         }
     }
 
-    // Clear all notifications for a user (when they view notifications)
+    // Clear all notifications for a user
     async clearUserNotifications(userId: string) {
         try {
-            await this.updateUserBadgeCount(userId, 0);
-            console.log('Cleared notifications for user:', userId);
+            // Reset the badge count
+            await this.updateUserBadgeCount(userId, 0, true); // true = reset completely
+
+            // Note: We don't delete individual notifications from Firestore
+            // as they serve as a record. The badge count reset is sufficient.
+            console.log('User notifications cleared for:', userId);
         } catch (error) {
             console.error('Error clearing user notifications:', error);
+            throw error;
         }
     }
 
