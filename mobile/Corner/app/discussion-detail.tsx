@@ -15,6 +15,8 @@ interface Comment {
     authorRole: string;
     authorId: string;
     isAnonymous?: boolean;
+    parentId?: string; // For nested replies
+    replies?: Comment[]; // Nested replies
 }
 
 interface Discussion {
@@ -41,6 +43,7 @@ export default function DiscussionDetailScreen() {
     const [loading, setLoading] = useState(false);
     const [isAnonymousComment, setIsAnonymousComment] = useState(false);
     const [editingComment, setEditingComment] = useState<{ id: string, content: string } | null>(null);
+    const [replyingTo, setReplyingTo] = useState<{ id: string, authorName: string } | null>(null);
 
     useEffect(() => {
         if (!courseId || !discussionId) return;
@@ -65,11 +68,24 @@ export default function DiscussionDetailScreen() {
         );
 
         const unsubscribeComments = onSnapshot(commentsQuery, (snapshot) => {
-            const commentsList = snapshot.docs.map(doc => ({
+            const allComments = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             })) as Comment[];
-            setComments(commentsList);
+
+            // Organize comments into threads
+            const topLevelComments = allComments.filter(comment => !comment.parentId);
+            const organizedComments = topLevelComments.map(comment => {
+                const replies = allComments
+                    .filter(reply => reply.parentId === comment.id)
+                    .sort((a, b) => a.createdAt?.seconds - b.createdAt?.seconds); // Sort replies chronologically
+                return {
+                    ...comment,
+                    replies
+                };
+            });
+
+            setComments(organizedComments);
         });
 
         return () => {
@@ -142,6 +158,7 @@ export default function DiscussionDetailScreen() {
     const resetCommentForm = () => {
         setNewComment('');
         setEditingComment(null);
+        setReplyingTo(null);
         setIsAnonymousComment(false);
     };
 
@@ -177,6 +194,11 @@ export default function DiscussionDetailScreen() {
                 authorId: user.uid
             };
 
+            // Add parentId if this is a reply
+            if (replyingTo) {
+                commentData.parentId = replyingTo.id;
+            }
+
             // Handle anonymity for student comments
             if (role === 'student' && isAnonymousComment) {
                 commentData.authorName = 'Anonymous Student';
@@ -204,7 +226,8 @@ export default function DiscussionDetailScreen() {
 
             setNewComment('');
             setIsAnonymousComment(false);
-            Alert.alert('Success', 'Comment added!');
+            setReplyingTo(null);
+            Alert.alert('Success', replyingTo ? 'Reply added!' : 'Comment added!');
         } catch (error) {
             console.error('Error adding comment:', error);
             Alert.alert('Error', 'Failed to add comment. Please try again.');
@@ -224,6 +247,92 @@ export default function DiscussionDetailScreen() {
         } else {
             return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
+    };
+
+    const handleReplyToComment = (comment: Comment) => {
+        setReplyingTo({
+            id: comment.id,
+            authorName: comment.authorName
+        });
+        setNewComment('');
+    };
+
+    const renderComment = (comment: Comment, depth: number = 0) => {
+        const isReply = depth > 0;
+
+        return (
+            <View key={comment.id}>
+                <View style={[
+                    styles.commentWrapper,
+                    isReply && styles.replyWrapper
+                ]}>
+                    {isReply && <View style={styles.replyConnector} />}
+                    <View style={styles.commentIndentLine} />
+                    <View style={[
+                        styles.commentCard,
+                        isReply && styles.replyCard
+                    ]}>
+                        <View style={styles.commentHeader}>
+                            <View style={styles.commentAuthorSection}>
+                                <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+                                <View style={[
+                                    styles.commentRoleTag,
+                                    comment.isAnonymous ? styles.studentTag :
+                                        comment.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                ]}>
+                                    <Text style={styles.commentRoleText}>
+                                        {comment.authorRole}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={styles.commentActions}>
+                                {/* Reply button - only show for top-level comments and if not archived */}
+                                {!isReply && !courseIsArchived && (
+                                    <TouchableOpacity
+                                        style={styles.replyButton}
+                                        onPress={() => handleReplyToComment(comment)}
+                                    >
+                                        <Ionicons name="chatbubble-outline" size={14} color="#81171b" />
+                                    </TouchableOpacity>
+                                )}
+                                {/* Show edit/delete only for comment author and if not archived */}
+                                {auth.currentUser?.uid === comment.authorId && !courseIsArchived && (
+                                    <>
+                                        <TouchableOpacity
+                                            style={styles.editButton}
+                                            onPress={() => handleEditComment(comment)}
+                                        >
+                                            <Ionicons name="pencil" size={14} color="#666" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.deleteButton}
+                                            onPress={() => handleDeleteComment(comment.id)}
+                                        >
+                                            <Ionicons name="trash" size={14} color="#d32f2f" />
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                            </View>
+                        </View>
+                        <Text style={styles.commentContent}>{comment.content}</Text>
+                        <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
+                        {courseIsArchived && (
+                            <View style={styles.archivedNotice}>
+                                <Ionicons name="archive" size={12} color="#666" />
+                                <Text style={styles.archivedNoticeText}>Read only - Course archived</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+
+                {/* Render replies */}
+                {comment.replies && comment.replies.length > 0 && (
+                    <View style={styles.repliesContainer}>
+                        {comment.replies.map(reply => renderComment(reply, depth + 1))}
+                    </View>
+                )}
+            </View>
+        );
     };
 
     return (
@@ -276,52 +385,7 @@ export default function DiscussionDetailScreen() {
                         </View>
                     ) : (
                         <View style={styles.commentsContainer}>
-                            {comments.map((comment) => (
-                                <View key={comment.id} style={styles.commentWrapper}>
-                                    <View style={styles.commentIndentLine} />
-                                    <View style={styles.commentCard}>
-                                        <View style={styles.commentHeader}>
-                                            <View style={styles.commentAuthorSection}>
-                                                <Text style={styles.commentAuthor}>{comment.authorName}</Text>
-                                                <View style={[
-                                                    styles.commentRoleTag,
-                                                    comment.isAnonymous ? styles.studentTag :
-                                                        comment.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
-                                                ]}>
-                                                    <Text style={styles.commentRoleText}>
-                                                        {comment.authorRole}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                            {/* Show edit/delete only for comment author and if not archived */}
-                                            {auth.currentUser?.uid === comment.authorId && !courseIsArchived && (
-                                                <View style={styles.commentActions}>
-                                                    <TouchableOpacity
-                                                        style={styles.editButton}
-                                                        onPress={() => handleEditComment(comment)}
-                                                    >
-                                                        <Ionicons name="pencil" size={14} color="#666" />
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity
-                                                        style={styles.deleteButton}
-                                                        onPress={() => handleDeleteComment(comment.id)}
-                                                    >
-                                                        <Ionicons name="trash" size={14} color="#d32f2f" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            )}
-                                        </View>
-                                        <Text style={styles.commentContent}>{comment.content}</Text>
-                                        <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
-                                        {courseIsArchived && (
-                                            <View style={styles.archivedNotice}>
-                                                <Ionicons name="archive" size={12} color="#666" />
-                                                <Text style={styles.archivedNoticeText}>Read only - Course archived</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                </View>
-                            ))}
+                            {comments.map((comment) => renderComment(comment))}
                         </View>
                     )}
                 </View>
@@ -333,6 +397,22 @@ export default function DiscussionDetailScreen() {
                     style={styles.commentInputContainer}
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
                 >
+                    {/* Reply context banner */}
+                    {replyingTo && (
+                        <View style={styles.replyContext}>
+                            <Ionicons name="chatbubble-outline" size={16} color="#81171b" />
+                            <Text style={styles.replyContextText}>
+                                Replying to {replyingTo.authorName}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.cancelReplyButton}
+                                onPress={() => setReplyingTo(null)}
+                            >
+                                <Ionicons name="close" size={16} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
                     {/* Anonymity option for students */}
                     {role === 'student' && (
                         <View style={styles.anonymityOption}>
@@ -349,13 +429,17 @@ export default function DiscussionDetailScreen() {
                     <View style={styles.commentInputRow}>
                         <TextInput
                             style={styles.commentInput}
-                            placeholder={editingComment ? "Edit your comment..." : "Add a comment..."}
+                            placeholder={
+                                editingComment ? "Edit your comment..." :
+                                    replyingTo ? `Reply to ${replyingTo.authorName}...` :
+                                        "Add a comment..."
+                            }
                             value={newComment}
                             onChangeText={setNewComment}
                             multiline
                             placeholderTextColor="#666"
                         />
-                        {editingComment && (
+                        {(editingComment || replyingTo) && (
                             <TouchableOpacity
                                 style={styles.cancelButton}
                                 onPress={resetCommentForm}
@@ -722,5 +806,50 @@ const styles = StyleSheet.create({
         color: '#64748b',
         marginLeft: 12,
         fontWeight: '500',
+    },
+    replyWrapper: {
+        marginLeft: 40,
+    },
+    replyCard: {
+        backgroundColor: '#f8fafc',
+        borderLeftWidth: 3,
+        borderLeftColor: '#81171b',
+        borderRadius: 12,
+    },
+    replyConnector: {
+        position: 'absolute',
+        left: -40,
+        top: 0,
+        bottom: 0,
+        width: 2,
+        backgroundColor: '#81171b',
+        opacity: 0.3,
+    },
+    repliesContainer: {
+        marginLeft: 40,
+    },
+    replyButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f1f5f9',
+    },
+    replyContext: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    replyContextText: {
+        fontSize: 15,
+        color: '#1e293b',
+        marginLeft: 12,
+        fontWeight: '500',
+    },
+    cancelReplyButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f1f5f9',
     },
 }); 
