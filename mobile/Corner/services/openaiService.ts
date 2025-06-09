@@ -17,6 +17,8 @@ interface ResourceRecommendation {
     relevanceScore: number;
 }
 
+type UserRole = 'teacher' | 'student';
+
 class OpenAIService {
     private openai: OpenAI | null = null;
     private isConfigured: boolean = false;
@@ -43,17 +45,18 @@ class OpenAIService {
     async generateResponse(
         userMessage: string,
         courseContext: CourseContext,
-        resources: ResourceRecommendation[]
+        resources: ResourceRecommendation[],
+        userRole: UserRole = 'student'
     ): Promise<{ content: string; followUpQuestions: string[] }> {
 
         // Check if OpenAI is configured
         if (!this.isConfigured || !this.openai) {
-            return this.getFallbackResponse(userMessage, courseContext, resources);
+            return this.getFallbackResponse(userMessage, courseContext, resources, userRole);
         }
 
         try {
-            const systemPrompt = this.buildSystemPrompt(courseContext, resources);
-            const userPrompt = this.buildUserPrompt(userMessage, resources);
+            const systemPrompt = this.buildSystemPrompt(courseContext, resources, userRole);
+            const userPrompt = this.buildUserPrompt(userMessage, resources, userRole);
 
             const completion = await this.openai.chat.completions.create({
                 model: OPENAI_CONFIG.model,
@@ -75,7 +78,7 @@ class OpenAIService {
                 "I'm sorry, I couldn't generate a response. Please try asking your question differently.";
 
             // Generate follow-up questions based on the response
-            const followUpQuestions = await this.generateFollowUpQuestions(userMessage, response, courseContext);
+            const followUpQuestions = await this.generateFollowUpQuestions(userMessage, response, courseContext, userRole);
 
             return {
                 content: response,
@@ -84,64 +87,100 @@ class OpenAIService {
 
         } catch (error) {
             console.error('OpenAI API Error:', error);
-            return this.getFallbackResponse(userMessage, courseContext, resources);
+            return this.getFallbackResponse(userMessage, courseContext, resources, userRole);
         }
     }
 
     private getFallbackResponse(
         userMessage: string,
         courseContext: CourseContext,
-        resources: ResourceRecommendation[]
+        resources: ResourceRecommendation[],
+        userRole: UserRole
     ): { content: string; followUpQuestions: string[] } {
 
         const queryLower = userMessage.toLowerCase();
         let content = "";
         let followUpQuestions: string[] = [];
 
-        // Provide basic course-aware responses without OpenAI
-        if (queryLower.includes('course') && (queryLower.includes('about') || queryLower.includes('overview'))) {
-            content = `This is ${courseContext.courseName} (${courseContext.courseCode}), taught by ${courseContext.instructorName}. We currently have ${courseContext.discussions.length} discussions and ${courseContext.announcements.length} announcements.`;
-            followUpQuestions = [
-                "What are the main topics discussed?",
-                "Can you show me recent announcements?",
-                "What resources are available?"
-            ];
-        } else if (queryLower.includes('announcement') && (queryLower.includes('recent') || queryLower.includes('latest'))) {
-            const recentAnnouncements = courseContext.announcements.slice(0, 2);
-            if (recentAnnouncements.length === 0) {
-                content = "There are no recent announcements in this course.";
+        if (userRole === 'teacher') {
+            // Teacher-specific fallback responses
+            if (queryLower.includes('student') && (queryLower.includes('confused') || queryLower.includes('challenge'))) {
+                const recentDiscussions = courseContext.discussions.slice(0, 3);
+                const topics = recentDiscussions.map(d => d.title).join(', ');
+                content = `Based on recent discussions (${topics}), students seem to be engaging with these topics. You might want to check the discussion details to see specific questions or concerns.`;
+                followUpQuestions = [
+                    "What specific discussion needs follow-up?",
+                    "Should I draft an announcement to clarify?",
+                    "What resources can help with these topics?"
+                ];
+            } else if (queryLower.includes('announcement') || queryLower.includes('draft')) {
+                content = `I can help you draft announcements based on course activity. We have ${courseContext.discussions.length} discussions and ${courseContext.announcements.length} previous announcements to reference.`;
+                followUpQuestions = [
+                    "What topic should the announcement cover?",
+                    "Should I reference recent discussions?",
+                    "What tone should the announcement have?"
+                ];
+            } else if (queryLower.includes('summary') || queryLower.includes('trends')) {
+                content = `Course Summary: ${courseContext.courseName} has ${courseContext.discussions.length} active discussions and ${courseContext.announcements.length} announcements. This gives you insights into student engagement patterns.`;
+                followUpQuestions = [
+                    "Which discussions need your attention?",
+                    "What patterns do you see in student questions?",
+                    "Should we create additional resources?"
+                ];
             } else {
-                const titles = recentAnnouncements.map(a => a.title).join(' and ');
-                content = `Recent announcements include: ${titles}. Check the announcements tab for full details.`;
+                content = `As your co-instructor assistant for ${courseContext.courseName}, I can help you analyze student engagement, draft announcements, or suggest improvements. What would you like to focus on?`;
+                followUpQuestions = [
+                    "What are students confused about this week?",
+                    "Help me draft an announcement",
+                    "What should I explain better in class?"
+                ];
             }
-            followUpQuestions = [
-                "Can you summarize these announcements?",
-                "Are there any assignments mentioned?",
-                "What's the most important information?"
-            ];
-        } else if (queryLower.includes('discussion')) {
-            const recentDiscussions = courseContext.discussions.slice(0, 3);
-            const topics = recentDiscussions.map(d => d.title).join(', ');
-            content = `Recent discussion topics include: ${topics}. These discussions contain insights from your classmates and instructor.`;
-            followUpQuestions = [
-                "Can you show me the most active discussions?",
-                "What are students saying about this?",
-                "Which discussions should I read first?"
-            ];
-        } else if (resources.length > 0) {
-            content = `I found some relevant course materials that might help with your question about "${userMessage}". Check the resources below for more information.`;
-            followUpQuestions = [
-                "Can you explain this topic further?",
-                "Are there related discussions?",
-                "What should I focus on studying?"
-            ];
         } else {
-            content = `I understand you're asking about "${userMessage}". While I don't have specific information on this exact topic, I can help you explore course discussions and announcements that might be related.`;
-            followUpQuestions = [
-                "Can you help me find course materials?",
-                "What should I review for this topic?",
-                "Are there recent announcements I should check?"
-            ];
+            // Student-specific fallback responses
+            if (queryLower.includes('course') && (queryLower.includes('about') || queryLower.includes('overview'))) {
+                content = `This is ${courseContext.courseName} (${courseContext.courseCode}), taught by ${courseContext.instructorName}. We currently have ${courseContext.discussions.length} discussions and ${courseContext.announcements.length} announcements.`;
+                followUpQuestions = [
+                    "What are the main topics discussed?",
+                    "Can you show me recent announcements?",
+                    "What resources are available?"
+                ];
+            } else if (queryLower.includes('announcement') && (queryLower.includes('recent') || queryLower.includes('latest'))) {
+                const recentAnnouncements = courseContext.announcements.slice(0, 2);
+                if (recentAnnouncements.length === 0) {
+                    content = "There are no recent announcements in this course.";
+                } else {
+                    const titles = recentAnnouncements.map(a => a.title).join(' and ');
+                    content = `Recent announcements include: ${titles}. Check the announcements tab for full details.`;
+                }
+                followUpQuestions = [
+                    "Can you explain the last announcement?",
+                    "Are there any assignments mentioned?",
+                    "What's the most important information?"
+                ];
+            } else if (queryLower.includes('discussion')) {
+                const recentDiscussions = courseContext.discussions.slice(0, 3);
+                const topics = recentDiscussions.map(d => d.title).join(', ');
+                content = `Recent discussion topics include: ${topics}. These discussions contain insights from your classmates and instructor.`;
+                followUpQuestions = [
+                    "What do others think about topic X?",
+                    "Can you explain a specific discussion?",
+                    "Which discussions should I read first?"
+                ];
+            } else if (resources.length > 0) {
+                content = `I found some relevant course materials that might help with your question about "${userMessage}". Check the resources below for more information.`;
+                followUpQuestions = [
+                    "Can you explain this topic further?",
+                    "Give me resources to review before next class",
+                    "What should I focus on studying?"
+                ];
+            } else {
+                content = `I understand you're asking about "${userMessage}". I can help you understand course concepts, explain announcements, or recommend relevant discussions. What would you like to explore?`;
+                followUpQuestions = [
+                    "Can you explain the last announcement?",
+                    "What do others think about this topic?",
+                    "Give me resources to review before next class"
+                ];
+            }
         }
 
         // Add note about AI configuration if not set up
@@ -152,21 +191,42 @@ class OpenAIService {
         return { content, followUpQuestions };
     }
 
-    private buildSystemPrompt(courseContext: CourseContext, resources: ResourceRecommendation[]): string {
-        const basePrompt = `You are an AI course assistant embedded in a learning platform called Corner. Your role is to help students by answering questions based on course discussions, notes, announcements, and shared resources. You should always assume you're part of a specific course.
+    private buildSystemPrompt(courseContext: CourseContext, resources: ResourceRecommendation[], userRole: UserRole): string {
+        let basePrompt = "";
 
-Context:
-- Each course has a name and description
-- Teachers may post announcements and notes
-- Students may ask questions or participate in discussions
-- Some resources may be attached: links, PDFs, external materials
+        if (userRole === 'teacher') {
+            basePrompt = `You are assisting a teacher who manages a course on ${courseContext.courseName} (code: ${courseContext.courseCode}).
+The teacher's name is ${courseContext.instructorName}. 
+You have access to the following data:
+- Recent student discussion questions and comments (with role tags and timestamps)
+- Frequently asked or upvoted questions
+- List of posted announcements and notes
+- Optional external resources and PDFs uploaded to the course
 
-Instructions:
-- Answer questions accurately using course-related knowledge and other relevant knowledge
-- Recommend relevant resources from the course, such as readings, PDFs, or links when possible or other relevant resources
-- If the question is vague, ask clarifying or follow-up questions to help the student refine it
-- If you cannot find enough context, suggest asking the teacher or checking course materials
-- Always keep responses respectful, concise, and student-friendly`;
+Your job is to:
+- Summarize class-wide student challenges
+- Suggest learning resources or improvements
+- Help draft announcements and follow-ups
+- Analyze student engagement patterns
+
+Always remember you're speaking to the instructor, so focus on pedagogical insights and class management.`;
+        } else {
+            basePrompt = `You are helping a student enrolled in ${courseContext.courseName} (code: ${courseContext.courseCode}).
+Their instructor is ${courseContext.instructorName}. 
+You have access to:
+- Announcements made by the instructor
+- Class notes or summaries
+- Student discussions and questions
+- External resources (links, PDFs)
+
+Your job is to:
+- Answer questions using course content
+- Provide brief, easy-to-understand explanations
+- Recommend relevant discussions/announcements
+- Ask follow-up questions to deepen understanding
+
+Always remember you're speaking to a student, so keep explanations clear and supportive.`;
+        }
 
         // Add current course context
         const courseInfo = `
@@ -200,8 +260,14 @@ ${resources.map((r, i) => `${i + 1}. [${r.type.toUpperCase()}] "${r.title}" - ${
         return basePrompt + courseInfo + discussionsContext + announcementsContext + resourcesContext;
     }
 
-    private buildUserPrompt(userMessage: string, resources: ResourceRecommendation[]): string {
-        let prompt = `Student Question: "${userMessage}"`;
+    private buildUserPrompt(userMessage: string, resources: ResourceRecommendation[], userRole: UserRole): string {
+        let prompt = "";
+
+        if (userRole === 'teacher') {
+            prompt = `Teacher Question: "${userMessage}"`;
+        } else {
+            prompt = `Student Question: "${userMessage}"`;
+        }
 
         if (resources.length > 0) {
             prompt += `\n\nNote: I found ${resources.length} relevant course resource(s) that might help with this question. Please reference them in your response if applicable.`;
@@ -213,23 +279,28 @@ ${resources.map((r, i) => `${i + 1}. [${r.type.toUpperCase()}] "${r.title}" - ${
     private async generateFollowUpQuestions(
         userMessage: string,
         aiResponse: string,
-        courseContext: CourseContext
+        courseContext: CourseContext,
+        userRole: UserRole
     ): Promise<string[]> {
 
         if (!this.isConfigured || !this.openai) {
-            return this.getFallbackFollowUpQuestions(userMessage);
+            return this.getFallbackFollowUpQuestions(userMessage, userRole);
         }
 
         try {
+            const roleContext = userRole === 'teacher'
+                ? "You are helping generate follow-up questions for a teacher managing a course. Focus on pedagogical insights, class management, and student engagement."
+                : "You are helping generate follow-up questions for a student. Focus on learning, understanding concepts, and academic growth.";
+
             const completion = await this.openai.chat.completions.create({
                 model: OPENAI_CONFIG.model,
                 messages: [
                     {
                         role: "system",
-                        content: `You are helping generate follow-up questions for a course assistant. Based on the student's original question and the AI response, suggest 2-3 relevant follow-up questions that would help the student learn more about the topic or explore related course content.
+                        content: `${roleContext} Based on the ${userRole === 'teacher' ? 'teacher' : 'student'}'s original question and the AI response, suggest 2-3 relevant follow-up questions that would help them ${userRole === 'teacher' ? 'better manage their course and understand student needs' : 'learn more about the topic or explore related course content'}.
 
 Course: ${courseContext.courseName}
-Make the questions specific to the course context and encourage deeper learning.`
+Make the questions specific to the course context and encourage ${userRole === 'teacher' ? 'effective teaching' : 'deeper learning'}.`
                     },
                     {
                         role: "user",
@@ -251,31 +322,53 @@ Generate 2-3 follow-up questions (return as a simple list, one per line):`
 
         } catch (error) {
             console.error('Error generating follow-up questions:', error);
-            return this.getFallbackFollowUpQuestions(userMessage);
+            return this.getFallbackFollowUpQuestions(userMessage, userRole);
         }
     }
 
-    private getFallbackFollowUpQuestions(userMessage: string): string[] {
+    private getFallbackFollowUpQuestions(userMessage: string, userRole: UserRole): string[] {
         const queryLower = userMessage.toLowerCase();
 
-        if (queryLower.includes('assignment') || queryLower.includes('homework')) {
-            return [
-                "What are the specific requirements for this assignment?",
-                "When is this assignment due?",
-                "Are there any related discussions about this assignment?"
-            ];
-        } else if (queryLower.includes('discussion') || queryLower.includes('topic')) {
-            return [
-                "Can you show me more discussions on this topic?",
-                "What do other students think about this?",
-                "Are there any announcements related to this topic?"
-            ];
+        if (userRole === 'teacher') {
+            if (queryLower.includes('student') || queryLower.includes('confusion')) {
+                return [
+                    "What specific topics need clarification?",
+                    "Should I create additional resources?",
+                    "How can I better support struggling students?"
+                ];
+            } else if (queryLower.includes('announcement') || queryLower.includes('draft')) {
+                return [
+                    "What tone should this announcement have?",
+                    "Should I reference specific discussions?",
+                    "When should this be posted?"
+                ];
+            } else {
+                return [
+                    "What are students confused about this week?",
+                    "Help me draft an announcement",
+                    "What should I explain better in class?"
+                ];
+            }
         } else {
-            return [
-                "Can you elaborate on this topic?",
-                "What course materials should I review?",
-                "Are there related discussions I should read?"
-            ];
+            if (queryLower.includes('assignment') || queryLower.includes('homework')) {
+                return [
+                    "What are the specific requirements?",
+                    "When is this due?",
+                    "Are there related discussions about this?"
+                ];
+            } else if (queryLower.includes('concept') || queryLower.includes('explain')) {
+                return [
+                    "Can you give me more examples?",
+                    "What resources can help me understand this?",
+                    "What should I ask if I'm still confused?"
+                ];
+            } else {
+                return [
+                    "Can you explain the last announcement?",
+                    "What do others think about this topic?",
+                    "Give me resources to review before next class"
+                ];
+            }
         }
     }
 }

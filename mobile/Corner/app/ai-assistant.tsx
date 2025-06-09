@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { db, auth } from '../config/ firebase-config';
+import { db, auth } from '../config/ firebase-config.js';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
 import { openaiService } from '../services/openaiService';
 
@@ -53,20 +53,33 @@ export default function AIAssistantScreen() {
 
         // Add welcome message
         if (messages.length === 0) {
-            setMessages([{
-                id: 'welcome',
-                content: `Hi! I'm your AI assistant for ${courseName}. I can help you with questions about the course content, discussions, announcements, and provide relevant resources. I have access to all course materials and can give you personalized assistance. What would you like to know?`,
-                isUser: false,
-                timestamp: new Date(),
-                followUpQuestions: [
+            const welcomeMessage = role === 'teacher'
+                ? `Hi! I'm your co-instructor AI assistant for ${courseName}. I can help you analyze student engagement, draft announcements, summarize discussion trends, and provide insights into what students are struggling with. How can I support your teaching today?`
+                : `Hi! I'm your AI assistant for ${courseName}. I can help you with questions about the course content, discussions, announcements, and provide relevant resources. I have access to all course materials and can give you personalized assistance. What would you like to know?`;
+
+            const welcomeFollowUps = role === 'teacher'
+                ? [
+                    "What are students confused about this week?",
+                    "Help me draft an announcement",
+                    "Summarize recent discussion trends",
+                    "What topics need more attention?"
+                ]
+                : [
                     "What are the main topics discussed in this course?",
                     "Can you summarize recent announcements?",
                     "What resources are available for this course?",
                     "Help me understand a specific discussion topic"
-                ]
+                ];
+
+            setMessages([{
+                id: 'welcome',
+                content: welcomeMessage,
+                isUser: false,
+                timestamp: new Date(),
+                followUpQuestions: welcomeFollowUps
             }]);
         }
-    }, [courseId]);
+    }, [courseId, role]);
 
     const loadCourseContext = async () => {
         try {
@@ -142,11 +155,12 @@ export default function AIAssistantScreen() {
         const resources = findRelevantResources(userMessage);
 
         try {
-            // Use OpenAI service to generate response with full course context
+            // Use OpenAI service to generate response with full course context and user role
             const { content, followUpQuestions } = await openaiService.generateResponse(
                 userMessage,
                 courseContext,
-                resources
+                resources,
+                role as 'teacher' | 'student'
             );
 
             return {
@@ -162,17 +176,29 @@ export default function AIAssistantScreen() {
             console.error('Error generating AI response:', error);
 
             // Fallback to basic response if OpenAI fails
-            return {
-                id: Date.now().toString(),
-                content: "I'm having trouble generating a response right now. Please try rephrasing your question or check with your instructor if you need immediate help.",
-                isUser: false,
-                timestamp: new Date(),
-                resources: resources.slice(0, 3),
-                followUpQuestions: [
+            const fallbackMessage = role === 'teacher'
+                ? "I'm having trouble generating a response right now. Please try rephrasing your question or let me know what specific aspect of course management you'd like help with."
+                : "I'm having trouble generating a response right now. Please try rephrasing your question or check with your instructor if you need immediate help.";
+
+            const fallbackFollowUps = role === 'teacher'
+                ? [
+                    "What specific student questions should I address?",
+                    "Help me analyze discussion patterns",
+                    "What announcements should I consider?"
+                ]
+                : [
                     "Can you help me find course materials?",
                     "What should I review for this topic?",
                     "Are there recent announcements I should check?"
-                ]
+                ];
+
+            return {
+                id: Date.now().toString(),
+                content: fallbackMessage,
+                isUser: false,
+                timestamp: new Date(),
+                resources: resources.slice(0, 3),
+                followUpQuestions: fallbackFollowUps
             };
         }
     };
@@ -380,7 +406,9 @@ export default function AIAssistantScreen() {
                 </Pressable>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle}>AI Assistant</Text>
-                    <Text style={styles.headerSubtitle}>{courseName}</Text>
+                    <Text style={styles.headerSubtitle}>
+                        {courseName} • {role === 'teacher' ? 'Teacher' : 'Student'}
+                    </Text>
                 </View>
                 <View style={styles.aiIndicator}>
                     <Ionicons name="sparkles" size={20} color="#81171b" />
