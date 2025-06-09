@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../app/firebase/config';
+import { auth, db } from '../config/ firebase-config';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
 

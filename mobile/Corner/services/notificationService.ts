@@ -3,7 +3,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from '../app/firebase/config';
+import { db } from '../config/ firebase-config';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 // Configure notification behavior
@@ -56,7 +56,6 @@ class NotificationService {
             }
 
             if (finalStatus !== 'granted') {
-                console.log('Failed to get push token for push notification!');
                 return null;
             }
 
@@ -69,7 +68,6 @@ class NotificationService {
                 ).data;
 
                 this.expoPushToken = pushTokenString;
-                console.log('Expo Push Token:', pushTokenString);
 
                 // Store token locally
                 await AsyncStorage.setItem('expoPushToken', pushTokenString);
@@ -80,7 +78,6 @@ class NotificationService {
                 return null;
             }
         } else {
-            console.log('Must use physical device for Push notifications');
             return null;
         }
     }
@@ -88,18 +85,16 @@ class NotificationService {
     private setupNotificationListeners() {
         // Handle notification received while app is foregrounded
         Notifications.addNotificationReceivedListener(notification => {
-            console.log('Notification received:', notification);
+            // Notification received in foreground
         });
 
         // Handle notification response (when user taps notification)
         Notifications.addNotificationResponseReceivedListener(response => {
-            console.log('Notification response:', response);
             const data = response.notification.request.content.data;
 
             // Handle navigation based on notification type
             if (data?.type === 'announcement' || data?.type === 'discussion_milestone' || data?.type === 'discussion_replies' || data?.type === 'teacher_discussion_milestone') {
-                // You can add navigation logic here
-                console.log('Navigate to course:', data.courseId);
+                // Navigation logic can be added here
             }
         });
     }
@@ -128,7 +123,6 @@ class NotificationService {
                     expoPushTokens: arrayUnion(token),
                     lastTokenUpdate: new Date()
                 });
-                console.log('User notification token updated');
             } catch (error) {
                 console.error('Error updating user notification token:', error);
             }
@@ -177,7 +171,6 @@ class NotificationService {
             });
 
             const result = await response.json();
-            console.log('Push notification sent:', result);
             return result;
         } catch (error) {
             console.error('Error sending push notification:', error);

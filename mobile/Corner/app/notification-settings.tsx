@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from './firebase/config';
+import { auth, db } from '../config/ firebase-config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { notificationService } from '../services/notificationService';
 import { notificationHelpers } from '../services/notificationHelpers';
@@ -98,11 +98,10 @@ export default function NotificationSettingsScreen() {
                 courseId: 'test',
                 courseName: 'Test Course',
                 title: 'Test Notification',
-                body: 'This is a test notification to check if everything is working!',
+                body: 'This is a test notification to verify your settings work correctly.',
                 data: { test: true }
             });
-            Alert.alert('Test Notification', 'A test notification should appear shortly!');
-            console.log('Test notification scheduled');
+            Alert.alert('Success', 'Test notification sent! Check your notification tray.');
         } catch (error) {
             console.error('Error sending test notification:', error);
             Alert.alert('Error', 'Failed to send test notification.');
@@ -118,8 +117,7 @@ export default function NotificationSettingsScreen() {
             }
 
             await notificationHelpers.clearUserNotifications(user.uid);
-            Alert.alert('Success', 'All notifications cleared!');
-            console.log('All notifications cleared for user:', user.uid);
+            Alert.alert('Success', 'All notifications have been cleared.');
         } catch (error) {
             console.error('Error clearing notifications:', error);
             Alert.alert('Error', 'Failed to clear notifications.');

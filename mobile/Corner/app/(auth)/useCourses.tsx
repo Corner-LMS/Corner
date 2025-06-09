@@ -1,4 +1,4 @@
-import { db } from '../firebase/config';
+import { db } from '../../config/ firebase-config';
 import { collection, addDoc } from 'firebase/firestore';
 
 function generateCode(length = 6) {

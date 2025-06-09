@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Pressable, ScrollView, Alert } from 'react-native';
-import { auth, db } from '../firebase/config';
+import { auth, db } from '../../config/ firebase-config';
 import { collection, query, where, getDocs, getDoc, doc, DocumentReference, updateDoc, deleteDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,9 +14,9 @@ export default function DashboardScreen() {
   const [role, setRole] = useState('');
   const [studentCourses, setStudentCourses] = useState<any[]>([]);
   const [teacherNames, setTeacherNames] = useState<Record<string, string>>({});
+  const [user, setUser] = useState<User | null>(null);
 
-  const loadUserAndCourses = async () => {
-    const user = auth.currentUser;
+  const loadUserAndCourses = async (user: User) => {
     if (!user) {
       setLoading(false);
       router.replace('/welcome');
@@ -97,16 +97,14 @@ export default function DashboardScreen() {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user ? 'User logged in' : 'No user');
-
-      if (!user) {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      if (user) {
+        loadUserAndCourses(user);
+      } else {
+        setCourses([]);
         setLoading(false);
-        router.replace('/welcome');
-        return;
       }
-
-      await loadUserAndCourses();
     });
 
     return () => unsubscribe();
@@ -116,7 +114,7 @@ export default function DashboardScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (auth.currentUser) {
-        loadUserAndCourses();
+        loadUserAndCourses(auth.currentUser);
       }
     }, [])
   );

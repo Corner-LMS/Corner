@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { login } from './useAuth';
 import { router } from 'expo-router';
-import { auth } from '../firebase/config';
+import { auth } from '../../config/ firebase-config';
 import { doc } from 'firebase/firestore';
 import { getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db } from '../../config/ firebase-config';
 
 export default function Login() {
     const [email, setEmail] = useState('');

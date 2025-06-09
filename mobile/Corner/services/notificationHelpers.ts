@@ -1,4 +1,4 @@
-import { db } from '../app/firebase/config';
+import { db } from '../config/ firebase-config';
 import {
     collection,
     query,
@@ -46,7 +46,7 @@ class NotificationHelpers {
     // Send notification when teacher posts an announcement
     async notifyStudentsOfAnnouncement(courseId: string, announcementData: any, teacherId: string) {
         try {
-            console.log('Triggering announcement notifications for course:', courseId);
+
 
             // Get all students in the course
             const students = await this.getStudentsInCourse(courseId);
@@ -100,7 +100,7 @@ class NotificationHelpers {
             });
 
             await Promise.all(notificationPromises);
-            console.log(`Sent announcement notifications to ${students.length} students`);
+
 
             // Track notification in Firestore
             await this.logNotification({
@@ -121,14 +121,14 @@ class NotificationHelpers {
     // Check and notify after every 10 discussion posts
     async checkDiscussionMilestone(courseId: string, newPostAuthorId: string) {
         try {
-            console.log('Checking discussion milestone for course:', courseId);
+
 
             // Get total discussion count
             const discussionsQuery = query(collection(db, 'courses', courseId, 'discussions'));
             const discussionsSnapshot = await getDocs(discussionsQuery);
             const totalDiscussions = discussionsSnapshot.size;
 
-            console.log('Total discussions:', totalDiscussions);
+
 
             // Check if we hit a milestone (every 10 posts)
             if (totalDiscussions > 0 && totalDiscussions % 10 === 0) {
@@ -197,7 +197,6 @@ class NotificationHelpers {
             });
 
             await Promise.all(notificationPromises);
-            console.log(`Sent milestone notifications to ${students.length} students`);
 
             // Track notification
             await this.logNotification({
@@ -263,7 +262,7 @@ class NotificationHelpers {
                 );
 
                 await Promise.all(notificationPromises);
-                console.log(`Sent discussion milestone notification to teacher: ${teacherData.name}`);
+
             }
 
             // Track notification
@@ -286,7 +285,7 @@ class NotificationHelpers {
     // Notify when student's discussion post gets 3+ replies
     async checkDiscussionReplies(courseId: string, discussionId: string, newReplyAuthorId: string) {
         try {
-            console.log('Checking discussion replies for notification:', discussionId);
+
 
             // Get discussion details
             const discussionDoc = await getDoc(doc(db, 'courses', courseId, 'discussions', discussionId));
@@ -297,7 +296,7 @@ class NotificationHelpers {
             const replies = discussionData.replies || 0;
             const originalAuthorId = discussionData.authorId;
 
-            console.log('Discussion replies count:', replies);
+
 
             // Notify if we hit exactly 2 replies and the original author is a student
             if (replies === 5 && discussionData.authorRole === 'student' && originalAuthorId !== newReplyAuthorId) {
@@ -350,7 +349,7 @@ class NotificationHelpers {
                         );
 
                         await Promise.all(notificationPromises);
-                        console.log(`Sent reply notification to discussion author: ${authorData.name}`);
+
                     }
 
                     // Track notification
@@ -380,7 +379,7 @@ class NotificationHelpers {
 
             // Note: We don't delete individual notifications from Firestore
             // as they serve as a record. The badge count reset is sufficient.
-            console.log('User notifications cleared for:', userId);
+
         } catch (error) {
             console.error('Error clearing user notifications:', error);
             throw error;
@@ -401,7 +400,7 @@ class NotificationHelpers {
                 .map(doc => ({ id: doc.id, ...doc.data() } as StudentUser))
                 .filter(student => excludeUserId ? student.id !== excludeUserId : true);
 
-            console.log(`Found ${students.length} students in course ${courseId}`);
+
             return students;
         } catch (error) {
             console.error('Error getting students in course:', error);

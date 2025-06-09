@@ -1,3 +1,4 @@
 web_backup/
 backend_backup/
-mobile/Corner/app/firebase/config.js
+mobile/Corner/config/
+mobile/Corner/.env

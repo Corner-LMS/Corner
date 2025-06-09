@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
-import { db, auth } from './firebase/config';
+import { db, auth } from '../config/ firebase-config';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
 

@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
-import { auth } from './firebase/config';
+import { auth } from '../config/ firebase-config';
 import { onAuthStateChanged } from 'firebase/auth';
 
 import { useColorScheme } from '@/hooks/useColorScheme'; import { notificationService } from '../services/notificationService';
@@ -16,22 +16,20 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    // Initialize notification service when app starts
+    // Initialize notification service
     const initNotifications = async () => {
       try {
         await notificationService.init();
-        console.log('Notification service initialized');
       } catch (error) {
         console.error('Error initializing notification service:', error);
       }
     };
 
-    // Update user's notification token when they log in
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    // Listen for auth state changes
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
           await notificationService.updateUserNotificationToken(user.uid);
-          console.log('User notification token updated for:', user.uid);
         } catch (error) {
           console.error('Error updating user notification token:', error);
         }
@@ -40,7 +38,7 @@ export default function RootLayout() {
 
     initNotifications();
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
 
   if (!loaded) {
@@ -62,6 +60,7 @@ export default function RootLayout() {
         <Stack.Screen name="welcome" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+        <Stack.Screen name="ai-assistant" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

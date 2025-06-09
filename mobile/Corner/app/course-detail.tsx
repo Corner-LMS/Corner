@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { db, auth } from './firebase/config';
+import { db, auth } from '../config/ firebase-config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { notificationHelpers } from '../services/notificationHelpers';
 
@@ -125,7 +125,6 @@ export default function CourseDetailScreen() {
             };
 
             postData.authorName = authorName;
-            console.log(postData.authorName);
 
             // Handle anonymity for discussions
             if (activeTab === 'discussions' && role === 'student' && isAnonymous) {
@@ -149,11 +148,9 @@ export default function CourseDetailScreen() {
                         authorName: authorName
                     };
                     await notificationHelpers.notifyStudentsOfAnnouncement(courseId as string, announcementData, user.uid);
-                    console.log('Announcement notification triggered');
                 } else if (activeTab === 'discussions') {
                     // Check for discussion milestone (every 10 posts)
                     await notificationHelpers.checkDiscussionMilestone(courseId as string, user.uid);
-                    console.log('Discussion milestone check triggered');
                 }
             } catch (notificationError) {
                 console.error('Error sending notifications:', notificationError);
@@ -479,6 +476,21 @@ export default function CourseDetailScreen() {
                     </View>
                     <Text style={styles.headerSubtitle}>{courseCode} • {instructorName}</Text>
                 </View>
+                <TouchableOpacity
+                    style={styles.aiAssistantButton}
+                    onPress={() => router.push({
+                        pathname: '/ai-assistant',
+                        params: {
+                            courseId: courseId,
+                            courseName: courseName,
+                            courseCode: courseCode,
+                            instructorName: instructorName,
+                            role: role
+                        }
+                    })}
+                >
+                    <Ionicons name="sparkles" size={20} color="#81171b" />
+                </TouchableOpacity>
             </View>
 
             <View style={styles.tabContainer}>
@@ -809,5 +821,10 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
         marginLeft: 5,
+    },
+    aiAssistantButton: {
+        padding: 8,
+        borderRadius: 12,
+        backgroundColor: 'rgba(129, 23, 27, 0.08)',
     },
 }); 
