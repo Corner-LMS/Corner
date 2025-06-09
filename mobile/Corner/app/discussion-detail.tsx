@@ -45,6 +45,47 @@ export default function DiscussionDetailScreen() {
     const [editingComment, setEditingComment] = useState<{ id: string, content: string } | null>(null);
     const [replyingTo, setReplyingTo] = useState<{ id: string, authorName: string } | null>(null);
 
+    // Build nested comment tree from flat array
+    const buildCommentTree = (allComments: Comment[]): Comment[] => {
+        const commentMap = new Map<string, Comment>();
+        const topLevelComments: Comment[] = [];
+
+        // Initialize all comments with empty replies array
+        allComments.forEach(comment => {
+            commentMap.set(comment.id, { ...comment, replies: [] });
+        });
+
+        // Build the tree
+        allComments.forEach(comment => {
+            const commentWithReplies = commentMap.get(comment.id)!;
+
+            if (comment.parentId) {
+                // This is a reply - add it to parent's replies
+                const parent = commentMap.get(comment.parentId);
+                if (parent) {
+                    parent.replies!.push(commentWithReplies);
+                }
+            } else {
+                // This is a top-level comment
+                topLevelComments.push(commentWithReplies);
+            }
+        });
+
+        // Sort top-level comments by creation time (newest first)
+        topLevelComments.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+
+        // Recursively sort replies within each comment (oldest first for replies)
+        const sortReplies = (comment: Comment) => {
+            if (comment.replies && comment.replies.length > 0) {
+                comment.replies.sort((a, b) => a.createdAt?.seconds - b.createdAt?.seconds);
+                comment.replies.forEach(sortReplies);
+            }
+        };
+
+        topLevelComments.forEach(sortReplies);
+        return topLevelComments;
+    };
+
     useEffect(() => {
         if (!courseId || !discussionId) return;
 
@@ -73,19 +114,9 @@ export default function DiscussionDetailScreen() {
                 ...doc.data()
             })) as Comment[];
 
-            // Organize comments into threads
-            const topLevelComments = allComments.filter(comment => !comment.parentId);
-            const organizedComments = topLevelComments.map(comment => {
-                const replies = allComments
-                    .filter(reply => reply.parentId === comment.id)
-                    .sort((a, b) => a.createdAt?.seconds - b.createdAt?.seconds); // Sort replies chronologically
-                return {
-                    ...comment,
-                    replies
-                };
-            });
-
-            setComments(organizedComments);
+            // Build nested comment tree
+            const commentTree = buildCommentTree(allComments);
+            setComments(commentTree);
         });
 
         return () => {
@@ -258,19 +289,21 @@ export default function DiscussionDetailScreen() {
     };
 
     const renderComment = (comment: Comment, depth: number = 0) => {
-        const isReply = depth > 0;
+        const maxDepth = 8; // Prevent excessive nesting for UI readability
+        const isDeepNested = depth >= maxDepth;
 
         return (
             <View key={comment.id}>
                 <View style={[
                     styles.commentWrapper,
-                    isReply && styles.replyWrapper
+                    { marginLeft: Math.min(depth * 20, maxDepth * 20) }
                 ]}>
-                    {isReply && <View style={styles.replyConnector} />}
-                    <View style={styles.commentIndentLine} />
+                    {depth > 0 && <View style={[styles.threadLine, { left: -10 }]} />}
+
                     <View style={[
                         styles.commentCard,
-                        isReply && styles.replyCard
+                        depth > 0 && styles.replyCard,
+                        isDeepNested && styles.deepNestedCard
                     ]}>
                         <View style={styles.commentHeader}>
                             <View style={styles.commentAuthorSection}>
@@ -284,10 +317,15 @@ export default function DiscussionDetailScreen() {
                                         {comment.authorRole}
                                     </Text>
                                 </View>
+                                {depth > 0 && (
+                                    <View style={styles.depthIndicator}>
+                                        <Text style={styles.depthText}>L{depth}</Text>
+                                    </View>
+                                )}
                             </View>
                             <View style={styles.commentActions}>
-                                {/* Reply button - only show for top-level comments and if not archived */}
-                                {!isReply && !courseIsArchived && (
+                                {/* Reply button - show for all comments if not archived */}
+                                {!courseIsArchived && (
                                     <TouchableOpacity
                                         style={styles.replyButton}
                                         onPress={() => handleReplyToComment(comment)}
@@ -325,7 +363,7 @@ export default function DiscussionDetailScreen() {
                     </View>
                 </View>
 
-                {/* Render replies */}
+                {/* Recursively render nested replies */}
                 {comment.replies && comment.replies.length > 0 && (
                     <View style={styles.repliesContainer}>
                         {comment.replies.map(reply => renderComment(reply, depth + 1))}
@@ -334,6 +372,19 @@ export default function DiscussionDetailScreen() {
             </View>
         );
     };
+
+    // Count total comments including nested replies
+    const countAllComments = (comments: Comment[]): number => {
+        let total = comments.length;
+        comments.forEach(comment => {
+            if (comment.replies && comment.replies.length > 0) {
+                total += countAllComments(comment.replies);
+            }
+        });
+        return total;
+    };
+
+    const totalComments = countAllComments(comments);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -374,7 +425,7 @@ export default function DiscussionDetailScreen() {
                     <View style={styles.commentsSeparator}>
                         <View style={styles.separatorLine} />
                         <Text style={styles.commentsTitle}>
-                            Comments ({comments.length})
+                            Comments ({totalComments})
                         </Text>
                         <View style={styles.separatorLine} />
                     </View>
@@ -627,25 +678,21 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     commentWrapper: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 12,
-        marginLeft: 40,
+        marginBottom: 16,
+        position: 'relative',
     },
-    commentIndentLine: {
+    threadLine: {
         position: 'absolute',
-        left: -40,
         top: 0,
         bottom: 0,
         width: 2,
-        backgroundColor: '#81171b',
-        opacity: 0.3,
+        backgroundColor: 'rgba(129, 23, 27, 0.2)',
+        borderRadius: 1,
     },
     commentCard: {
         backgroundColor: '#fff',
         padding: 20,
         borderRadius: 14,
-        flex: 1,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
@@ -653,6 +700,16 @@ const styles = StyleSheet.create({
         elevation: 3,
         borderLeftWidth: 3,
         borderLeftColor: '#f1f5f9',
+    },
+    replyCard: {
+        backgroundColor: '#f8fafc',
+        borderLeftWidth: 3,
+        borderLeftColor: '#81171b',
+        marginLeft: 10,
+    },
+    deepNestedCard: {
+        backgroundColor: '#f1f5f9',
+        borderLeftColor: '#64748b',
     },
     commentHeader: {
         flexDirection: 'row',
@@ -663,6 +720,7 @@ const styles = StyleSheet.create({
     commentAuthorSection: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
     },
     commentAuthor: {
         fontSize: 16,
@@ -675,12 +733,24 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 8,
+        marginRight: 8,
     },
     commentRoleText: {
         fontSize: 11,
         color: '#fff',
         fontWeight: '700',
         letterSpacing: 0.3,
+    },
+    depthIndicator: {
+        backgroundColor: 'rgba(129, 23, 27, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    depthText: {
+        fontSize: 10,
+        color: '#81171b',
+        fontWeight: '600',
     },
     commentContent: {
         fontSize: 16,
@@ -761,7 +831,6 @@ const styles = StyleSheet.create({
     commentActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginLeft: 12,
         gap: 4,
     },
     editButton: {
@@ -775,6 +844,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#fef2f2',
     },
     cancelButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f1f5f9',
+    },
+    replyButton: {
         padding: 8,
         borderRadius: 8,
         backgroundColor: '#f1f5f9',
@@ -807,31 +881,8 @@ const styles = StyleSheet.create({
         marginLeft: 12,
         fontWeight: '500',
     },
-    replyWrapper: {
-        marginLeft: 40,
-    },
-    replyCard: {
-        backgroundColor: '#f8fafc',
-        borderLeftWidth: 3,
-        borderLeftColor: '#81171b',
-        borderRadius: 12,
-    },
-    replyConnector: {
-        position: 'absolute',
-        left: -40,
-        top: 0,
-        bottom: 0,
-        width: 2,
-        backgroundColor: '#81171b',
-        opacity: 0.3,
-    },
     repliesContainer: {
-        marginLeft: 40,
-    },
-    replyButton: {
-        padding: 8,
-        borderRadius: 8,
-        backgroundColor: '#f1f5f9',
+        marginTop: 8,
     },
     replyContext: {
         flexDirection: 'row',
@@ -846,6 +897,7 @@ const styles = StyleSheet.create({
         color: '#1e293b',
         marginLeft: 12,
         fontWeight: '500',
+        flex: 1,
     },
     cancelReplyButton: {
         padding: 8,
