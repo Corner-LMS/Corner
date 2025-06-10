@@ -18,7 +18,7 @@ interface Message {
 
 interface ResourceRecommendation {
     title: string;
-    type: 'discussion' | 'announcement' | 'link' | 'file';
+    type: 'discussion' | 'announcement' | 'link' | 'text';
     id?: string;
     description: string;
     relevanceScore: number;
@@ -27,6 +27,7 @@ interface ResourceRecommendation {
 interface CourseContext {
     discussions: any[];
     announcements: any[];
+    resources: any[];
     courseName: string;
     courseCode: string;
     instructorName: string;
@@ -95,9 +96,16 @@ export default function AIAssistantScreen() {
             );
             const announcements = announcementsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+            // Load course resources
+            const resourcesSnapshot = await getDocs(
+                query(collection(db, 'courses', courseId as string, 'resources'), orderBy('createdAt', 'desc'))
+            );
+            const resources = resourcesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
             setCourseContext({
                 discussions,
                 announcements,
+                resources,
                 courseName: courseName as string,
                 courseCode: courseCode as string,
                 instructorName: instructorName as string
@@ -241,6 +249,32 @@ export default function AIAssistantScreen() {
             }
         });
 
+        // Search course resources (links, text)
+        courseContext.resources.forEach(resource => {
+            const titleMatch = resource.title?.toLowerCase().includes(queryLower);
+            const descriptionMatch = resource.description?.toLowerCase().includes(queryLower);
+            const contentMatch = resource.type === 'text' && resource.content?.toLowerCase().includes(queryLower);
+
+            if (titleMatch || descriptionMatch || contentMatch) {
+                let description = '';
+                if (resource.description) {
+                    description = resource.description;
+                } else if (resource.type === 'text') {
+                    description = resource.content.substring(0, 100) + '...';
+                } else if (resource.type === 'link') {
+                    description = `Link: ${resource.content}`;
+                }
+
+                resources.push({
+                    title: resource.title,
+                    type: resource.type as 'link' | 'text',
+                    id: resource.id,
+                    description,
+                    relevanceScore: titleMatch ? 0.95 : (descriptionMatch ? 0.7 : 0.6)
+                });
+            }
+        });
+
         // Sort by relevance score
         return resources.sort((a, b) => b.relevanceScore - a.relevanceScore);
     };
@@ -309,7 +343,7 @@ export default function AIAssistantScreen() {
                     role: role
                 }
             });
-        } else {
+        } else if (resource.type === 'announcement') {
             // Navigate back to course detail to view announcement
             router.push({
                 pathname: '/course-detail',
@@ -318,6 +352,16 @@ export default function AIAssistantScreen() {
                     courseName: courseName,
                     courseCode: courseCode,
                     instructorName: instructorName,
+                    role: role
+                }
+            });
+        } else if (resource.type === 'link' || resource.type === 'text') {
+            // Navigate to course resources page
+            router.push({
+                pathname: '/course-resources',
+                params: {
+                    courseId: courseId,
+                    courseName: courseName,
                     role: role
                 }
             });
@@ -368,7 +412,9 @@ export default function AIAssistantScreen() {
                         >
                             <View style={styles.resourceHeader}>
                                 <Ionicons
-                                    name={resource.type === 'discussion' ? 'chatbubbles' : 'megaphone'}
+                                    name={resource.type === 'discussion' ? 'chatbubbles' :
+                                        resource.type === 'announcement' ? 'megaphone' :
+                                            resource.type === 'link' ? 'link' : 'reader'}
                                     size={16}
                                     color="#81171b"
                                 />

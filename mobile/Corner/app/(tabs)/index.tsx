@@ -89,6 +89,38 @@ export default function DashboardScreen() {
           setCourses([]); // Set empty array on error
         }
       }
+
+      // 🔑 Admin can see all courses in the system
+      if (userData.role === 'admin') {
+        try {
+          const snapshot = await getDocs(collection(db, 'courses'));
+          // Get all courses (archived and active) for admin overview
+          const coursesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setCourses(coursesList);
+
+          // Get teacher names for all courses
+          const teacherNamesMap: Record<string, string> = {};
+          for (const course of coursesList) {
+            const courseData = course as any; // Type assertion for Firebase data
+            if (courseData.teacherId && !teacherNamesMap[courseData.teacherId]) {
+              try {
+                const teacherRef = doc(db, 'users', courseData.teacherId);
+                const teacherSnap = await getDoc(teacherRef);
+                if (teacherSnap.exists()) {
+                  teacherNamesMap[courseData.teacherId] = teacherSnap.data().name || 'Unknown Teacher';
+                }
+              } catch (error) {
+                console.error('Error fetching teacher name:', error);
+                teacherNamesMap[courseData.teacherId] = 'Unknown Teacher';
+              }
+            }
+          }
+          setTeacherNames(teacherNamesMap);
+        } catch (error) {
+          console.error('Error fetching admin courses:', error);
+          setCourses([]);
+        }
+      }
     } catch (error) {
       console.error('Error in loadUserAndCourses:', error);
     } finally {
@@ -261,7 +293,9 @@ export default function DashboardScreen() {
 
           <View style={styles.welcomeSection}>
             <Text style={styles.welcomeText}>Welcome back! 👋</Text>
-            <Text style={styles.welcomeSubtext}>Here are your courses</Text>
+            <Text style={styles.welcomeSubtext}>
+              {role === 'admin' ? 'Platform Overview' : 'Here are your courses'}
+            </Text>
           </View>
 
           {role === 'student' && studentCourses.length > 0 ? (
@@ -378,6 +412,70 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               </View>
             ))
+          ) : role === 'admin' && courses.length > 0 ? (
+            courses.map((course) => {
+              const courseData = course as any;
+              const teacherName = courseData.teacherId ? teacherNames[courseData.teacherId] : 'Unknown Teacher';
+              const isArchived = courseData.archived === true;
+
+              return (
+                <View key={course.id} style={styles.courseContainer}>
+                  <TouchableOpacity
+                    style={[styles.courseBox, isArchived && styles.archivedCourseBox]}
+                    onPress={() => router.push({
+                      pathname: '/course-detail',
+                      params: {
+                        courseId: course.id,
+                        courseName: courseData.name,
+                        courseCode: courseData.code || 'N/A',
+                        instructorName: teacherName,
+                        role: role,
+                        isArchived: isArchived ? 'true' : 'false'
+                      }
+                    })}
+                  >
+                    <View style={styles.courseHeader}>
+                      <Text style={[styles.courseName, isArchived && styles.archivedText]}>
+                        {courseData.name}
+                        {isArchived && ' (Archived)'}
+                      </Text>
+                      <View style={styles.subtleActionsGroup}>
+                        <View style={[styles.roleTag, styles.adminCourseTag]}>
+                          <Text style={styles.roleTagText}>Admin View</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>Course Code:</Text>
+                      <Text style={styles.courseValue}>{courseData.code || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>Description:</Text>
+                      <Text style={styles.courseValue}>{courseData.description || 'No description'}</Text>
+                    </View>
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>Instructor:</Text>
+                      <Text style={styles.courseValue}>{teacherName}</Text>
+                    </View>
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>Created:</Text>
+                      <Text style={styles.courseValue}>
+                        {courseData.createdAt ? new Date(courseData.createdAt).toLocaleDateString() : 'N/A'}
+                      </Text>
+                    </View>
+                    {isArchived && (
+                      <View style={styles.courseDetail}>
+                        <Text style={styles.courseLabel}>Archived:</Text>
+                        <Text style={styles.courseValue}>
+                          {courseData.archivedAt ? new Date(courseData.archivedAt).toLocaleDateString() : 'N/A'}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })
           ) : (
             <View style={styles.noCourseBox}>
               <Text style={styles.noCourseText}>No courses found.</Text>
@@ -401,6 +499,15 @@ export default function DashboardScreen() {
           onPress={() => router.push('/join-course')}
         >
           <Ionicons name="add" size={30} color="#fff" />
+        </TouchableOpacity>
+      )}
+
+      {role === 'admin' && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => router.push('/(tabs)/analytics')}
+        >
+          <Ionicons name="bar-chart" size={30} color="#fff" />
         </TouchableOpacity>
       )}
     </SafeAreaView>
@@ -634,5 +741,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#64748b',
     fontWeight: '500',
+  },
+  archivedCourseBox: {
+    opacity: 0.7,
+    borderLeftColor: '#6b7280',
+  },
+  archivedText: {
+    color: '#6b7280',
+  },
+  adminCourseTag: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
   },
 });

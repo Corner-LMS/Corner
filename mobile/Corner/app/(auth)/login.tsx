@@ -28,7 +28,7 @@ export default function Login() {
             const role = userData.role;
             if (role === 'student') {
                 router.replace('/');
-            } else if (role === 'teacher') {
+            } else if (role === 'teacher' || role === 'admin') {
                 router.replace('/(tabs)');
             } else {
                 router.replace('/');
@@ -72,6 +72,14 @@ export default function Login() {
                 <TouchableOpacity style={styles.button} onPress={handleLogin}>
                     <Text style={styles.buttonText}>Log In</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.forgotPasswordButton}
+                    onPress={() => router.push('/(auth)/reset-password')}
+                >
+                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                     style={styles.linkButton}
                     onPress={() => router.replace('/(auth)/signup')}
@@ -141,6 +149,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     linkText: {
+        color: '#81171b',
+        fontSize: 16,
+    },
+    forgotPasswordButton: {
+        marginTop: 10,
+        alignItems: 'center',
+    },
+    forgotPasswordText: {
         color: '#81171b',
         fontSize: 16,
     },

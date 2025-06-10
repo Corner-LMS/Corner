@@ -139,8 +139,8 @@ export default function CourseDetailScreen() {
 
             // Trigger notifications based on content type
             try {
-                if (activeTab === 'announcements' && role === 'teacher') {
-                    // Notify students of new announcement (teachers only)
+                if (activeTab === 'announcements' && (role === 'teacher' || role === 'admin')) {
+                    // Notify students of new announcement (teachers and admins only)
                     const announcementData = {
                         id: docRef.id,
                         title: newTitle.trim(),
@@ -282,7 +282,8 @@ export default function CourseDetailScreen() {
                             <View style={styles.postHeaderRight}>
                                 <View style={[
                                     styles.roleTag,
-                                    announcement.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                    announcement.authorRole === 'teacher' ? styles.teacherTag :
+                                        announcement.authorRole === 'admin' ? styles.adminTag : styles.studentTag
                                 ]}>
                                     <Text style={styles.roleTagText}>{announcement.authorRole}</Text>
                                 </View>
@@ -342,7 +343,8 @@ export default function CourseDetailScreen() {
                                 <View style={[
                                     styles.roleTag,
                                     discussion.isAnonymous ? styles.studentTag :
-                                        discussion.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                        discussion.authorRole === 'teacher' ? styles.teacherTag :
+                                            discussion.authorRole === 'admin' ? styles.adminTag : styles.studentTag
                                 ]}>
                                     <Text style={styles.roleTagText}>
                                         {discussion.authorRole}
@@ -476,21 +478,38 @@ export default function CourseDetailScreen() {
                     </View>
                     <Text style={styles.headerSubtitle}>{courseCode} • {instructorName}</Text>
                 </View>
-                <TouchableOpacity
-                    style={styles.aiAssistantButton}
-                    onPress={() => router.push({
-                        pathname: '/ai-assistant',
-                        params: {
-                            courseId: courseId,
-                            courseName: courseName,
-                            courseCode: courseCode,
-                            instructorName: instructorName,
-                            role: role
-                        }
-                    })}
-                >
-                    <Ionicons name="sparkles" size={20} color="#81171b" />
-                </TouchableOpacity>
+                <View style={styles.headerActions}>
+                    {role === 'teacher' && (
+                        <TouchableOpacity
+                            style={styles.resourcesButton}
+                            onPress={() => router.push({
+                                pathname: '/course-resources',
+                                params: {
+                                    courseId: courseId,
+                                    courseName: courseName,
+                                    role: role
+                                }
+                            })}
+                        >
+                            <Ionicons name="folder" size={20} color="#81171b" />
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                        style={styles.aiAssistantButton}
+                        onPress={() => router.push({
+                            pathname: '/ai-assistant',
+                            params: {
+                                courseId: courseId,
+                                courseName: courseName,
+                                courseCode: courseCode,
+                                instructorName: instructorName,
+                                role: role
+                            }
+                        })}
+                    >
+                        <Ionicons name="sparkles" size={20} color="#81171b" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <View style={styles.tabContainer}>
@@ -517,7 +536,7 @@ export default function CourseDetailScreen() {
                     {activeTab === 'announcements' ? renderAnnouncements() : renderDiscussions()}
 
                     {/* Only show FAB if not archived and user can create content */}
-                    {!courseIsArchived && (activeTab === 'discussions' || role === 'teacher') && (
+                    {!courseIsArchived && (activeTab === 'discussions' || role === 'teacher' || role === 'admin') && (
                         <TouchableOpacity
                             style={styles.fab}
                             onPress={() => setShowCreateForm(true)}
@@ -681,6 +700,9 @@ const styles = StyleSheet.create({
     teacherTag: {
         backgroundColor: '#81171b',
     },
+    adminTag: {
+        backgroundColor: '#f59e0b',
+    },
     studentTag: {
         backgroundColor: '#d97706',
     },
@@ -826,5 +848,15 @@ const styles = StyleSheet.create({
         padding: 8,
         borderRadius: 12,
         backgroundColor: 'rgba(129, 23, 27, 0.08)',
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    resourcesButton: {
+        padding: 8,
+        borderRadius: 12,
+        backgroundColor: 'rgba(129, 23, 27, 0.08)',
+        marginRight: 8,
     },
 }); 

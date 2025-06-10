@@ -4,6 +4,7 @@ import { OPENAI_CONFIG, validateOpenAIConfig } from '../config/openai.config';
 interface CourseContext {
     discussions: any[];
     announcements: any[];
+    resources: any[];
     courseName: string;
     courseCode: string;
     instructorName: string;
@@ -11,7 +12,7 @@ interface CourseContext {
 
 interface ResourceRecommendation {
     title: string;
-    type: 'discussion' | 'announcement' | 'link' | 'file';
+    type: 'discussion' | 'announcement' | 'link' | 'text';
     id?: string;
     description: string;
     relevanceScore: number;
@@ -235,7 +236,8 @@ CURRENT COURSE CONTEXT:
 Course: ${courseContext.courseName} (${courseContext.courseCode})
 Instructor: ${courseContext.instructorName}
 Total Discussions: ${courseContext.discussions.length}
-Total Announcements: ${courseContext.announcements.length}`;
+Total Announcements: ${courseContext.announcements.length}
+Total Resources: ${courseContext.resources.length}`;
 
         // Add recent discussions context
         const recentDiscussions = courseContext.discussions.slice(0, 5);
@@ -251,13 +253,20 @@ ${recentDiscussions.map((d, i) => `${i + 1}. "${d.title}" - ${d.content.substrin
 RECENT ANNOUNCEMENTS:
 ${recentAnnouncements.map((a, i) => `${i + 1}. "${a.title}" - ${a.content.substring(0, 100)}...`).join('\n')}` : '';
 
+        // Add course resources context
+        const recentResources = courseContext.resources.slice(0, 5);
+        const resourcesListContext = recentResources.length > 0 ? `
+
+AVAILABLE COURSE RESOURCES:
+${recentResources.map((r, i) => `${i + 1}. [${r.type.toUpperCase()}] "${r.title}" - ${r.description || r.content.substring(0, 100)}...`).join('\n')}` : '';
+
         // Add relevant resources found
         const resourcesContext = resources.length > 0 ? `
 
 RELEVANT COURSE RESOURCES FOR THIS QUERY:
 ${resources.map((r, i) => `${i + 1}. [${r.type.toUpperCase()}] "${r.title}" - ${r.description}`).join('\n')}` : '';
 
-        return basePrompt + courseInfo + discussionsContext + announcementsContext + resourcesContext;
+        return basePrompt + courseInfo + discussionsContext + announcementsContext + resourcesListContext + resourcesContext;
     }
 
     private buildUserPrompt(userMessage: string, resources: ResourceRecommendation[], userRole: UserRole): string {
