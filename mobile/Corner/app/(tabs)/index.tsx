@@ -90,32 +90,43 @@ export default function DashboardScreen() {
         }
       }
 
-      // 🔑 Admin can see all courses in the system
+      // 🔑 Admin can see courses from their school only
       if (userData.role === 'admin') {
         try {
-          const snapshot = await getDocs(collection(db, 'courses'));
-          // Get all courses (archived and active) for admin overview
-          const coursesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setCourses(coursesList);
+          const adminSchoolId = userData.schoolId;
 
-          // Get teacher names for all courses
-          const teacherNamesMap: Record<string, string> = {};
-          for (const course of coursesList) {
-            const courseData = course as any; // Type assertion for Firebase data
-            if (courseData.teacherId && !teacherNamesMap[courseData.teacherId]) {
-              try {
-                const teacherRef = doc(db, 'users', courseData.teacherId);
-                const teacherSnap = await getDoc(teacherRef);
-                if (teacherSnap.exists()) {
-                  teacherNamesMap[courseData.teacherId] = teacherSnap.data().name || 'Unknown Teacher';
+          if (!adminSchoolId) {
+            console.warn('Admin has no school association');
+            setCourses([]);
+            setTeacherNames({});
+          } else {
+            // Get all courses and filter by admin's school
+            const snapshot = await getDocs(collection(db, 'courses'));
+            const allCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Filter courses to only show those from admin's school
+            const coursesList = allCourses.filter((course: any) => course.schoolId === adminSchoolId);
+            setCourses(coursesList);
+
+            // Get teacher names for courses from admin's school only
+            const teacherNamesMap: Record<string, string> = {};
+            for (const course of coursesList) {
+              const courseData = course as any; // Type assertion for Firebase data
+              if (courseData.teacherId && !teacherNamesMap[courseData.teacherId]) {
+                try {
+                  const teacherRef = doc(db, 'users', courseData.teacherId);
+                  const teacherSnap = await getDoc(teacherRef);
+                  if (teacherSnap.exists()) {
+                    teacherNamesMap[courseData.teacherId] = teacherSnap.data().name || 'Unknown Teacher';
+                  }
+                } catch (error) {
+                  console.error('Error fetching teacher name:', error);
+                  teacherNamesMap[courseData.teacherId] = 'Unknown Teacher';
                 }
-              } catch (error) {
-                console.error('Error fetching teacher name:', error);
-                teacherNamesMap[courseData.teacherId] = 'Unknown Teacher';
               }
             }
+            setTeacherNames(teacherNamesMap);
           }
-          setTeacherNames(teacherNamesMap);
         } catch (error) {
           console.error('Error fetching admin courses:', error);
           setCourses([]);
@@ -266,251 +277,255 @@ export default function DashboardScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.menuButton} onPress={() => {/* TODO: Add menu functionality */ }}>
-              <Ionicons name="menu" size={24} color="#1e293b" />
-            </TouchableOpacity>
+    <>
+      <SafeAreaView style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
 
-            <View style={styles.logoContainer}>
-              <View style={styles.logoPlaceholder}>
-                <Text style={styles.logoText}>LOGO</Text>
-              </View>
-            </View>
-
-            <View style={styles.rightActions}>
-              <View style={styles.roleTag}>
-                <Text style={styles.roleTagText}>{role.charAt(0).toUpperCase()}</Text>
-              </View>
-              <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/notification-settings')}>
-                <Ionicons name="settings-outline" size={20} color="#64748b" />
+          <View style={styles.content}>
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.menuButton} onPress={() => {/* TODO: Add menu functionality */ }}>
+                <Ionicons name="menu" size={24} color="#1e293b" />
               </TouchableOpacity>
-              <NotificationBadge size="medium" />
+
+              <View style={styles.logoContainer}>
+                <View style={styles.logoPlaceholder}>
+                  <Text style={styles.logoText}>LOGO</Text>
+                </View>
+              </View>
+
+              <View style={styles.rightActions}>
+                <View style={styles.roleTag}>
+                  <Text style={styles.roleTagText}>{role.charAt(0).toUpperCase()}</Text>
+                </View>
+                <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/notification-settings')}>
+                  <Ionicons name="settings-outline" size={20} color="#64748b" />
+                </TouchableOpacity>
+                <NotificationBadge size="medium" />
+              </View>
             </View>
-          </View>
 
-          <View style={styles.welcomeSection}>
-            <Text style={styles.welcomeText}>Welcome back! 👋</Text>
-            <Text style={styles.welcomeSubtext}>
-              {role === 'admin' ? 'Platform Overview' : 'Here are your courses'}
-            </Text>
-          </View>
+            <View style={styles.welcomeSection}>
+              <Text style={styles.welcomeText}>Welcome back! 👋</Text>
+              <Text style={styles.welcomeSubtext}>
+                {role === 'admin' ? 'Platform Overview' : 'Here are your courses'}
+              </Text>
+            </View>
 
-          {role === 'student' && studentCourses.length > 0 ? (
-            studentCourses.map((course) => (
-              <View key={course.id} style={styles.courseContainer}>
-                <TouchableOpacity
-                  style={styles.courseBox}
-                  onPress={() => router.push({
-                    pathname: '/course-detail',
-                    params: {
-                      courseId: course.id,
-                      courseName: course.name,
-                      courseCode: course.code,
-                      instructorName: course.instructorName,
-                      role: role
-                    }
-                  })}
-                >
-                  <View style={styles.courseHeader}>
-                    <Text style={styles.courseName}>{course.name}</Text>
-                    <TouchableOpacity
-                      style={styles.subtleActionButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleUnjoinCourse(course.id, course.name);
-                      }}
-                    >
-                      <Ionicons name="exit-outline" size={18} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>Course Code:</Text>
-                    <Text style={styles.courseValue}>{course.code}</Text>
-                  </View>
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>Instructor:</Text>
-                    <Text style={styles.courseValue}>{course.instructorName}</Text>
-                  </View>
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>Course Created:</Text>
-                    <Text style={styles.courseValue}>
-                      {new Date(course.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>You Joined:</Text>
-                    <Text style={styles.courseValue}>
-                      {new Date(course.joinedAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ))
-          ) : role === 'teacher' && courses.length > 0 ? (
-            courses.map((course) => (
-              <View key={course.id} style={styles.courseContainer}>
-                <TouchableOpacity
-                  style={styles.courseBox}
-                  onPress={() => router.push({
-                    pathname: '/course-detail',
-                    params: {
-                      courseId: course.id,
-                      courseName: course.name,
-                      courseCode: course.code,
-                      instructorName: course.instructorName,
-                      role: role
-                    }
-                  })}
-                >
-                  <View style={styles.courseHeader}>
-                    <Text style={styles.courseName}>{course.name}</Text>
-                    <View style={styles.subtleActionsGroup}>
-                      <TouchableOpacity
-                        style={styles.subtleActionButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleArchiveCourse(course.id, course.name);
-                        }}
-                      >
-                        <Ionicons name="archive-outline" size={18} color="#666" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.subtleActionButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDeleteCourse(course.id, course.name);
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#d32f2f" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>Course Code:</Text>
-                    <Text style={styles.courseValue}>{course.code}</Text>
-                  </View>
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>Description:</Text>
-                    <Text style={styles.courseValue}>{course.description || 'No description'}</Text>
-                  </View>
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>Instructor:</Text>
-                    <Text style={styles.courseValue}>{course.instructorName}</Text>
-                  </View>
-                  <View style={styles.courseDetail}>
-                    <Text style={styles.courseLabel}>Created:</Text>
-                    <Text style={styles.courseValue}>
-                      {new Date(course.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ))
-          ) : role === 'admin' && courses.length > 0 ? (
-            courses.map((course) => {
-              const courseData = course as any;
-              const teacherName = courseData.teacherId ? teacherNames[courseData.teacherId] : 'Unknown Teacher';
-              const isArchived = courseData.archived === true;
-
-              return (
+            {role === 'student' && studentCourses.length > 0 ? (
+              studentCourses.map((course) => (
                 <View key={course.id} style={styles.courseContainer}>
                   <TouchableOpacity
-                    style={[styles.courseBox, isArchived && styles.archivedCourseBox]}
+                    style={styles.courseBox}
                     onPress={() => router.push({
                       pathname: '/course-detail',
                       params: {
                         courseId: course.id,
-                        courseName: courseData.name,
-                        courseCode: courseData.code || 'N/A',
-                        instructorName: teacherName,
-                        role: role,
-                        isArchived: isArchived ? 'true' : 'false'
+                        courseName: course.name,
+                        courseCode: course.code,
+                        instructorName: course.instructorName,
+                        role: role
                       }
                     })}
                   >
                     <View style={styles.courseHeader}>
-                      <Text style={[styles.courseName, isArchived && styles.archivedText]}>
-                        {courseData.name}
-                        {isArchived && ' (Archived)'}
+                      <Text style={styles.courseName}>{course.name}</Text>
+                      <TouchableOpacity
+                        style={styles.subtleActionButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleUnjoinCourse(course.id, course.name);
+                        }}
+                      >
+                        <Ionicons name="exit-outline" size={18} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>Course Code:</Text>
+                      <Text style={styles.courseValue}>{course.code}</Text>
+                    </View>
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>Instructor:</Text>
+                      <Text style={styles.courseValue}>{course.instructorName}</Text>
+                    </View>
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>Course Created:</Text>
+                      <Text style={styles.courseValue}>
+                        {new Date(course.createdAt).toLocaleDateString()}
                       </Text>
+                    </View>
+                    <View style={styles.courseDetail}>
+                      <Text style={styles.courseLabel}>You Joined:</Text>
+                      <Text style={styles.courseValue}>
+                        {new Date(course.joinedAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              ))
+            ) : role === 'teacher' && courses.length > 0 ? (
+              courses.map((course) => (
+                <View key={course.id} style={styles.courseContainer}>
+                  <TouchableOpacity
+                    style={styles.courseBox}
+                    onPress={() => router.push({
+                      pathname: '/course-detail',
+                      params: {
+                        courseId: course.id,
+                        courseName: course.name,
+                        courseCode: course.code,
+                        instructorName: course.instructorName,
+                        role: role
+                      }
+                    })}
+                  >
+                    <View style={styles.courseHeader}>
+                      <Text style={styles.courseName}>{course.name}</Text>
                       <View style={styles.subtleActionsGroup}>
-                        <View style={[styles.roleTag, styles.adminCourseTag]}>
-                          <Text style={styles.roleTagText}>Admin View</Text>
-                        </View>
+                        <TouchableOpacity
+                          style={styles.subtleActionButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleArchiveCourse(course.id, course.name);
+                          }}
+                        >
+                          <Ionicons name="archive-outline" size={18} color="#666" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.subtleActionButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCourse(course.id, course.name);
+                          }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#d32f2f" />
+                        </TouchableOpacity>
                       </View>
                     </View>
 
                     <View style={styles.courseDetail}>
                       <Text style={styles.courseLabel}>Course Code:</Text>
-                      <Text style={styles.courseValue}>{courseData.code || 'N/A'}</Text>
+                      <Text style={styles.courseValue}>{course.code}</Text>
                     </View>
                     <View style={styles.courseDetail}>
                       <Text style={styles.courseLabel}>Description:</Text>
-                      <Text style={styles.courseValue}>{courseData.description || 'No description'}</Text>
+                      <Text style={styles.courseValue}>{course.description || 'No description'}</Text>
                     </View>
                     <View style={styles.courseDetail}>
                       <Text style={styles.courseLabel}>Instructor:</Text>
-                      <Text style={styles.courseValue}>{teacherName}</Text>
+                      <Text style={styles.courseValue}>{course.instructorName}</Text>
                     </View>
                     <View style={styles.courseDetail}>
                       <Text style={styles.courseLabel}>Created:</Text>
                       <Text style={styles.courseValue}>
-                        {courseData.createdAt ? new Date(courseData.createdAt).toLocaleDateString() : 'N/A'}
+                        {new Date(course.createdAt).toLocaleDateString()}
                       </Text>
                     </View>
-                    {isArchived && (
-                      <View style={styles.courseDetail}>
-                        <Text style={styles.courseLabel}>Archived:</Text>
-                        <Text style={styles.courseValue}>
-                          {courseData.archivedAt ? new Date(courseData.archivedAt).toLocaleDateString() : 'N/A'}
-                        </Text>
-                      </View>
-                    )}
                   </TouchableOpacity>
                 </View>
-              );
-            })
-          ) : (
-            <View style={styles.noCourseBox}>
-              <Text style={styles.noCourseText}>No courses found.</Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
+              ))
+            ) : role === 'admin' && courses.length > 0 ? (
+              courses.map((course) => {
+                const courseData = course as any;
+                const teacherName = courseData.teacherId ? teacherNames[courseData.teacherId] : 'Unknown Teacher';
+                const isArchived = courseData.archived === true;
 
-      {role === 'teacher' && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push('/create-course')}
-        >
-          <Ionicons name="add" size={30} color="#fff" />
-        </TouchableOpacity>
-      )}
+                return (
+                  <View key={course.id} style={styles.courseContainer}>
+                    <TouchableOpacity
+                      style={[styles.courseBox, isArchived && styles.archivedCourseBox]}
+                      onPress={() => router.push({
+                        pathname: '/course-detail',
+                        params: {
+                          courseId: course.id,
+                          courseName: courseData.name,
+                          courseCode: courseData.code || 'N/A',
+                          instructorName: teacherName,
+                          role: role,
+                          isArchived: isArchived ? 'true' : 'false'
+                        }
+                      })}
+                    >
+                      <View style={styles.courseHeader}>
+                        <Text style={[styles.courseName, isArchived && styles.archivedText]}>
+                          {courseData.name}
+                          {isArchived && ' (Archived)'}
+                        </Text>
+                        <View style={styles.subtleActionsGroup}>
+                          <View style={[styles.roleTag, styles.adminCourseTag]}>
+                            <Text style={styles.roleTagText}>Admin View</Text>
+                          </View>
+                        </View>
+                      </View>
 
-      {role === 'student' && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push('/join-course')}
-        >
-          <Ionicons name="add" size={30} color="#fff" />
-        </TouchableOpacity>
-      )}
+                      <View style={styles.courseDetail}>
+                        <Text style={styles.courseLabel}>Course Code:</Text>
+                        <Text style={styles.courseValue}>{courseData.code || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.courseDetail}>
+                        <Text style={styles.courseLabel}>Description:</Text>
+                        <Text style={styles.courseValue}>{courseData.description || 'No description'}</Text>
+                      </View>
+                      <View style={styles.courseDetail}>
+                        <Text style={styles.courseLabel}>Instructor:</Text>
+                        <Text style={styles.courseValue}>{teacherName}</Text>
+                      </View>
+                      <View style={styles.courseDetail}>
+                        <Text style={styles.courseLabel}>Created:</Text>
+                        <Text style={styles.courseValue}>
+                          {courseData.createdAt ? new Date(courseData.createdAt).toLocaleDateString() : 'N/A'}
+                        </Text>
+                      </View>
+                      {isArchived && (
+                        <View style={styles.courseDetail}>
+                          <Text style={styles.courseLabel}>Archived:</Text>
+                          <Text style={styles.courseValue}>
+                            {courseData.archivedAt ? new Date(courseData.archivedAt).toLocaleDateString() : 'N/A'}
+                          </Text>
+                        </View>
+                      )}
 
-      {role === 'admin' && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push('/(tabs)/analytics')}
-        >
-          <Ionicons name="bar-chart" size={30} color="#fff" />
-        </TouchableOpacity>
-      )}
-    </SafeAreaView>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.noCourseBox}>
+                <Text style={styles.noCourseText}>No courses found.</Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+
+        {role === 'teacher' && (
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={() => router.push('/create-course')}
+          >
+            <Ionicons name="add" size={30} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {role === 'student' && (
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={() => router.push('/join-course')}
+          >
+            <Ionicons name="add" size={30} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {role === 'admin' && (
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={() => router.push('/(tabs)/analytics')}
+          >
+            <Ionicons name="bar-chart" size={30} color="#fff" />
+          </TouchableOpacity>
+        )}
+      </SafeAreaView>
+    </>
   );
 }
 
@@ -752,5 +767,22 @@ const styles = StyleSheet.create({
   adminCourseTag: {
     backgroundColor: '#fef3c7',
     borderColor: '#f59e0b',
+  },
+  adminButtonContainer: {
+    marginBottom: 16,
+    alignItems: 'flex-end',
+  },
+  adminButton: {
+    backgroundColor: '#81171b',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  adminButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

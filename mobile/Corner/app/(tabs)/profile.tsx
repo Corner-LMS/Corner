@@ -5,11 +5,14 @@ import { useRouter } from 'expo-router';
 import { auth, db } from '../../config/ firebase-config';
 import { doc, getDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import { ProfileInitials } from '@/components/ui/ProfileInitials';
+import { getSchoolById } from '@/constants/Schools';
 
 interface UserData {
     name: string;
     email: string;
     role: string;
+    schoolId?: string;
 }
 
 export default function Profile() {
@@ -30,7 +33,8 @@ export default function Profile() {
                         setUserData({
                             name: data.name || 'No name set',
                             email: data.email || user.email || 'No email',
-                            role: data.role || 'No role set'
+                            role: data.role || 'No role set',
+                            schoolId: data.schoolId
                         });
                     }
                 } catch (error) {
@@ -84,13 +88,7 @@ export default function Profile() {
                     <>
                         {/* Header Section */}
                         <View style={styles.header}>
-                            <View style={styles.profileIcon}>
-                                <Ionicons
-                                    name="person"
-                                    size={40}
-                                    color="#81171b"
-                                />
-                            </View>
+                            <ProfileInitials size={80} color="#81171b" variant="header" />
                             <Text style={styles.welcomeText}>Welcome back!</Text>
                             <Text style={styles.userName}>{userData.name}</Text>
                         </View>
@@ -126,8 +124,22 @@ export default function Profile() {
 
                                 <View style={styles.infoRow}>
                                     <View style={styles.infoIconContainer}>
+                                        <Ionicons name="school-outline" size={20} color="#81171b" />
+                                    </View>
+                                    <View style={styles.infoContent}>
+                                        <Text style={styles.infoLabel}>School</Text>
+                                        <Text style={styles.infoValue}>
+                                            {userData.schoolId ? getSchoolById(userData.schoolId)?.name || 'Unknown School' : 'No school assigned'}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.divider} />
+
+                                <View style={styles.infoRow}>
+                                    <View style={styles.infoIconContainer}>
                                         <Ionicons
-                                            name={userData.role === 'teacher' ? 'school-outline' : 'library-outline'}
+                                            name={userData.role === 'teacher' ? 'school-outline' : userData.role === 'admin' ? 'shield-checkmark-outline' : 'library-outline'}
                                             size={20}
                                             color="#81171b"
                                         />
@@ -138,7 +150,8 @@ export default function Profile() {
                                             <Text style={styles.infoValue}>{userData.role}</Text>
                                             <View style={[
                                                 styles.roleTag,
-                                                userData.role === 'teacher' ? styles.teacherTag : styles.studentTag
+                                                userData.role === 'teacher' ? styles.teacherTag :
+                                                    userData.role === 'admin' ? styles.adminTag : styles.studentTag
                                             ]}>
                                                 <Text style={styles.roleTagText}>{userData.role}</Text>
                                             </View>
@@ -205,19 +218,15 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        marginBottom: 24,
-    },
-    profileIcon: {
-        backgroundColor: '#81171b',
-        borderRadius: 20,
-        padding: 8,
-        marginBottom: 12,
+        marginBottom: 32,
+        paddingTop: 8,
     },
     welcomeText: {
         fontSize: 24,
         fontWeight: 'bold',
         color: '#333',
         marginBottom: 12,
+        marginTop: 16,
     },
     userName: {
         fontSize: 18,
@@ -287,6 +296,9 @@ const styles = StyleSheet.create({
     },
     studentTag: {
         backgroundColor: '#D65108',
+    },
+    adminTag: {
+        backgroundColor: '#f59e0b',
     },
     roleTagText: {
         fontSize: 12,

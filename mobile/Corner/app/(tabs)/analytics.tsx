@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from '../../config/ firebase-config';
 import { collection, getDocs, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
+import { getSchoolById } from '@/constants/Schools';
 
 interface AnalyticsData {
     totalCourses: number;
@@ -16,6 +17,11 @@ interface AnalyticsData {
     totalDiscussions: number;
     recentCourses: any[];
     mostActiveCourses: any[];
+    schoolInfo?: {
+        id: string;
+        name: string;
+        shortName: string;
+    };
 }
 
 export default function AnalyticsScreen() {
@@ -28,7 +34,7 @@ export default function AnalyticsScreen() {
             const user = auth.currentUser;
             if (!user) return;
 
-            // Check if user is admin
+            // Check if user is admin and get their school
             const userDoc = await getDoc(doc(db, 'users', user.uid));
             if (!userDoc.exists() || userDoc.data().role !== 'admin') {
                 Alert.alert('Access Denied', 'You do not have permission to view analytics.');
@@ -36,31 +42,46 @@ export default function AnalyticsScreen() {
                 return;
             }
 
-            // Fetch all courses
+            const adminData = userDoc.data();
+            const adminSchoolId = adminData.schoolId;
+
+            if (!adminSchoolId) {
+                Alert.alert('Error', 'Your account is not associated with any school. Please contact support.');
+                router.back();
+                return;
+            }
+
+            // Get school information
+            const schoolInfo = getSchoolById(adminSchoolId);
+            if (!schoolInfo) {
+                Alert.alert('Error', 'School information not found.');
+                router.back();
+                return;
+            }
+
+            // Fetch only courses from admin's school
             const coursesSnapshot = await getDocs(collection(db, 'courses'));
-            const courses = coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const allCourses = coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const courses = allCourses.filter((course: any) => course.schoolId === adminSchoolId);
 
-            // Fetch all users
+            // Fetch only users from admin's school
             const usersSnapshot = await getDocs(collection(db, 'users'));
-            const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const allUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const users = allUsers.filter((user: any) => user.schoolId === adminSchoolId);
 
-            // Count users by role
+            // Count users by role (only from admin's school)
             const roleCount = users.reduce((acc, user) => {
-                const userData = user as any; // Type assertion for Firebase data
+                const userData = user as any;
                 acc[userData.role] = (acc[userData.role] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>);
 
-            // Fetch recent courses (last 5)
-            const recentCoursesQuery = query(
-                collection(db, 'courses'),
-                orderBy('createdAt', 'desc'),
-                limit(5)
-            );
-            const recentCoursesSnapshot = await getDocs(recentCoursesQuery);
-            const recentCourses = recentCoursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Fetch recent courses from admin's school (last 5)
+            const recentCourses = courses
+                .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 5);
 
-            // Count announcements and discussions across all courses
+            // Count announcements and discussions across courses from admin's school only
             let totalAnnouncements = 0;
             let totalDiscussions = 0;
             const courseActivity = [];
@@ -87,7 +108,7 @@ export default function AnalyticsScreen() {
                 });
             }
 
-            // Sort courses by activity
+            // Sort courses by activity (only from admin's school)
             const mostActiveCourses = courseActivity
                 .sort((a, b) => b.totalActivity - a.totalActivity)
                 .slice(0, 5);
@@ -101,7 +122,12 @@ export default function AnalyticsScreen() {
                 totalAnnouncements,
                 totalDiscussions,
                 recentCourses,
-                mostActiveCourses
+                mostActiveCourses,
+                schoolInfo: {
+                    id: schoolInfo.id,
+                    name: schoolInfo.name,
+                    shortName: schoolInfo.shortName
+                }
             });
         } catch (error) {
             console.error('Error fetching analytics:', error);
@@ -149,7 +175,12 @@ export default function AnalyticsScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Platform Analytics</Text>
+                <View style={styles.headerContent}>
+                    <Text style={styles.title}>School Analytics</Text>
+                    {analytics?.schoolInfo && (
+                        <Text style={styles.schoolName}>{analytics.schoolInfo.shortName}</Text>
+                    )}
+                </View>
                 <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
                     <Ionicons
                         name="refresh"
@@ -160,6 +191,19 @@ export default function AnalyticsScreen() {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                {/* School Info Card */}
+                {analytics?.schoolInfo && (
+                    <View style={styles.schoolInfoCard}>
+                        <View style={styles.schoolIconContainer}>
+                            <Ionicons name="school-outline" size={24} color="#81171b" />
+                        </View>
+                        <View style={styles.schoolInfoContent}>
+                            <Text style={styles.schoolInfoTitle}>{analytics.schoolInfo.name}</Text>
+                            <Text style={styles.schoolInfoSubtitle}>Analytics Dashboard</Text>
+                        </View>
+                    </View>
+                )}
+
                 {/* Overview Cards */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Overview</Text>
@@ -167,19 +211,19 @@ export default function AnalyticsScreen() {
                         <View style={[styles.card, styles.primaryCard]}>
                             <Ionicons name="book-outline" size={32} color="#81171b" />
                             <Text style={styles.cardNumber}>{analytics.totalCourses}</Text>
-                            <Text style={styles.cardLabel}>Total Courses</Text>
+                            <Text style={styles.cardLabel}>School Courses</Text>
                         </View>
                         <View style={[styles.card, styles.secondaryCard]}>
                             <Ionicons name="people-outline" size={32} color="#2563eb" />
                             <Text style={styles.cardNumber}>{analytics.totalUsers}</Text>
-                            <Text style={styles.cardLabel}>Total Users</Text>
+                            <Text style={styles.cardLabel}>School Users</Text>
                         </View>
                     </View>
                 </View>
 
                 {/* User Breakdown */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>User Distribution</Text>
+                    <Text style={styles.sectionTitle}>School User Distribution</Text>
                     <View style={styles.cardGrid}>
                         <View style={styles.card}>
                             <Ionicons name="book-outline" size={24} color="#10b981" />
@@ -201,7 +245,7 @@ export default function AnalyticsScreen() {
 
                 {/* Activity Stats */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Platform Activity</Text>
+                    <Text style={styles.sectionTitle}>School Activity</Text>
                     <View style={styles.cardGrid}>
                         <View style={[styles.card, styles.fullWidth]}>
                             <View style={styles.activityRow}>
@@ -303,10 +347,20 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
     },
+    headerContent: {
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+    },
     title: {
         fontSize: 24,
         fontWeight: '700',
         color: '#1f2937',
+    },
+    schoolName: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#6b7280',
     },
     refreshButton: {
         padding: 8,
@@ -447,5 +501,34 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    schoolInfoCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    schoolIconContainer: {
+        backgroundColor: '#81171b',
+        borderRadius: 12,
+        padding: 8,
+    },
+    schoolInfoContent: {
+        marginLeft: 16,
+    },
+    schoolInfoTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1f2937',
+    },
+    schoolInfoSubtitle: {
+        fontSize: 14,
+        color: '#6b7280',
     },
 }); 

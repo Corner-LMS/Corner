@@ -37,3 +37,13 @@ export async function saveUserName(name: string) {
         email: user.email,
     }, { merge: true });
 }
+
+export async function saveUserSchool(schoolId: string) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No user logged in");
+
+    await setDoc(doc(db, "users", user.uid), {
+        schoolId,
+        email: user.email,
+    }, { merge: true });
+}

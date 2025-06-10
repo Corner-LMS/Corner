@@ -3,9 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { auth, db } from '../../config/ firebase-config';
 import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { ProfileInitials } from '@/components/ui/ProfileInitials';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -13,19 +15,33 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const [userRole, setUserRole] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
-      const user = auth.currentUser;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setUserRole(userDoc.data().role);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            setUserRole(userDoc.data().role || '');
+          }
+        } catch (error) {
+          console.error('Error fetching user role:', error);
+          setUserRole('');
         }
+      } else {
+        setUserRole('');
       }
-    };
-    fetchUserRole();
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  // Don't render tabs until we know the user role
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <Tabs
@@ -50,15 +66,14 @@ export default function TabLayout() {
         }}
       />
 
-      {userRole === 'admin' && (
-        <Tabs.Screen
-          name="analytics"
-          options={{
-            title: 'Analytics',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
-          }}
-        />
-      )}
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Analytics',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+          href: userRole === 'admin' ? '/analytics' : null,
+        }}
+      />
 
       <Tabs.Screen
         name="archives"
@@ -72,7 +87,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          tabBarIcon: ({ color }) => <ProfileInitials size={28} color={color} />,
         }}
       />
     </Tabs>

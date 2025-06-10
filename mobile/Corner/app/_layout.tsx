@@ -62,6 +62,7 @@ export default function RootLayout() {
         <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
         <Stack.Screen name="ai-assistant" options={{ headerShown: false }} />
         <Stack.Screen name="course-resources" options={{ headerShown: false }} />
+        <Stack.Screen name="migrate-data" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
