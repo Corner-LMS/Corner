@@ -12,7 +12,7 @@ export default function WelcomeScreen() {
                     {/* Header */}
                     <View style={styles.header}>
                         <View style={styles.logoContainer}>
-                            <Ionicons name="school" size={48} color="#81171b" />
+                            <Ionicons name="school" size={48} color="#4f46e5" />
                         </View>
                         <Text style={styles.appName}>Corner</Text>
                         <Text style={styles.tagline}>Connect • Learn • Grow</Text>
@@ -30,7 +30,7 @@ export default function WelcomeScreen() {
                     <View style={styles.featuresSection}>
                         <View style={styles.feature}>
                             <View style={styles.featureIcon}>
-                                <Ionicons name="people" size={20} color="#81171b" />
+                                <Ionicons name="people" size={20} color="#4f46e5" />
                             </View>
                             <View style={styles.featureText}>
                                 <Text style={styles.featureTitle}>Connect</Text>
@@ -42,7 +42,7 @@ export default function WelcomeScreen() {
 
                         <View style={styles.feature}>
                             <View style={styles.featureIcon}>
-                                <Ionicons name="chatbubbles" size={20} color="#81171b" />
+                                <Ionicons name="chatbubbles" size={20} color="#4f46e5" />
                             </View>
                             <View style={styles.featureText}>
                                 <Text style={styles.featureTitle}>Discuss</Text>
@@ -54,7 +54,7 @@ export default function WelcomeScreen() {
 
                         <View style={styles.feature}>
                             <View style={styles.featureIcon}>
-                                <Ionicons name="megaphone" size={20} color="#81171b" />
+                                <Ionicons name="megaphone" size={20} color="#4f46e5" />
                             </View>
                             <View style={styles.featureText}>
                                 <Text style={styles.featureTitle}>Stay Updated</Text>
@@ -101,7 +101,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#f1f5f9',
     },
     scrollContent: {
         flexGrow: 1,
@@ -112,132 +112,166 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        marginBottom: 24,
-        marginTop: 16,
+        marginBottom: 32,
+        marginTop: 20,
     },
     logoContainer: {
-        backgroundColor: '#f8f8f8',
-        borderRadius: 20,
-        padding: 12,
-        marginBottom: 12,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 24,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 2,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 3,
     },
     appName: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#81171b',
-        marginBottom: 6,
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#4f46e5',
+        marginBottom: 8,
+        letterSpacing: -0.5,
     },
     tagline: {
-        fontSize: 14,
-        color: '#666',
-        fontWeight: '500',
+        fontSize: 15,
+        color: '#64748b',
+        fontWeight: '600',
+        letterSpacing: 0.5,
     },
     welcomeSection: {
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 32,
     },
     welcomeTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 12,
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#1e293b',
+        marginBottom: 16,
         textAlign: 'center',
+        letterSpacing: -0.3,
     },
     welcomeDescription: {
-        fontSize: 16,
-        color: '#666',
+        fontSize: 17,
+        color: '#64748b',
         textAlign: 'center',
-        lineHeight: 22,
+        lineHeight: 26,
         paddingHorizontal: 20,
+        fontWeight: '500',
     },
     featuresSection: {
-        marginBottom: 24,
+        marginBottom: 32,
     },
     feature: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 20,
         paddingHorizontal: 8,
+        backgroundColor: '#fff',
+        padding: 20,
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     featureIcon: {
-        backgroundColor: '#f8f8f8',
-        borderRadius: 10,
-        padding: 10,
-        marginRight: 12,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 12,
+        padding: 12,
+        marginRight: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
     },
     featureText: {
         flex: 1,
     },
     featureTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 2,
+        fontSize: 17,
+        fontWeight: '700',
+        color: '#1e293b',
+        marginBottom: 4,
+        letterSpacing: -0.2,
     },
     featureDescription: {
-        fontSize: 13,
-        color: '#666',
-        lineHeight: 18,
+        fontSize: 14,
+        color: '#64748b',
+        lineHeight: 20,
+        fontWeight: '500',
     },
     ctaSection: {
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 32,
     },
     ctaTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 6,
+        fontSize: 24,
+        fontWeight: '800',
+        color: '#1e293b',
+        marginBottom: 8,
         textAlign: 'center',
+        letterSpacing: -0.3,
     },
     ctaSubtitle: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 24,
+        fontSize: 16,
+        color: '#64748b',
+        marginBottom: 32,
         textAlign: 'center',
+        fontWeight: '500',
+        lineHeight: 24,
     },
     signupButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#81171b',
-        paddingVertical: 16,
+        backgroundColor: '#4f46e5',
+        paddingVertical: 18,
         paddingHorizontal: 32,
-        borderRadius: 12,
-        marginBottom: 16,
+        borderRadius: 16,
+        marginBottom: 20,
         width: '100%',
         justifyContent: 'center',
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
+        elevation: 6,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
     },
     signupButtonText: {
         color: '#fff',
         fontSize: 18,
-        fontWeight: '600',
-        marginRight: 8,
+        fontWeight: '700',
+        marginRight: 10,
+        letterSpacing: 0.3,
     },
     loginButton: {
-        paddingVertical: 12,
+        paddingVertical: 16,
         paddingHorizontal: 32,
-        borderRadius: 8,
+        borderRadius: 12,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
     },
     loginButtonText: {
-        color: '#81171b',
+        color: '#4f46e5',
         fontSize: 16,
-        fontWeight: '500',
+        fontWeight: '700',
         textAlign: 'center',
+        letterSpacing: 0.3,
     },
     footer: {
         alignItems: 'center',
-        paddingTop: 20,
+        paddingTop: 24,
         borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
+        borderTopColor: '#e2e8f0',
     },
     footerText: {
         fontSize: 14,
-        color: '#999',
+        color: '#94a3b8',
         textAlign: 'center',
+        fontWeight: '500',
     },
 }); 

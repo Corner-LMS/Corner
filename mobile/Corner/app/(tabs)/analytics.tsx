@@ -195,10 +195,16 @@ export default function AnalyticsScreen() {
                 {analytics?.schoolInfo && (
                     <View style={styles.schoolInfoCard}>
                         <View style={styles.schoolIconContainer}>
-                            <Ionicons name="school-outline" size={24} color="#81171b" />
+                            <Ionicons name="school-outline" size={24} color="#fff" />
                         </View>
                         <View style={styles.schoolInfoContent}>
-                            <Text style={styles.schoolInfoTitle}>{analytics.schoolInfo.name}</Text>
+                            <Text
+                                style={styles.schoolInfoTitle}
+                                numberOfLines={2}
+                                ellipsizeMode="tail"
+                            >
+                                {analytics.schoolInfo.name}
+                            </Text>
                             <Text style={styles.schoolInfoSubtitle}>Analytics Dashboard</Text>
                         </View>
                     </View>
@@ -504,7 +510,7 @@ const styles = StyleSheet.create({
     },
     schoolInfoCard: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         padding: 20,
         backgroundColor: '#fff',
         borderRadius: 16,
@@ -513,19 +519,31 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 3,
+        marginBottom: 24,
+        width: '100%',
+        maxWidth: '100%',
     },
     schoolIconContainer: {
         backgroundColor: '#81171b',
         borderRadius: 12,
         padding: 8,
+        flexShrink: 0,
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     schoolInfoContent: {
         marginLeft: 16,
+        flex: 1,
+        minWidth: 0,
+        maxWidth: '100%',
     },
     schoolInfoTitle: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '700',
         color: '#1f2937',
+        flexWrap: 'wrap',
     },
     schoolInfoSubtitle: {
         fontSize: 14,

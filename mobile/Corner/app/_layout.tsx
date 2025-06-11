@@ -3,17 +3,25 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { auth } from '../config/ firebase-config';
 import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/ firebase-config';
+import { offlineCacheService } from '../services/offlineCache';
+import { presenceService } from '../services/presenceService';
+import TeacherOnlineNotification from '../components/TeacherOnlineNotification';
 
-import { useColorScheme } from '@/hooks/useColorScheme'; import { notificationService } from '../services/notificationService';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { notificationService } from '../services/notificationService';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     // Initialize notification service
@@ -29,16 +37,43 @@ export default function RootLayout() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
+          // Update notification token
           await notificationService.updateUserNotificationToken(user.uid);
+
+          // Get user role and initialize presence service
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const role = userData.role;
+            setUserRole(role);
+
+            // Initialize presence service based on user role
+            try {
+              await presenceService.initialize(role);
+            } catch (error) {
+              console.error('Error initializing presence service:', error);
+            }
+          }
         } catch (error) {
-          console.error('Error updating user notification token:', error);
+          console.error('Error in auth state change handler:', error);
         }
+      } else {
+        // User logged out - cleanup presence service
+        setUserRole(null);
+        presenceService.cleanup();
       }
     });
 
+    // Initialize offline cache when app starts
+    offlineCacheService.initializeCache();
+
     initNotifications();
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      // Cleanup presence service when app unmounts
+      presenceService.cleanup();
+    };
   }, []);
 
   if (!loaded) {
@@ -48,23 +83,31 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="role" options={{ headerShown: false }} />
-        <Stack.Screen name="create-course" options={{ headerShown: false }} />
-        <Stack.Screen name="join-course" options={{ headerShown: false }} />
-        <Stack.Screen name="course-detail" options={{ headerShown: false }} />
-        <Stack.Screen name="discussion-detail" options={{ headerShown: false }} />
-        <Stack.Screen name="welcome" options={{ headerShown: false }} />
-        <Stack.Screen name="notifications" options={{ headerShown: false }} />
-        <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
-        <Stack.Screen name="ai-assistant" options={{ headerShown: false }} />
-        <Stack.Screen name="course-resources" options={{ headerShown: false }} />
-        <Stack.Screen name="migrate-data" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
+      <View style={{ flex: 1 }}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="role" options={{ headerShown: false }} />
+          <Stack.Screen name="create-course" options={{ headerShown: false }} />
+          <Stack.Screen name="join-course" options={{ headerShown: false }} />
+          <Stack.Screen name="course-detail" options={{ headerShown: false }} />
+          <Stack.Screen name="discussion-detail" options={{ headerShown: false }} />
+          <Stack.Screen name="welcome" options={{ headerShown: false }} />
+          <Stack.Screen name="notifications" options={{ headerShown: false }} />
+          <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="ai-assistant" options={{ headerShown: false }} />
+          <Stack.Screen name="course-resources" options={{ headerShown: false }} />
+          <Stack.Screen name="migrate-data" options={{ headerShown: false }} />
+        </Stack>
+
+        {/* Global teacher online notification - only for students */}
+        {userRole === 'student' && (
+          <TeacherOnlineNotification style={{ top: 50 }} />
+        )}
+
+        <StatusBar style="auto" />
+      </View>
     </ThemeProvider>
   );
 }

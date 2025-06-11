@@ -49,6 +49,7 @@ export function ProfileInitials({ size = 24, color, variant = 'tab' }: ProfileIn
                     width: size,
                     height: size,
                     borderRadius: size / 2,
+                    backgroundColor: color,
                 }
             ]}>
                 <Text style={[
@@ -100,7 +101,6 @@ const styles = StyleSheet.create({
     headerContainer: {
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#81171b',
     },
     headerInitialsText: {
         color: '#fff',

@@ -21,6 +21,7 @@ const MAPPING = {
   'chart.bar.fill': 'bar-chart',
   'archivebox.fill': 'archive',
   'person.fill': 'person',
+  'building.2.fill': 'business',
 } as IconMapping;
 
 /**

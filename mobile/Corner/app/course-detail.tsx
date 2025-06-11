@@ -6,6 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from '../config/ firebase-config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { notificationHelpers } from '../services/notificationHelpers';
+import { offlineCacheService, CachedAnnouncement, CachedDiscussion } from '../services/offlineCache';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { draftManager, DraftPost } from '../services/draftManager';
+import ConnectivityIndicator from '../components/ConnectivityIndicator';
 
 interface Announcement {
     id: string;
@@ -32,6 +36,7 @@ interface Discussion {
 export default function CourseDetailScreen() {
     const params = useLocalSearchParams();
     const { courseId, courseName, courseCode, instructorName, role, isArchived } = params;
+    const { isOnline, hasReconnected } = useNetworkStatus();
 
     // Check if course is archived
     const courseIsArchived = isArchived === 'true';
@@ -45,8 +50,79 @@ export default function CourseDetailScreen() {
     const [loading, setLoading] = useState(false);
     const [isAnonymous, setIsAnonymous] = useState(false);
     const [editingItem, setEditingItem] = useState<{ id: string, type: 'announcement' | 'discussion', title: string, content: string } | null>(null);
+    const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
+    const [drafts, setDrafts] = useState<DraftPost[]>([]);
+    const [syncingDrafts, setSyncingDrafts] = useState(false);
 
+    // Initialize cache on component mount
     useEffect(() => {
+        offlineCacheService.initializeCache();
+        loadDrafts();
+    }, []);
+
+    // Load cached data when offline or sync when reconnected
+    useEffect(() => {
+        if (!courseId) return;
+
+        if (isOnline) {
+            // Online: Use Firebase listeners and cache the data
+            setupFirebaseListeners();
+            // Sync drafts when coming back online
+            if (hasReconnected) {
+                syncDrafts();
+            }
+        } else {
+            // Offline: Load cached data
+            loadCachedData();
+        }
+
+        // Sync when reconnected
+        if (hasReconnected && courseId) {
+            syncDataAfterReconnection();
+        }
+    }, [courseId, isOnline, hasReconnected]);
+
+    const loadDrafts = async () => {
+        if (!courseId) return;
+        try {
+            const courseDrafts = await draftManager.getDraftsByCourse(courseId as string);
+            setDrafts(courseDrafts);
+        } catch (error) {
+            console.error('Error loading drafts:', error);
+        }
+    };
+
+    const syncDrafts = async () => {
+        if (!courseId) return;
+
+        setSyncingDrafts(true);
+        try {
+            const result = await draftManager.syncAllDrafts();
+            if (result.syncedCount > 0) {
+                Alert.alert(
+                    'Drafts Synced',
+                    `Successfully synced ${result.syncedCount} draft${result.syncedCount > 1 ? 's' : ''}.`,
+                    [{ text: 'OK' }]
+                );
+            }
+
+            if (result.failedCount > 0) {
+                Alert.alert(
+                    'Sync Issues',
+                    `${result.failedCount} draft${result.failedCount > 1 ? 's' : ''} failed to sync. They will be retried later.`,
+                    [{ text: 'OK' }]
+                );
+            }
+
+            await loadDrafts(); // Refresh drafts list
+        } catch (error) {
+            console.error('Error syncing drafts:', error);
+        } finally {
+            setSyncingDrafts(false);
+        }
+    };
+
+    const setupFirebaseListeners = () => {
         if (!courseId) return;
 
         // Listen to announcements
@@ -55,33 +131,101 @@ export default function CourseDetailScreen() {
             orderBy('createdAt', 'desc')
         );
 
-        const unsubscribeAnnouncements = onSnapshot(announcementsQuery, (snapshot) => {
+        const unsubscribeAnnouncements = onSnapshot(announcementsQuery, async (snapshot) => {
             const announcementsList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             })) as Announcement[];
+
             setAnnouncements(announcementsList);
+
+            // Cache the announcements when online
+            try {
+                await offlineCacheService.cacheAnnouncements(
+                    courseId as string,
+                    announcementsList,
+                    courseName as string
+                );
+            } catch (error) {
+                console.error('Error caching announcements:', error);
+            }
         });
 
-        // Listen to discussions
+        // Listen to discussions and cache them
         const discussionsQuery = query(
             collection(db, 'courses', courseId as string, 'discussions'),
             orderBy('createdAt', 'desc')
         );
 
-        const unsubscribeDiscussions = onSnapshot(discussionsQuery, (snapshot) => {
+        const unsubscribeDiscussions = onSnapshot(discussionsQuery, async (snapshot) => {
             const discussionsList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             })) as Discussion[];
+
             setDiscussions(discussionsList);
+
+            // Cache the discussions when online
+            try {
+                await offlineCacheService.cacheDiscussions(
+                    courseId as string,
+                    discussionsList,
+                    courseName as string
+                );
+            } catch (error) {
+                console.error('Error caching discussions:', error);
+            }
         });
 
         return () => {
             unsubscribeAnnouncements();
             unsubscribeDiscussions();
         };
-    }, [courseId]);
+    };
+
+    const loadCachedData = async () => {
+        if (!courseId) return;
+
+        setIsLoadingFromCache(true);
+        try {
+            const [cachedAnnouncements, cachedDiscussions] = await Promise.all([
+                offlineCacheService.getCachedAnnouncements(courseId as string),
+                offlineCacheService.getCachedDiscussions(courseId as string)
+            ]);
+
+            setAnnouncements(cachedAnnouncements as Announcement[]);
+            setDiscussions(cachedDiscussions as Discussion[]);
+
+            if (cachedAnnouncements.length > 0 || cachedDiscussions.length > 0) {
+                console.log(`Loaded ${cachedAnnouncements.length} announcements and ${cachedDiscussions.length} discussions from cache`);
+            }
+        } catch (error) {
+            console.error('Error loading cached data:', error);
+        } finally {
+            setIsLoadingFromCache(false);
+        }
+    };
+
+    const syncDataAfterReconnection = async () => {
+        if (!courseId || !courseName) return;
+
+        try {
+            console.log('Syncing data after reconnection...');
+            await Promise.all([
+                offlineCacheService.syncAnnouncementsFromFirebase(
+                    courseId as string,
+                    courseName as string
+                ),
+                offlineCacheService.syncDiscussionsFromFirebase(
+                    courseId as string,
+                    courseName as string
+                )
+            ]);
+            await offlineCacheService.updateLastSyncTime();
+        } catch (error) {
+            console.error('Error syncing data after reconnection:', error);
+        }
+    };
 
     const handleCreate = async () => {
         if (!newTitle.trim() || !newContent.trim()) {
@@ -92,6 +236,11 @@ export default function CourseDetailScreen() {
         // If editing, use update function instead
         if (editingItem) {
             return handleUpdate();
+        }
+
+        // If offline, save as draft
+        if (!isOnline) {
+            return handleSaveDraft();
         }
 
         setLoading(true);
@@ -167,6 +316,43 @@ export default function CourseDetailScreen() {
             Alert.alert('Error', 'Failed to create post. Please try again.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSaveDraft = async () => {
+        try {
+            if (activeTab === 'announcements') {
+                Alert.alert('Offline', 'Announcements cannot be drafted offline. Please try when online.');
+                return;
+            }
+
+            const draftData = {
+                type: 'discussion' as const,
+                title: newTitle.trim(),
+                content: newContent.trim(),
+                courseId: courseId as string,
+                isAnonymous: isAnonymous,
+                authorRole: role as string,
+                instructorName: instructorName as string
+            };
+
+            const draftId = await draftManager.saveDraft(draftData);
+
+            setNewTitle('');
+            setNewContent('');
+            setIsAnonymous(false);
+            setShowCreateForm(false);
+
+            await loadDrafts(); // Refresh drafts list
+
+            Alert.alert(
+                'Draft Saved',
+                'Your discussion has been saved as a draft and will be posted when you go back online.',
+                [{ text: 'OK' }]
+            );
+        } catch (error) {
+            console.error('Error saving draft:', error);
+            Alert.alert('Error', 'Failed to save draft. Please try again.');
         }
     };
 
@@ -270,9 +456,25 @@ export default function CourseDetailScreen() {
 
     const renderAnnouncements = () => (
         <ScrollView style={styles.contentContainer}>
+            {/* Offline/Cache Status Indicator */}
+            {(!isOnline || isLoadingFromCache) && (
+                <View style={styles.offlineIndicator}>
+                    <Ionicons
+                        name={!isOnline ? "cloud-offline" : "refresh"}
+                        size={16}
+                        color={!isOnline ? "#f59e0b" : "#4f46e5"}
+                    />
+                    <Text style={styles.offlineText}>
+                        {!isOnline ? "Offline - Showing cached content" : "Loading cached content..."}
+                    </Text>
+                </View>
+            )}
+
             {announcements.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>No announcements yet</Text>
+                    <Text style={styles.emptyText}>
+                        {!isOnline ? "No cached announcements available" : "No announcements yet"}
+                    </Text>
                 </View>
             ) : (
                 announcements.map((announcement) => (
@@ -287,8 +489,8 @@ export default function CourseDetailScreen() {
                                 ]}>
                                     <Text style={styles.roleTagText}>{announcement.authorRole}</Text>
                                 </View>
-                                {/* Show edit/delete only for author and if not archived */}
-                                {auth.currentUser?.uid === announcement.authorId && !courseIsArchived && (
+                                {/* Show edit/delete only for author and if not archived and online */}
+                                {auth.currentUser?.uid === announcement.authorId && !courseIsArchived && isOnline && (
                                     <View style={styles.actionButtons}>
                                         <TouchableOpacity
                                             style={styles.editButton}
@@ -317,6 +519,12 @@ export default function CourseDetailScreen() {
                                 <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
                             </View>
                         )}
+                        {!isOnline && (
+                            <View style={styles.cachedIndicator}>
+                                <Ionicons name="download" size={12} color="#4f46e5" />
+                                <Text style={styles.cachedText}>Cached content</Text>
+                            </View>
+                        )}
                     </View>
                 ))
             )}
@@ -325,9 +533,79 @@ export default function CourseDetailScreen() {
 
     const renderDiscussions = () => (
         <ScrollView style={styles.contentContainer}>
-            {discussions.length === 0 ? (
+            {/* Offline/Cache Status Indicator */}
+            {(!isOnline || isLoadingFromCache) && (
+                <View style={styles.offlineIndicator}>
+                    <Ionicons
+                        name={!isOnline ? "cloud-offline" : "refresh"}
+                        size={16}
+                        color={!isOnline ? "#f59e0b" : "#4f46e5"}
+                    />
+                    <Text style={styles.offlineText}>
+                        {!isOnline ? "Offline - Showing cached discussions" : "Loading cached discussions..."}
+                    </Text>
+                </View>
+            )}
+
+            {/* Draft Sync Status */}
+            {syncingDrafts && (
+                <View style={styles.syncIndicator}>
+                    <Ionicons name="sync" size={16} color="#4f46e5" />
+                    <Text style={styles.syncText}>Syncing drafts...</Text>
+                </View>
+            )}
+
+            {/* Draft Posts (Pending/Failed) */}
+            {drafts.filter(draft => draft.type === 'discussion' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
+                <View key={draft.id} style={[styles.postCard, styles.draftCard]}>
+                    <View style={styles.postHeader}>
+                        <Text style={styles.postTitle}>{draft.title}</Text>
+                        <View style={styles.postHeaderRight}>
+                            <View style={[styles.statusBadge,
+                            draft.status === 'pending' ? styles.pendingBadge :
+                                draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
+                            ]}>
+                                <Ionicons
+                                    name={
+                                        draft.status === 'pending' ? "sync" :
+                                            draft.status === 'failed' ? "alert-circle" : "document-text"
+                                    }
+                                    size={12}
+                                    color="#fff"
+                                />
+                                <Text style={styles.statusBadgeText}>
+                                    {draft.status === 'pending' ? 'Syncing' :
+                                        draft.status === 'failed' ? 'Failed' : 'Draft'}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                    <Text style={styles.postContent}>{draft.content}</Text>
+                    <View style={styles.postMeta}>
+                        <Text style={styles.postAuthor}>
+                            {draft.isAnonymous ? 'Anonymous Student' : `By ${draft.authorRole}`}
+                        </Text>
+                        <Text style={styles.postDate}>
+                            {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                    </View>
+                    {draft.status === 'failed' && (
+                        <View style={styles.errorNotice}>
+                            <Ionicons name="warning" size={14} color="#ef4444" />
+                            <Text style={styles.errorNoticeText}>
+                                Failed to sync. Will retry when online.
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            ))}
+
+            {/* Regular Discussions */}
+            {discussions.length === 0 && drafts.filter(d => d.type === 'discussion').length === 0 ? (
                 <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>No discussions yet</Text>
+                    <Text style={styles.emptyText}>
+                        {!isOnline ? "No cached discussions available" : "No discussions yet"}
+                    </Text>
                 </View>
             ) : (
                 discussions.map((discussion) => (
@@ -350,8 +628,8 @@ export default function CourseDetailScreen() {
                                         {discussion.authorRole}
                                     </Text>
                                 </View>
-                                {/* Show edit/delete only for author and if not archived */}
-                                {auth.currentUser?.uid === discussion.authorId && !courseIsArchived && (
+                                {/* Show edit/delete only for author and if not archived and online */}
+                                {auth.currentUser?.uid === discussion.authorId && !courseIsArchived && isOnline && (
                                     <View style={styles.actionButtons}>
                                         <TouchableOpacity
                                             style={styles.editButton}
@@ -392,6 +670,12 @@ export default function CourseDetailScreen() {
                                 <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
                             </View>
                         )}
+                        {!isOnline && (
+                            <View style={styles.cachedIndicator}>
+                                <Ionicons name="download" size={12} color="#4f46e5" />
+                                <Text style={styles.cachedText}>Cached content</Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 ))
             )}
@@ -411,7 +695,7 @@ export default function CourseDetailScreen() {
                             {editingItem ? 'Edit' : 'Create'} {activeTab === 'announcements' ? 'Announcement' : 'Discussion'}
                         </Text>
                         <TouchableOpacity onPress={resetForm}>
-                            <Ionicons name="close" size={24} color="#81171b" />
+                            <Ionicons name="close" size={24} color="#4f46e5" />
                         </TouchableOpacity>
                     </View>
 
@@ -441,7 +725,7 @@ export default function CourseDetailScreen() {
                             <Switch
                                 value={isAnonymous}
                                 onValueChange={setIsAnonymous}
-                                trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                                trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                                 thumbColor={isAnonymous ? '#fff' : '#f4f3f4'}
                             />
                         </View>
@@ -465,7 +749,7 @@ export default function CourseDetailScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <Pressable style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#81171b" />
+                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                 </Pressable>
                 <View style={styles.headerInfo}>
                     <View style={styles.headerTitleRow}>
@@ -479,6 +763,7 @@ export default function CourseDetailScreen() {
                     <Text style={styles.headerSubtitle}>{courseCode} • {instructorName}</Text>
                 </View>
                 <View style={styles.headerActions}>
+                    <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
                     {role === 'teacher' && (
                         <TouchableOpacity
                             style={styles.resourcesButton}
@@ -491,7 +776,7 @@ export default function CourseDetailScreen() {
                                 }
                             })}
                         >
-                            <Ionicons name="folder" size={20} color="#81171b" />
+                            <Ionicons name="folder" size={20} color="#4f46e5" />
                         </TouchableOpacity>
                     )}
                     <TouchableOpacity
@@ -507,7 +792,7 @@ export default function CourseDetailScreen() {
                             }
                         })}
                     >
-                        <Ionicons name="sparkles" size={20} color="#81171b" />
+                        <Ionicons name="sparkles" size={20} color="#4f46e5" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -553,27 +838,27 @@ export default function CourseDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
-        backgroundColor: '#fff',
+        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 3,
+        elevation: 4,
     },
     backButton: {
-        marginRight: 16,
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(129, 23, 27, 0.08)',
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        marginRight: 16,
     },
     headerInfo: {
         flex: 1,
@@ -583,20 +868,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
     },
     archivedBadge: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#6b7280',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
-        marginLeft: 8,
+        marginLeft: 12,
     },
     headerSubtitle: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#64748b',
         marginTop: 4,
         fontWeight: '500',
@@ -614,7 +899,7 @@ const styles = StyleSheet.create({
     },
     activeTab: {
         backgroundColor: '#fff',
-        borderBottomColor: '#81171b',
+        borderBottomColor: '#4f46e5',
     },
     tabText: {
         fontSize: 16,
@@ -623,7 +908,7 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
     activeTabText: {
-        color: '#81171b',
+        color: '#4f46e5',
         fontWeight: '700',
     },
     contentContainer: {
@@ -643,42 +928,56 @@ const styles = StyleSheet.create({
     },
     postCard: {
         backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 16,
-        marginBottom: 16,
+        padding: 24,
+        borderRadius: 20,
+        marginBottom: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
         elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
+    },
+    draftCard: {
+        borderLeftWidth: 4,
+        borderLeftColor: '#059669',
+        backgroundColor: 'rgba(5, 150, 105, 0.02)',
     },
     postHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
+        alignItems: 'flex-start',
+        marginBottom: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
     },
     postTitle: {
-        fontSize: 19,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
         flex: 1,
         letterSpacing: -0.3,
+        lineHeight: 26,
     },
     postContent: {
         fontSize: 16,
         color: '#475569',
         lineHeight: 24,
-        marginBottom: 16,
+        marginBottom: 20,
     },
     postMeta: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
     },
     postAuthor: {
         fontSize: 14,
-        color: '#81171b',
+        color: '#4f46e5',
         fontWeight: '600',
     },
     postDate: {
@@ -687,24 +986,24 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     roleTag: {
-        backgroundColor: '#81171b',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
-        shadowColor: '#81171b',
+        backgroundColor: '#4f46e5',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 4,
         elevation: 2,
     },
     teacherTag: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
     },
     adminTag: {
-        backgroundColor: '#f59e0b',
+        backgroundColor: '#059669',
     },
     studentTag: {
-        backgroundColor: '#d97706',
+        backgroundColor: '#0891b2',
     },
     anonymousTag: {
         backgroundColor: '#64748b',
@@ -719,11 +1018,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 5,
+        marginTop: 8,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
     },
     repliesCount: {
-        fontSize: 12,
-        color: '#666',
+        fontSize: 14,
+        color: '#64748b',
+        fontWeight: '500',
     },
     createFormContainer: {
         flex: 1,
@@ -736,16 +1039,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
     },
     formTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#1e293b',
+        letterSpacing: -0.3,
     },
     titleInput: {
-        backgroundColor: '#f8fafc',
-        padding: 18,
+        backgroundColor: '#fff',
+        padding: 20,
         borderRadius: 16,
         fontSize: 17,
         marginBottom: 16,
@@ -753,27 +1060,37 @@ const styles = StyleSheet.create({
         borderColor: '#e2e8f0',
         color: '#1e293b',
         fontWeight: '500',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
     contentInput: {
-        backgroundColor: '#f8fafc',
-        padding: 18,
+        backgroundColor: '#fff',
+        padding: 20,
         borderRadius: 16,
         fontSize: 16,
         minHeight: 140,
-        marginBottom: 20,
+        marginBottom: 24,
         borderWidth: 2,
         borderColor: '#e2e8f0',
         color: '#1e293b',
         lineHeight: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
     createButton: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
         padding: 18,
         borderRadius: 16,
         alignItems: 'center',
-        shadowColor: '#81171b',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 6,
     },
@@ -791,31 +1108,36 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
+        padding: 16,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
     },
     anonymityLabel: {
         fontSize: 16,
-        color: '#333',
-        fontWeight: '500',
+        color: '#1e293b',
+        fontWeight: '600',
     },
     fab: {
         position: 'absolute',
         bottom: 24,
         right: 24,
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#81171b',
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        backgroundColor: '#4f46e5',
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 8,
-        shadowColor: '#81171b',
+        elevation: 12,
+        shadowColor: '#4f46e5',
         shadowOffset: {
             width: 0,
-            height: 6,
+            height: 8,
         },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
     },
     formScrollView: {
         flex: 1,
@@ -823,40 +1145,129 @@ const styles = StyleSheet.create({
     postHeaderRight: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 12,
     },
     actionButtons: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 8,
     },
     editButton: {
-        padding: 5,
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f8fafc',
     },
     deleteButton: {
-        padding: 5,
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#fef2f2',
     },
     archivedNotice: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 5,
+        marginTop: 12,
+        padding: 8,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
     },
     archivedNoticeText: {
         fontSize: 12,
-        color: '#666',
-        marginLeft: 5,
+        color: '#64748b',
+        marginLeft: 6,
+        fontWeight: '500',
     },
     aiAssistantButton: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(129, 23, 27, 0.08)',
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
     },
     headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 8,
     },
     resourcesButton: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(129, 23, 27, 0.08)',
-        marginRight: 8,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+    },
+    offlineIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        marginBottom: 20,
+    },
+    offlineText: {
+        fontSize: 14,
+        color: '#64748b',
+        marginLeft: 8,
+        fontWeight: '500',
+    },
+    cachedIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        marginTop: 20,
+    },
+    cachedText: {
+        fontSize: 14,
+        color: '#64748b',
+        marginLeft: 8,
+        fontWeight: '500',
+    },
+    syncIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        marginBottom: 20,
+    },
+    syncText: {
+        fontSize: 14,
+        color: '#64748b',
+        marginLeft: 8,
+        fontWeight: '500',
+    },
+    statusBadge: {
+        backgroundColor: '#4f46e5',
+        padding: 8,
+        borderRadius: 8,
+    },
+    statusBadgeText: {
+        fontSize: 12,
+        color: '#fff',
+        fontWeight: '700',
+    },
+    pendingBadge: {
+        backgroundColor: '#f59e0b',
+    },
+    failedBadge: {
+        backgroundColor: '#ef4444',
+    },
+    draftBadge: {
+        backgroundColor: '#059669',
+    },
+    errorNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+        padding: 8,
+        backgroundColor: '#fef2f2',
+        borderRadius: 8,
+    },
+    errorNoticeText: {
+        fontSize: 12,
+        color: '#ef4444',
+        marginLeft: 6,
+        fontWeight: '500',
+    },
+    connectivityIndicator: {
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 8,
     },
 }); 

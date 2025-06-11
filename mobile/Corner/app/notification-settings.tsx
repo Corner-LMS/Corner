@@ -141,7 +141,7 @@ export default function NotificationSettingsScreen() {
                     style={styles.backButton}
                     onPress={() => router.back()}
                 >
-                    <Ionicons name="arrow-back" size={24} color="#81171b" />
+                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notification Settings</Text>
                 <View style={styles.headerSpacer} />
@@ -158,7 +158,7 @@ export default function NotificationSettingsScreen() {
                         <>
                             <View style={styles.settingItem}>
                                 <View style={styles.settingInfo}>
-                                    <Ionicons name="megaphone" size={20} color="#81171b" style={styles.settingIcon} />
+                                    <Ionicons name="megaphone" size={20} color="#4f46e5" style={styles.settingIcon} />
                                     <View style={styles.settingText}>
                                         <Text style={styles.settingTitle}>Announcements</Text>
                                         <Text style={styles.settingSubtitle}>New announcements from teachers</Text>
@@ -167,14 +167,14 @@ export default function NotificationSettingsScreen() {
                                 <Switch
                                     value={settings.announcementNotifications}
                                     onValueChange={(value) => updateSetting('announcementNotifications', value)}
-                                    trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                                    trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                                     thumbColor={settings.announcementNotifications ? '#fff' : '#f4f3f4'}
                                 />
                             </View>
 
                             <View style={styles.settingItem}>
                                 <View style={styles.settingInfo}>
-                                    <Ionicons name="chatbubbles" size={20} color="#81171b" style={styles.settingIcon} />
+                                    <Ionicons name="chatbubbles" size={20} color="#4f46e5" style={styles.settingIcon} />
                                     <View style={styles.settingText}>
                                         <Text style={styles.settingTitle}>Discussion Milestones</Text>
                                         <Text style={styles.settingSubtitle}>Every 10 new discussion posts</Text>
@@ -183,14 +183,14 @@ export default function NotificationSettingsScreen() {
                                 <Switch
                                     value={settings.discussionMilestoneNotifications}
                                     onValueChange={(value) => updateSetting('discussionMilestoneNotifications', value)}
-                                    trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                                    trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                                     thumbColor={settings.discussionMilestoneNotifications ? '#fff' : '#f4f3f4'}
                                 />
                             </View>
 
                             <View style={styles.settingItem}>
                                 <View style={styles.settingInfo}>
-                                    <Ionicons name="heart" size={20} color="#81171b" style={styles.settingIcon} />
+                                    <Ionicons name="heart" size={20} color="#4f46e5" style={styles.settingIcon} />
                                     <View style={styles.settingText}>
                                         <Text style={styles.settingTitle}>Popular Discussions</Text>
                                         <Text style={styles.settingSubtitle}>When your posts get 3+ replies</Text>
@@ -199,7 +199,7 @@ export default function NotificationSettingsScreen() {
                                 <Switch
                                     value={settings.replyNotifications}
                                     onValueChange={(value) => updateSetting('replyNotifications', value)}
-                                    trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                                    trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                                     thumbColor={settings.replyNotifications ? '#fff' : '#f4f3f4'}
                                 />
                             </View>
@@ -209,7 +209,7 @@ export default function NotificationSettingsScreen() {
                     {userRole === 'teacher' && (
                         <View style={styles.settingItem}>
                             <View style={styles.settingInfo}>
-                                <Ionicons name="trending-up" size={20} color="#81171b" style={styles.settingIcon} />
+                                <Ionicons name="trending-up" size={20} color="#4f46e5" style={styles.settingIcon} />
                                 <View style={styles.settingText}>
                                     <Text style={styles.settingTitle}>Course Activity</Text>
                                     <Text style={styles.settingSubtitle}>Every 10 discussion posts in your courses</Text>
@@ -218,7 +218,7 @@ export default function NotificationSettingsScreen() {
                             <Switch
                                 value={settings.teacherDiscussionMilestoneNotifications}
                                 onValueChange={(value) => updateSetting('teacherDiscussionMilestoneNotifications', value)}
-                                trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                                trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                                 thumbColor={settings.teacherDiscussionMilestoneNotifications ? '#fff' : '#f4f3f4'}
                             />
                         </View>
@@ -230,7 +230,7 @@ export default function NotificationSettingsScreen() {
 
                     <View style={styles.settingItem}>
                         <View style={styles.settingInfo}>
-                            <Ionicons name="volume-high" size={20} color="#81171b" style={styles.settingIcon} />
+                            <Ionicons name="volume-high" size={20} color="#4f46e5" style={styles.settingIcon} />
                             <View style={styles.settingText}>
                                 <Text style={styles.settingTitle}>Sound</Text>
                                 <Text style={styles.settingSubtitle}>Play notification sounds</Text>
@@ -239,14 +239,14 @@ export default function NotificationSettingsScreen() {
                         <Switch
                             value={settings.soundEnabled}
                             onValueChange={(value) => updateSetting('soundEnabled', value)}
-                            trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                            trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                             thumbColor={settings.soundEnabled ? '#fff' : '#f4f3f4'}
                         />
                     </View>
 
                     <View style={styles.settingItem}>
                         <View style={styles.settingInfo}>
-                            <Ionicons name="phone-portrait" size={20} color="#81171b" style={styles.settingIcon} />
+                            <Ionicons name="phone-portrait" size={20} color="#4f46e5" style={styles.settingIcon} />
                             <View style={styles.settingText}>
                                 <Text style={styles.settingTitle}>Vibration</Text>
                                 <Text style={styles.settingSubtitle}>Vibrate for notifications</Text>
@@ -255,7 +255,7 @@ export default function NotificationSettingsScreen() {
                         <Switch
                             value={settings.vibrationEnabled}
                             onValueChange={(value) => updateSetting('vibrationEnabled', value)}
-                            trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                            trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                             thumbColor={settings.vibrationEnabled ? '#fff' : '#f4f3f4'}
                         />
                     </View>
@@ -268,7 +268,7 @@ export default function NotificationSettingsScreen() {
                         style={styles.testButton}
                         onPress={testNotification}
                     >
-                        <Ionicons name="notifications" size={20} color="#81171b" />
+                        <Ionicons name="notifications" size={20} color="#4f46e5" />
                         <Text style={styles.testButtonText}>Send Test Notification</Text>
                     </TouchableOpacity>
 
@@ -276,7 +276,7 @@ export default function NotificationSettingsScreen() {
                         style={[styles.testButton, { marginTop: 12 }]}
                         onPress={clearAllNotifications}
                     >
-                        <Ionicons name="trash" size={20} color="#81171b" />
+                        <Ionicons name="trash" size={20} color="#4f46e5" />
                         <Text style={styles.testButtonText}>Clear All Notifications</Text>
                     </TouchableOpacity>
                 </View>
@@ -298,13 +298,13 @@ export default function NotificationSettingsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     loadingText: {
         fontSize: 16,
@@ -314,30 +314,30 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 20,
-        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
+        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 3,
+        elevation: 4,
     },
     backButton: {
         padding: 8,
         marginRight: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(129, 23, 27, 0.08)',
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
     },
     headerTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
         flex: 1,
         textAlign: 'center',
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
     },
     headerSpacer: {
         width: 40,
@@ -348,33 +348,36 @@ const styles = StyleSheet.create({
     },
     section: {
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 20,
+        borderRadius: 20,
+        padding: 24,
         marginBottom: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
         elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     sectionTitle: {
-        fontSize: 19,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
-        marginBottom: 6,
+        marginBottom: 8,
         letterSpacing: -0.3,
     },
     sectionDescription: {
         fontSize: 15,
         color: '#64748b',
-        marginBottom: 20,
+        marginBottom: 24,
         lineHeight: 22,
+        fontWeight: '500',
     },
     settingItem: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 16,
+        paddingVertical: 18,
         borderBottomWidth: 1,
         borderBottomColor: '#f1f5f9',
     },
@@ -395,43 +398,49 @@ const styles = StyleSheet.create({
         fontSize: 17,
         fontWeight: '600',
         color: '#1e293b',
-        marginBottom: 4,
+        marginBottom: 6,
         lineHeight: 22,
     },
     settingSubtitle: {
         fontSize: 14,
         color: '#64748b',
         lineHeight: 20,
+        fontWeight: '500',
     },
     testButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
-        backgroundColor: '#fef2f2',
-        borderRadius: 12,
+        padding: 18,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 16,
         borderWidth: 2,
-        borderColor: '#fecaca',
-        marginVertical: 6,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
+        marginVertical: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
     testButtonText: {
         fontSize: 16,
-        color: '#81171b',
-        fontWeight: '600',
-        marginLeft: 10,
+        color: '#4f46e5',
+        fontWeight: '700',
+        marginLeft: 12,
         letterSpacing: 0.3,
     },
     saveButton: {
-        backgroundColor: '#81171b',
-        padding: 18,
+        backgroundColor: '#4f46e5',
+        padding: 20,
         borderRadius: 16,
         alignItems: 'center',
-        marginTop: 24,
-        marginBottom: 32,
-        shadowColor: '#81171b',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
+        marginTop: 32,
+        marginBottom: 40,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
         elevation: 6,
     },
     saveButtonText: {

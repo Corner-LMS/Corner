@@ -5,6 +5,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../config/ firebase-config.js';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { offlineCacheService, CachedResource } from '../services/offlineCache';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 interface CourseResource {
     id: string;
@@ -21,6 +23,7 @@ type ResourceType = 'link' | 'text';
 export default function CourseResourcesScreen() {
     const params = useLocalSearchParams();
     const { courseId, courseName, role } = params;
+    const { isOnline, hasReconnected } = useNetworkStatus();
 
     const [resources, setResources] = useState<CourseResource[]>([]);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -30,8 +33,32 @@ export default function CourseResourcesScreen() {
     const [textContent, setTextContent] = useState('');
     const [linkUrl, setLinkUrl] = useState('');
     const [isUploading, setIsUploading] = useState(false);
+    const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
 
+    // Initialize cache on component mount
     useEffect(() => {
+        offlineCacheService.initializeCache();
+    }, []);
+
+    // Load cached data when offline or sync when reconnected
+    useEffect(() => {
+        if (!courseId) return;
+
+        if (isOnline) {
+            // Online: Use Firebase listeners and cache the data
+            setupFirebaseListener();
+        } else {
+            // Offline: Load cached data
+            loadCachedResources();
+        }
+
+        // Sync when reconnected
+        if (hasReconnected && courseId) {
+            syncResourcesAfterReconnection();
+        }
+    }, [courseId, isOnline, hasReconnected]);
+
+    const setupFirebaseListener = () => {
         if (!courseId) return;
 
         const resourcesQuery = query(
@@ -39,18 +66,68 @@ export default function CourseResourcesScreen() {
             orderBy('createdAt', 'desc')
         );
 
-        const unsubscribe = onSnapshot(resourcesQuery, (snapshot) => {
+        const unsubscribe = onSnapshot(resourcesQuery, async (snapshot) => {
             const resourcesList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             })) as CourseResource[];
+
             setResources(resourcesList);
+
+            // Cache the resources when online
+            try {
+                await offlineCacheService.cacheResources(
+                    courseId as string,
+                    resourcesList,
+                    courseName as string
+                );
+            } catch (error) {
+                console.error('Error caching resources:', error);
+            }
         });
 
         return unsubscribe;
-    }, [courseId]);
+    };
+
+    const loadCachedResources = async () => {
+        if (!courseId) return;
+
+        setIsLoadingFromCache(true);
+        try {
+            const cachedResources = await offlineCacheService.getCachedResources(courseId as string);
+            setResources(cachedResources as CourseResource[]);
+
+            if (cachedResources.length > 0) {
+                console.log(`Loaded ${cachedResources.length} cached resources`);
+            }
+        } catch (error) {
+            console.error('Error loading cached resources:', error);
+        } finally {
+            setIsLoadingFromCache(false);
+        }
+    };
+
+    const syncResourcesAfterReconnection = async () => {
+        if (!courseId || !courseName) return;
+
+        try {
+            console.log('Syncing resources after reconnection...');
+            await offlineCacheService.syncResourcesFromFirebase(
+                courseId as string,
+                courseName as string
+            );
+            await offlineCacheService.updateLastSyncTime();
+        } catch (error) {
+            console.error('Error syncing resources after reconnection:', error);
+        }
+    };
 
     const handleAddResource = async () => {
+        if (!isOnline) {
+            Alert.alert('Offline', 'You need to be online to add new resources.');
+            return;
+        }
+
         if (!title.trim()) {
             Alert.alert('Error', 'Please enter a title for the resource.');
             return;
@@ -150,7 +227,7 @@ export default function CourseResourcesScreen() {
                     <Ionicons
                         name={getResourceIcon(resource.type)}
                         size={24}
-                        color="#81171b"
+                        color="#4f46e5"
                         style={styles.resourceIcon}
                     />
                     <View style={styles.resourceDetails}>
@@ -200,7 +277,7 @@ export default function CourseResourcesScreen() {
                     }}
                 >
                     <Text style={styles.linkText}>Open Link</Text>
-                    <Ionicons name="open-outline" size={16} color="#81171b" />
+                    <Ionicons name="open-outline" size={16} color="#4f46e5" />
                 </TouchableOpacity>
             )}
         </View>
@@ -211,7 +288,7 @@ export default function CourseResourcesScreen() {
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
                     <Pressable style={styles.backButton} onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#81171b" />
+                        <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                     </Pressable>
                     <View style={styles.headerInfo}>
                         <Text style={styles.headerTitle}>Course Resources</Text>
@@ -220,16 +297,45 @@ export default function CourseResourcesScreen() {
                 </View>
 
                 <ScrollView style={styles.content}>
+                    {/* Offline/Cache Status Indicator */}
+                    {(!isOnline || isLoadingFromCache) && (
+                        <View style={styles.offlineIndicator}>
+                            <Ionicons
+                                name={!isOnline ? "cloud-offline" : "refresh"}
+                                size={16}
+                                color={!isOnline ? "#f59e0b" : "#4f46e5"}
+                            />
+                            <Text style={styles.offlineText}>
+                                {!isOnline ? "Offline - Showing cached resources" : "Loading cached resources..."}
+                            </Text>
+                        </View>
+                    )}
+
                     {resources.length === 0 ? (
                         <View style={styles.emptyState}>
                             <Ionicons name="folder-open-outline" size={64} color="#94a3b8" />
-                            <Text style={styles.emptyStateText}>No resources available</Text>
+                            <Text style={styles.emptyStateText}>
+                                {!isOnline ? "No cached resources available" : "No resources available"}
+                            </Text>
                             <Text style={styles.emptyStateSubtext}>
-                                Your instructor hasn't added any resources yet.
+                                {!isOnline
+                                    ? "Resources will be available when you go back online."
+                                    : "Your instructor hasn't added any resources yet."
+                                }
                             </Text>
                         </View>
                     ) : (
-                        resources.map(renderResourceCard)
+                        resources.map(resource => (
+                            <View key={resource.id}>
+                                {renderResourceCard(resource)}
+                                {!isOnline && (
+                                    <View style={styles.cachedIndicator}>
+                                        <Ionicons name="download" size={12} color="#4f46e5" />
+                                        <Text style={styles.cachedText}>Cached content</Text>
+                                    </View>
+                                )}
+                            </View>
+                        ))
                     )}
                 </ScrollView>
             </SafeAreaView>
@@ -240,31 +346,61 @@ export default function CourseResourcesScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <Pressable style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#81171b" />
+                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                 </Pressable>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle}>Course Resources</Text>
                     <Text style={styles.headerSubtitle}>{courseName}</Text>
                 </View>
                 <TouchableOpacity
-                    style={styles.addButton}
+                    style={[styles.addButton, !isOnline && styles.addButtonDisabled]}
                     onPress={() => setShowAddModal(true)}
+                    disabled={!isOnline}
                 >
                     <Ionicons name="add" size={24} color="#fff" />
                 </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.content}>
+                {/* Offline/Cache Status Indicator */}
+                {(!isOnline || isLoadingFromCache) && (
+                    <View style={styles.offlineIndicator}>
+                        <Ionicons
+                            name={!isOnline ? "cloud-offline" : "refresh"}
+                            size={16}
+                            color={!isOnline ? "#f59e0b" : "#4f46e5"}
+                        />
+                        <Text style={styles.offlineText}>
+                            {!isOnline ? "Offline - Showing cached resources" : "Loading cached resources..."}
+                        </Text>
+                    </View>
+                )}
+
                 {resources.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="folder-open-outline" size={64} color="#94a3b8" />
-                        <Text style={styles.emptyStateText}>No resources yet</Text>
+                        <Text style={styles.emptyStateText}>
+                            {!isOnline ? "No cached resources available" : "No resources yet"}
+                        </Text>
                         <Text style={styles.emptyStateSubtext}>
-                            Add your first course resource to help students learn better.
+                            {!isOnline
+                                ? "Resources will be available when you go back online."
+                                : "Add your first course resource to help students learn better."
+                            }
                         </Text>
                     </View>
                 ) : (
-                    resources.map(renderResourceCard)
+                    resources.map(resource => (
+                        <View key={resource.id}>
+                            {renderResourceCard(resource)}
+                            {!isOnline && (
+                                <View style={styles.cachedIndicator}>
+                                    <Ionicons name="download" size={12} color="#4f46e5" />
+                                    <Text style={styles.cachedText}>Cached content</Text>
+                                </View>
+                            )}
+                        </View>
+                    ))
                 )}
             </ScrollView>
 
@@ -389,27 +525,27 @@ export default function CourseResourcesScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
-        backgroundColor: '#fff',
+        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 3,
+        elevation: 4,
     },
     backButton: {
         marginRight: 16,
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(129, 23, 27, 0.08)',
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
     },
     headerInfo: {
         flex: 1,
@@ -421,23 +557,27 @@ const styles = StyleSheet.create({
         letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#64748b',
-        marginTop: 2,
+        marginTop: 4,
         fontWeight: '500',
     },
     addButton: {
-        backgroundColor: '#81171b',
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        backgroundColor: '#4f46e5',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#81171b',
-        shadowOffset: { width: 0, height: 2 },
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowRadius: 8,
         elevation: 4,
+    },
+    addButtonDisabled: {
+        backgroundColor: '#94a3b8',
+        shadowColor: '#94a3b8',
     },
     content: {
         flex: 1,
@@ -446,13 +586,13 @@ const styles = StyleSheet.create({
     emptyState: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 60,
+        paddingVertical: 80,
     },
     emptyStateText: {
         fontSize: 18,
         fontWeight: '600',
         color: '#475569',
-        marginTop: 16,
+        marginTop: 20,
         marginBottom: 8,
     },
     emptyStateSubtext: {
@@ -461,45 +601,54 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 22,
         paddingHorizontal: 32,
+        fontWeight: '500',
     },
     resourceCard: {
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 16,
+        borderRadius: 20,
+        padding: 24,
+        marginBottom: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     resourceHeader: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
     },
     resourceInfo: {
         flexDirection: 'row',
         flex: 1,
     },
     resourceIcon: {
-        marginRight: 12,
+        marginRight: 16,
         marginTop: 2,
     },
     resourceDetails: {
         flex: 1,
     },
     resourceTitle: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 17,
+        fontWeight: '700',
         color: '#1e293b',
-        marginBottom: 4,
+        marginBottom: 8,
+        letterSpacing: -0.3,
+        lineHeight: 24,
     },
     resourceDescription: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#64748b',
-        marginBottom: 8,
-        lineHeight: 20,
+        marginBottom: 12,
+        lineHeight: 22,
+        fontWeight: '500',
     },
     resourceMeta: {
         flexDirection: 'row',
@@ -507,37 +656,53 @@ const styles = StyleSheet.create({
     },
     resourceType: {
         fontSize: 12,
-        color: '#94a3b8',
-        fontWeight: '500',
+        color: '#4f46e5',
+        fontWeight: '700',
+        letterSpacing: 0.5,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
     },
     deleteButton: {
         padding: 8,
         marginLeft: 12,
+        borderRadius: 8,
+        backgroundColor: '#fef2f2',
     },
     textContent: {
-        marginTop: 12,
-        padding: 16,
+        marginTop: 16,
+        padding: 20,
         backgroundColor: '#f8fafc',
-        borderRadius: 12,
-        borderLeftWidth: 3,
-        borderLeftColor: '#81171b',
+        borderRadius: 16,
+        borderLeftWidth: 4,
+        borderLeftColor: '#4f46e5',
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     textContentText: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#475569',
-        lineHeight: 20,
+        lineHeight: 22,
+        fontWeight: '500',
     },
     linkButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 12,
-        paddingVertical: 8,
+        marginTop: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
     },
     linkText: {
-        fontSize: 14,
-        color: '#81171b',
-        fontWeight: '500',
-        marginRight: 6,
+        fontSize: 15,
+        color: '#4f46e5',
+        fontWeight: '700',
+        marginRight: 8,
+        letterSpacing: 0.3,
     },
     modalOverlay: {
         flex: 1,
@@ -562,99 +727,152 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
+        letterSpacing: -0.3,
     },
     modalBody: {
         padding: 24,
     },
     sectionTitle: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#1e293b',
-        marginBottom: 12,
+        marginBottom: 16,
+        letterSpacing: -0.2,
     },
     typeSelector: {
         flexDirection: 'row',
-        marginBottom: 24,
-        gap: 12,
+        marginBottom: 32,
+        gap: 16,
     },
     typeButton: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 12,
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderRadius: 16,
         borderWidth: 2,
         borderColor: '#e2e8f0',
         backgroundColor: '#f8fafc',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
     typeButtonActive: {
-        backgroundColor: '#81171b',
-        borderColor: '#81171b',
+        backgroundColor: '#4f46e5',
+        borderColor: '#4f46e5',
+        shadowColor: '#4f46e5',
+        shadowOpacity: 0.2,
     },
     typeButtonText: {
-        fontSize: 14,
-        fontWeight: '500',
+        fontSize: 15,
+        fontWeight: '600',
         color: '#64748b',
-        marginLeft: 6,
+        marginLeft: 8,
     },
     typeButtonTextActive: {
         color: '#fff',
+        fontWeight: '700',
     },
     inputLabel: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 15,
+        fontWeight: '700',
         color: '#374151',
-        marginBottom: 8,
-        marginTop: 16,
+        marginBottom: 12,
+        marginTop: 20,
+        letterSpacing: -0.1,
     },
     textInput: {
         borderWidth: 2,
         borderColor: '#e2e8f0',
-        borderRadius: 12,
-        padding: 16,
+        borderRadius: 16,
+        padding: 18,
         fontSize: 16,
         color: '#1e293b',
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#fff',
+        fontWeight: '500',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
     textArea: {
-        height: 100,
+        height: 120,
         textAlignVertical: 'top',
+        lineHeight: 24,
     },
     modalFooter: {
         flexDirection: 'row',
         padding: 24,
-        gap: 12,
+        gap: 16,
         borderTopWidth: 1,
         borderTopColor: '#e2e8f0',
     },
     cancelButton: {
         flex: 1,
-        paddingVertical: 16,
-        borderRadius: 12,
+        paddingVertical: 18,
+        borderRadius: 16,
         borderWidth: 2,
         borderColor: '#e2e8f0',
         alignItems: 'center',
+        backgroundColor: '#f8fafc',
     },
     cancelButtonText: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#64748b',
+        letterSpacing: 0.3,
     },
     saveButton: {
         flex: 1,
-        paddingVertical: 16,
-        borderRadius: 12,
-        backgroundColor: '#81171b',
+        paddingVertical: 18,
+        borderRadius: 16,
+        backgroundColor: '#4f46e5',
         alignItems: 'center',
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     saveButtonDisabled: {
         backgroundColor: '#94a3b8',
+        shadowOpacity: 0.1,
     },
     saveButtonText: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#fff',
+        letterSpacing: 0.3,
+    },
+    offlineIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
+    },
+    offlineText: {
+        fontSize: 14,
+        color: '#64748b',
+        marginLeft: 8,
+    },
+    cachedIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(241, 245, 249, 0.8)',
+    },
+    cachedText: {
+        fontSize: 14,
+        color: '#64748b',
+        marginLeft: 8,
     },
 }); 

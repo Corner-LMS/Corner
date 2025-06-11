@@ -77,7 +77,7 @@ export default function RoleSelectionScreen() {
         <>
             <View style={[styles.header, isShortScreen && styles.headerShort]}>
                 <View style={[styles.logoContainer, isShortScreen && styles.logoContainerShort]}>
-                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#81171b" />
+                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#4f46e5" />
                 </View>
                 <Text style={[styles.welcomeText, isShortScreen && styles.welcomeTextShort]}>Welcome to Corner</Text>
                 <Text style={styles.subtitle}>Select your school to get started</Text>
@@ -99,7 +99,7 @@ export default function RoleSelectionScreen() {
                                 <Text style={styles.schoolCardTitle}>{school.shortName}</Text>
                                 <Text style={styles.schoolCardName}>{school.name}</Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="#81171b" />
+                            <Ionicons name="chevron-forward" size={20} color="#4f46e5" />
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -111,7 +111,7 @@ export default function RoleSelectionScreen() {
         <>
             <View style={[styles.header, isShortScreen && styles.headerShort]}>
                 <View style={[styles.logoContainer, isShortScreen && styles.logoContainerShort]}>
-                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#81171b" />
+                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#4f46e5" />
                 </View>
                 <Text style={[styles.welcomeText, isShortScreen && styles.welcomeTextShort]}>Welcome to Corner</Text>
                 <Text style={styles.subtitle}>
@@ -123,7 +123,7 @@ export default function RoleSelectionScreen() {
                 <View style={[styles.inputSection, isShortScreen && styles.inputSectionShort]}>
                     <Text style={styles.inputLabel}>Your Name</Text>
                     <View style={styles.inputContainer}>
-                        <Ionicons name="person-outline" size={20} color="#81171b" style={styles.inputIcon} />
+                        <Ionicons name="person-outline" size={20} color="#4f46e5" style={styles.inputIcon} />
                         <TextInput
                             style={styles.nameInput}
                             placeholder="Enter your full name"
@@ -153,7 +153,7 @@ export default function RoleSelectionScreen() {
         <>
             <View style={[styles.header, isShortScreen && styles.headerShort]}>
                 <View style={[styles.logoContainer, isShortScreen && styles.logoContainerShort]}>
-                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#81171b" />
+                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#4f46e5" />
                 </View>
                 <Text style={[styles.welcomeText, isShortScreen && styles.welcomeTextShort]}>Welcome {name}!</Text>
                 <Text style={styles.subtitle}>
@@ -192,7 +192,7 @@ export default function RoleSelectionScreen() {
                             activeOpacity={0.8}
                         >
                             <View style={[styles.roleIconContainer, styles.teacherIconContainer]}>
-                                <Ionicons name="desktop-outline" size={28} color="#81171b" />
+                                <Ionicons name="desktop-outline" size={28} color="#4f46e5" />
                             </View>
                             <View style={styles.roleTextContainer}>
                                 <Text style={[styles.roleButtonTitle, styles.teacherButtonTitle]}>Teacher</Text>
@@ -200,7 +200,7 @@ export default function RoleSelectionScreen() {
                                     Create and manage courses
                                 </Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="rgba(129, 23, 27, 0.7)" />
+                            <Ionicons name="chevron-forward" size={20} color="rgba(79, 70, 229, 0.7)" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -235,7 +235,7 @@ export default function RoleSelectionScreen() {
                 style={styles.backButton}
                 onPress={goBack}
             >
-                <Ionicons name="arrow-back" size={24} color="#81171b" />
+                <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                 <Text style={styles.backButtonText}>Back</Text>
             </Pressable>
 
@@ -268,7 +268,7 @@ export default function RoleSelectionScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     backButton: {
         position: 'absolute',
@@ -279,18 +279,19 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderRadius: 12,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 4,
     },
     backButtonText: {
-        color: '#81171b',
+        color: '#4f46e5',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     scrollView: {
         flex: 1,
@@ -315,10 +316,12 @@ const styles = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: 'rgba(129, 23, 27, 0.1)',
+        backgroundColor: 'rgba(79, 70, 229, 0.1)',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
+        borderWidth: 2,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
     },
     logoContainerShort: {
         width: 60,
@@ -362,22 +365,22 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     schoolGrid: {
-        gap: 12,
+        gap: 16,
     },
     schoolCard: {
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 16,
+        borderRadius: 20,
+        padding: 20,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     schoolCardContent: {
         flex: 1,
@@ -385,13 +388,15 @@ const styles = StyleSheet.create({
     schoolCardTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#81171b',
-        marginBottom: 4,
+        color: '#4f46e5',
+        marginBottom: 6,
+        letterSpacing: -0.2,
     },
     schoolCardName: {
         fontSize: 14,
         color: '#64748b',
         lineHeight: 20,
+        fontWeight: '500',
     },
     form: {
         flex: 1,
@@ -404,9 +409,10 @@ const styles = StyleSheet.create({
     },
     inputLabel: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#374151',
-        marginBottom: 8,
+        marginBottom: 12,
+        letterSpacing: -0.1,
     },
     inputContainer: {
         flexDirection: 'row',
@@ -417,10 +423,10 @@ const styles = StyleSheet.create({
         borderColor: '#e2e8f0',
         paddingHorizontal: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 3,
     },
     inputIcon: {
         marginRight: 12,
@@ -433,17 +439,17 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     continueButton: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
         borderRadius: 16,
-        padding: 16,
+        padding: 18,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        shadowColor: '#81171b',
-        shadowOffset: { width: 0, height: 4 },
+        gap: 10,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
-        shadowRadius: 12,
+        shadowRadius: 16,
         elevation: 6,
     },
     continueButtonDisabled: {
@@ -452,8 +458,9 @@ const styles = StyleSheet.create({
     },
     continueButtonText: {
         color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 17,
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     roleSection: {
         flex: 1,
@@ -476,60 +483,63 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     roleButtonContainer: {
-        gap: 16,
+        gap: 20,
     },
     roleButtonContainerShort: {
-        gap: 12,
+        gap: 16,
     },
     roleButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
-        borderRadius: 16,
+        padding: 20,
+        borderRadius: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
         elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     studentButton: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
+        borderColor: '#4f46e5',
     },
     teacherButton: {
         backgroundColor: '#fff',
         borderWidth: 2,
-        borderColor: '#81171b',
+        borderColor: '#4f46e5',
     },
     roleIconContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 16,
+        marginRight: 20,
     },
     teacherIconContainer: {
-        backgroundColor: 'rgba(129, 23, 27, 0.1)',
+        backgroundColor: 'rgba(79, 70, 229, 0.1)',
     },
     roleTextContainer: {
         flex: 1,
-        marginRight: 12,
+        marginRight: 16,
     },
     roleButtonTitle: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '700',
         color: '#fff',
-        marginBottom: 4,
+        marginBottom: 6,
         letterSpacing: -0.2,
     },
     teacherButtonTitle: {
-        color: '#81171b',
+        color: '#4f46e5',
     },
     roleButtonDescription: {
-        fontSize: 14,
+        fontSize: 15,
         color: 'rgba(255, 255, 255, 0.8)',
-        lineHeight: 20,
+        lineHeight: 22,
         fontWeight: '500',
     },
     teacherButtonDescription: {
@@ -540,15 +550,21 @@ const styles = StyleSheet.create({
         bottom: 40,
         left: 20,
         right: 20,
-        backgroundColor: 'rgba(129, 23, 27, 0.9)',
-        padding: 16,
-        borderRadius: 12,
+        backgroundColor: 'rgba(79, 70, 229, 0.95)',
+        padding: 20,
+        borderRadius: 16,
         alignItems: 'center',
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 6,
     },
     loadingText: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     adminButton: {
         backgroundColor: '#fff',

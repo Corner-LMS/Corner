@@ -7,6 +7,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileInitials } from '@/components/ui/ProfileInitials';
 import { getSchoolById } from '@/constants/Schools';
+import ConnectivityIndicator from '../../components/ConnectivityIndicator';
 
 interface UserData {
     name: string;
@@ -75,7 +76,7 @@ export default function Profile() {
     if (loading) {
         return (
             <SafeAreaView style={styles.center}>
-                <ActivityIndicator size="large" color="#81171b" />
+                <ActivityIndicator size="large" color="#4f46e5" />
                 <Text style={styles.loadingText}>Loading profile...</Text>
             </SafeAreaView>
         );
@@ -88,9 +89,33 @@ export default function Profile() {
                     <>
                         {/* Header Section */}
                         <View style={styles.header}>
-                            <ProfileInitials size={80} color="#81171b" variant="header" />
-                            <Text style={styles.welcomeText}>Welcome back!</Text>
-                            <Text style={styles.userName}>{userData.name}</Text>
+                            <View style={styles.headerContent}>
+                                <Text style={styles.headerTitle}>Profile</Text>
+                                <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
+                            </View>
+                        </View>
+
+                        {/* Profile Card */}
+                        <View style={styles.profileCard}>
+                            <View style={styles.profileHeader}>
+                                <View style={styles.avatarContainer}>
+                                    <ProfileInitials size={80} color="#4f46e5" variant="header" />
+                                </View>
+                                <Text style={styles.welcomeText}>Welcome back!</Text>
+                                <Text style={styles.userName}>{userData.name}</Text>
+                                <View style={[
+                                    styles.roleTag,
+                                    userData.role === 'teacher' ? styles.teacherTag :
+                                        userData.role === 'admin' ? styles.adminTag : styles.studentTag
+                                ]}>
+                                    <Ionicons
+                                        name={userData.role === 'teacher' ? 'school' : userData.role === 'admin' ? 'shield-checkmark' : 'library'}
+                                        size={14}
+                                        color="#fff"
+                                    />
+                                    <Text style={styles.roleTagText}>{userData.role}</Text>
+                                </View>
+                            </View>
                         </View>
 
                         {/* Profile Information */}
@@ -100,7 +125,7 @@ export default function Profile() {
                             <View style={styles.infoCard}>
                                 <View style={styles.infoRow}>
                                     <View style={styles.infoIconContainer}>
-                                        <Ionicons name="person-outline" size={20} color="#81171b" />
+                                        <Ionicons name="person-outline" size={20} color="#4f46e5" />
                                     </View>
                                     <View style={styles.infoContent}>
                                         <Text style={styles.infoLabel}>Full Name</Text>
@@ -112,7 +137,7 @@ export default function Profile() {
 
                                 <View style={styles.infoRow}>
                                     <View style={styles.infoIconContainer}>
-                                        <Ionicons name="mail-outline" size={20} color="#81171b" />
+                                        <Ionicons name="mail-outline" size={20} color="#4f46e5" />
                                     </View>
                                     <View style={styles.infoContent}>
                                         <Text style={styles.infoLabel}>Email Address</Text>
@@ -124,7 +149,7 @@ export default function Profile() {
 
                                 <View style={styles.infoRow}>
                                     <View style={styles.infoIconContainer}>
-                                        <Ionicons name="school-outline" size={20} color="#81171b" />
+                                        <Ionicons name="school-outline" size={20} color="#4f46e5" />
                                     </View>
                                     <View style={styles.infoContent}>
                                         <Text style={styles.infoLabel}>School</Text>
@@ -141,21 +166,12 @@ export default function Profile() {
                                         <Ionicons
                                             name={userData.role === 'teacher' ? 'school-outline' : userData.role === 'admin' ? 'shield-checkmark-outline' : 'library-outline'}
                                             size={20}
-                                            color="#81171b"
+                                            color="#4f46e5"
                                         />
                                     </View>
                                     <View style={styles.infoContent}>
                                         <Text style={styles.infoLabel}>Role</Text>
-                                        <View style={styles.roleContainer}>
-                                            <Text style={styles.infoValue}>{userData.role}</Text>
-                                            <View style={[
-                                                styles.roleTag,
-                                                userData.role === 'teacher' ? styles.teacherTag :
-                                                    userData.role === 'admin' ? styles.adminTag : styles.studentTag
-                                            ]}>
-                                                <Text style={styles.roleTagText}>{userData.role}</Text>
-                                            </View>
-                                        </View>
+                                        <Text style={styles.infoValue}>{userData.role}</Text>
                                     </View>
                                 </View>
                             </View>
@@ -167,7 +183,7 @@ export default function Profile() {
                                 style={styles.logoutButton}
                                 onPress={handleLogout}
                             >
-                                <Ionicons name="log-out-outline" size={20} color="#d32f2f" />
+                                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
                                 <Text style={styles.logoutButtonText}>Log Out</Text>
                             </TouchableOpacity>
                         </View>
@@ -175,28 +191,30 @@ export default function Profile() {
                 ) : (
                     // Not logged in
                     <View style={styles.guestContent}>
-                        <View style={styles.guestIcon}>
-                            <Ionicons name="person-circle-outline" size={80} color="#ccc" />
-                        </View>
-                        <Text style={styles.guestTitle}>Welcome to Corner</Text>
-                        <Text style={styles.guestSubtitle}>
-                            Connect with teachers and students in a modern learning environment
-                        </Text>
+                        <View style={styles.guestCard}>
+                            <View style={styles.guestIcon}>
+                                <Ionicons name="person-circle-outline" size={80} color="#64748b" />
+                            </View>
+                            <Text style={styles.guestTitle}>Welcome to Corner</Text>
+                            <Text style={styles.guestSubtitle}>
+                                Connect with teachers and students in a modern learning environment
+                            </Text>
 
-                        <View style={styles.guestActions}>
-                            <TouchableOpacity
-                                style={styles.primaryButton}
-                                onPress={() => router.push('/(auth)/login')}
-                            >
-                                <Text style={styles.primaryButtonText}>Log In</Text>
-                            </TouchableOpacity>
+                            <View style={styles.guestActions}>
+                                <TouchableOpacity
+                                    style={styles.primaryButton}
+                                    onPress={() => router.push('/(auth)/login')}
+                                >
+                                    <Text style={styles.primaryButtonText}>Log In</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={styles.secondaryButton}
-                                onPress={() => router.push('/(auth)/signup')}
-                            >
-                                <Text style={styles.secondaryButtonText}>Create Account</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.secondaryButton}
+                                    onPress={() => router.push('/(auth)/signup')}
+                                >
+                                    <Text style={styles.secondaryButtonText}>Create Account</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 )}
@@ -208,106 +226,187 @@ export default function Profile() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#f1f5f9',
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
-        padding: 24,
+        padding: 20,
+        paddingBottom: 120,
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f1f5f9',
+    },
+    loadingText: {
+        fontSize: 16,
+        color: '#64748b',
+        marginTop: 12,
+        fontWeight: '500',
     },
     header: {
+        marginBottom: 24,
+    },
+    headerContent: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 32,
-        paddingTop: 8,
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
+    },
+    headerTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#1e293b',
+        letterSpacing: -0.3,
+    },
+    connectivityIndicator: {
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 8,
+    },
+    profileCard: {
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        marginBottom: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.1,
+        shadowRadius: 24,
+        elevation: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
+        overflow: 'hidden',
+    },
+    profileHeader: {
+        alignItems: 'center',
+        paddingVertical: 32,
+        paddingHorizontal: 24,
+        backgroundColor: 'linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(79, 70, 229, 0.02) 100%)',
+    },
+    avatarContainer: {
+        marginBottom: 16,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 4,
     },
     welcomeText: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 12,
-        marginTop: 16,
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#64748b',
+        marginBottom: 8,
+        letterSpacing: 0.2,
     },
     userName: {
-        fontSize: 18,
-        color: '#666',
+        fontSize: 26,
+        fontWeight: '800',
+        color: '#1e293b',
+        marginBottom: 16,
+        letterSpacing: -0.5,
+        textAlign: 'center',
+    },
+    roleTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 16,
+        gap: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    teacherTag: {
+        backgroundColor: '#4f46e5',
+    },
+    studentTag: {
+        backgroundColor: '#0891b2',
+    },
+    adminTag: {
+        backgroundColor: '#059669',
+    },
+    roleTagText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#fff',
+        textTransform: 'capitalize',
+        letterSpacing: 0.5,
     },
     infoSection: {
         marginBottom: 24,
     },
     sectionTitle: {
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 12,
+        fontWeight: '700',
+        color: '#1e293b',
+        marginBottom: 16,
+        letterSpacing: -0.3,
+        paddingHorizontal: 4,
     },
     infoCard: {
-        backgroundColor: '#f8f8f8',
-        borderRadius: 12,
-        padding: 20,
-        elevation: 2,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     infoRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 12,
     },
     infoIconContainer: {
-        backgroundColor: '#f0f0f0',
-        borderRadius: 8,
-        padding: 8,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 12,
+        padding: 12,
         marginRight: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.1)',
     },
     infoContent: {
         flex: 1,
     },
     infoLabel: {
         fontSize: 14,
-        fontWeight: '500',
-        color: '#666',
+        fontWeight: '600',
+        color: '#64748b',
         marginBottom: 4,
+        letterSpacing: 0.2,
     },
     infoValue: {
         fontSize: 16,
-        color: '#333',
-        fontWeight: '500',
+        color: '#1e293b',
+        fontWeight: '600',
+        letterSpacing: -0.1,
     },
     divider: {
         height: 1,
-        backgroundColor: '#e0e0e0',
+        backgroundColor: '#f1f5f9',
         marginVertical: 16,
     },
-    roleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    roleTag: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 16,
-    },
-    teacherTag: {
-        backgroundColor: '#81171b',
-    },
-    studentTag: {
-        backgroundColor: '#D65108',
-    },
-    adminTag: {
-        backgroundColor: '#f59e0b',
-    },
-    roleTagText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#fff',
-        textTransform: 'capitalize',
-    },
     actionsSection: {
-        marginTop: 32,
+        marginTop: 8,
+        marginBottom: 40,
     },
     logoutButton: {
         flexDirection: 'row',
@@ -315,75 +414,108 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#fff',
         borderWidth: 2,
-        borderColor: '#d32f2f',
+        borderColor: '#ef4444',
         paddingVertical: 16,
         paddingHorizontal: 24,
-        borderRadius: 12,
+        borderRadius: 16,
         width: '100%',
+        shadowColor: '#ef4444',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 2,
     },
     logoutButtonText: {
-        color: '#d32f2f',
+        color: '#ef4444',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         marginLeft: 8,
+        letterSpacing: 0.3,
     },
     guestContent: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
+    guestCard: {
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        padding: 32,
+        alignItems: 'center',
+        width: '100%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.1,
+        shadowRadius: 24,
+        elevation: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
+    },
     guestIcon: {
-        backgroundColor: '#ccc',
-        borderRadius: 40,
+        backgroundColor: 'rgba(100, 116, 139, 0.1)',
+        borderRadius: 50,
         padding: 20,
         marginBottom: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(100, 116, 139, 0.2)',
     },
     guestTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#1e293b',
         marginBottom: 12,
+        letterSpacing: -0.5,
+        textAlign: 'center',
     },
     guestSubtitle: {
-        fontSize: 18,
-        color: '#666',
-        marginBottom: 48,
+        fontSize: 16,
+        color: '#64748b',
+        marginBottom: 32,
         textAlign: 'center',
         lineHeight: 24,
+        fontWeight: '500',
+        letterSpacing: 0.2,
     },
     guestActions: {
         width: '100%',
         gap: 16,
     },
     primaryButton: {
-        backgroundColor: '#81171b',
-        padding: 16,
-        borderRadius: 10,
+        backgroundColor: '#4f46e5',
+        padding: 18,
+        borderRadius: 16,
         alignItems: 'center',
         width: '100%',
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 6,
     },
     primaryButtonText: {
         color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 17,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     secondaryButton: {
         backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#81171b',
+        borderWidth: 2,
+        borderColor: '#4f46e5',
+        padding: 18,
+        borderRadius: 16,
+        alignItems: 'center',
+        width: '100%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
     },
     secondaryButtonText: {
-        color: '#81171b',
-    },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-    },
-    loadingText: {
-        fontSize: 18,
-        color: '#666',
-        marginTop: 12,
+        color: '#4f46e5',
+        fontSize: 17,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
 });

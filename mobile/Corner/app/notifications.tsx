@@ -343,7 +343,7 @@ export default function NotificationsScreen() {
                                 <Ionicons
                                     name={getNotificationIcon(notification.type)}
                                     size={24}
-                                    color="#81171b"
+                                    color="#4f46e5"
                                 />
                             </View>
                             <View style={styles.notificationContent}>
@@ -372,7 +372,7 @@ export default function NotificationsScreen() {
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#81171b" />
+                        <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                     </TouchableOpacity>
                     <Text style={styles.title}>Notifications</Text>
                     <View style={{ width: 24 }} />
@@ -388,12 +388,12 @@ export default function NotificationsScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#81171b" />
+                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                 </TouchableOpacity>
                 <Text style={styles.title}>Notifications</Text>
                 {notifications.length > 0 && (
                     <TouchableOpacity onPress={clearAllNotifications}>
-                        <Ionicons name="trash-outline" size={20} color="#81171b" />
+                        <Ionicons name="trash-outline" size={20} color="#4f46e5" />
                     </TouchableOpacity>
                 )}
             </View>
@@ -431,38 +431,38 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 20,
-        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
+        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 3,
+        elevation: 4,
     },
     title: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     scrollView: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     emptyContainer: {
         flex: 1,
@@ -485,73 +485,83 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 24,
         marginBottom: 16,
+        fontWeight: '500',
     },
     notificationCard: {
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 20,
+        borderRadius: 20,
+        padding: 24,
     },
     unreadCard: {
-        borderLeftWidth: 5,
-        borderLeftColor: '#81171b',
+        borderLeftWidth: 6,
+        borderLeftColor: '#4f46e5',
         backgroundColor: '#fefefe',
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
     },
     notificationHeader: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        gap: 16,
+        gap: 20,
     },
     iconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#fef2f2',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 2,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
     },
     notificationContent: {
         flex: 1,
-        gap: 6,
+        gap: 8,
     },
     notificationTitle: {
         fontSize: 17,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#1e293b',
         lineHeight: 24,
-        marginBottom: 4,
+        marginBottom: 6,
+        letterSpacing: -0.2,
     },
     notificationBody: {
         fontSize: 15,
         color: '#475569',
         lineHeight: 22,
-        marginBottom: 8,
+        marginBottom: 12,
+        fontWeight: '500',
     },
     notificationTime: {
         fontSize: 13,
         color: '#94a3b8',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     unreadDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#81171b',
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: '#4f46e5',
         marginTop: 8,
-        shadowColor: '#81171b',
+        shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowOpacity: 0.4,
+        shadowRadius: 6,
     },
     swipeContainer: {
         marginHorizontal: 20,
-        marginVertical: 6,
-        borderRadius: 16,
+        marginVertical: 8,
+        borderRadius: 20,
         overflow: 'hidden',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
         elevation: 4,
     },
     deleteBackground: {
@@ -563,39 +573,39 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'flex-end',
         backgroundColor: '#ef4444',
-        paddingRight: 24,
+        paddingRight: 32,
         flexDirection: 'row',
-        gap: 10,
+        gap: 12,
     },
     deleteText: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         letterSpacing: 0.5,
     },
     notificationWrapper: {
         flex: 1,
         backgroundColor: '#fff',
-        borderRadius: 16,
+        borderRadius: 20,
     },
     swipeHint: {
         color: '#64748b',
         fontSize: 14,
         textAlign: 'center',
         marginTop: 20,
-        marginBottom: 12,
+        marginBottom: 16,
         marginHorizontal: 20,
-        fontWeight: '500',
+        fontWeight: '600',
         backgroundColor: '#fff',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 12,
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: '#e2e8f0',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
 }); 

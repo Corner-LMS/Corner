@@ -6,6 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from '../config/ firebase-config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
 import { notificationHelpers } from '../services/notificationHelpers';
+import { offlineCacheService, CachedComment } from '../services/offlineCache';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { draftManager, DraftPost } from '../services/draftManager';
+import ConnectivityIndicator from '../components/ConnectivityIndicator';
 
 interface Comment {
     id: string;
@@ -33,6 +37,7 @@ interface Discussion {
 export default function DiscussionDetailScreen() {
     const params = useLocalSearchParams();
     const { courseId, discussionId, discussionTitle, courseName, role, isArchived } = params;
+    const { isOnline, hasReconnected } = useNetworkStatus();
 
     // Check if course is archived
     const courseIsArchived = isArchived === 'true';
@@ -44,6 +49,9 @@ export default function DiscussionDetailScreen() {
     const [isAnonymousComment, setIsAnonymousComment] = useState(false);
     const [editingComment, setEditingComment] = useState<{ id: string, content: string } | null>(null);
     const [replyingTo, setReplyingTo] = useState<{ id: string, authorName: string } | null>(null);
+    const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
+    const [drafts, setDrafts] = useState<DraftPost[]>([]);
+    const [syncingDrafts, setSyncingDrafts] = useState(false);
 
     // Build nested comment tree from flat array
     const buildCommentTree = (allComments: Comment[]): Comment[] => {
@@ -86,7 +94,59 @@ export default function DiscussionDetailScreen() {
         return topLevelComments;
     };
 
+    // Initialize cache and load drafts
     useEffect(() => {
+        offlineCacheService.initializeCache();
+        loadDrafts();
+    }, []);
+
+    // Load cached data when offline or sync when reconnected
+    useEffect(() => {
+        if (!courseId || !discussionId) return;
+
+        if (isOnline) {
+            // Online: Use Firebase listeners and cache the data
+            setupFirebaseListeners();
+            // Sync drafts when coming back online
+            if (hasReconnected) {
+                syncDrafts();
+            }
+        } else {
+            // Offline: Load cached data
+            loadCachedComments();
+        }
+
+        // Sync when reconnected
+        if (hasReconnected && courseId && discussionId) {
+            syncCommentsAfterReconnection();
+        }
+    }, [courseId, discussionId, isOnline, hasReconnected]);
+
+    const loadDrafts = async () => {
+        if (!discussionId) return;
+        try {
+            const discussionDrafts = await draftManager.getDraftsByDiscussion(discussionId as string);
+            setDrafts(discussionDrafts);
+        } catch (error) {
+            console.error('Error loading drafts:', error);
+        }
+    };
+
+    const syncDrafts = async () => {
+        setSyncingDrafts(true);
+        try {
+            const result = await draftManager.syncAllDrafts();
+            if (result.syncedCount > 0) {
+                await loadDrafts(); // Refresh drafts list
+            }
+        } catch (error) {
+            console.error('Error syncing drafts:', error);
+        } finally {
+            setSyncingDrafts(false);
+        }
+    };
+
+    const setupFirebaseListeners = () => {
         if (!courseId || !discussionId) return;
 
         // Get discussion details
@@ -102,13 +162,13 @@ export default function DiscussionDetailScreen() {
 
         getDiscussion();
 
-        // Listen to comments
+        // Listen to comments and cache them
         const commentsQuery = query(
             collection(db, 'courses', courseId as string, 'discussions', discussionId as string, 'comments'),
             orderBy('createdAt', 'desc')
         );
 
-        const unsubscribeComments = onSnapshot(commentsQuery, (snapshot) => {
+        const unsubscribeComments = onSnapshot(commentsQuery, async (snapshot) => {
             const allComments = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -117,12 +177,59 @@ export default function DiscussionDetailScreen() {
             // Build nested comment tree
             const commentTree = buildCommentTree(allComments);
             setComments(commentTree);
+
+            // Cache the comments when online
+            try {
+                await offlineCacheService.cacheComments(
+                    discussionId as string,
+                    courseId as string,
+                    allComments
+                );
+            } catch (error) {
+                console.error('Error caching comments:', error);
+            }
         });
 
         return () => {
             unsubscribeComments();
         };
-    }, [courseId, discussionId]);
+    };
+
+    const loadCachedComments = async () => {
+        if (!discussionId) return;
+
+        setIsLoadingFromCache(true);
+        try {
+            const cachedComments = await offlineCacheService.getCachedComments(discussionId as string);
+
+            // Build nested comment tree from cached data
+            const commentTree = buildCommentTree(cachedComments as Comment[]);
+            setComments(commentTree);
+
+            if (cachedComments.length > 0) {
+                console.log(`Loaded ${cachedComments.length} cached comments`);
+            }
+        } catch (error) {
+            console.error('Error loading cached comments:', error);
+        } finally {
+            setIsLoadingFromCache(false);
+        }
+    };
+
+    const syncCommentsAfterReconnection = async () => {
+        if (!courseId || !discussionId) return;
+
+        try {
+            console.log('Syncing comments after reconnection...');
+            await offlineCacheService.syncCommentsFromFirebase(
+                discussionId as string,
+                courseId as string
+            );
+            await offlineCacheService.updateLastSyncTime();
+        } catch (error) {
+            console.error('Error syncing comments after reconnection:', error);
+        }
+    };
 
     const handleDeleteComment = async (commentId: string) => {
         Alert.alert(
@@ -204,6 +311,11 @@ export default function DiscussionDetailScreen() {
             return handleUpdateComment();
         }
 
+        // If offline, save as draft
+        if (!isOnline) {
+            return handleSaveDraft();
+        }
+
         setLoading(true);
         try {
             const user = auth.currentUser;
@@ -267,6 +379,37 @@ export default function DiscussionDetailScreen() {
         }
     };
 
+    const handleSaveDraft = async () => {
+        try {
+            const draftData = {
+                type: 'comment' as const,
+                content: newComment.trim(),
+                courseId: courseId as string,
+                discussionId: discussionId as string,
+                parentId: replyingTo?.id,
+                isAnonymous: isAnonymousComment,
+                authorRole: role as string
+            };
+
+            const draftId = await draftManager.saveDraft(draftData);
+
+            setNewComment('');
+            setIsAnonymousComment(false);
+            setReplyingTo(null);
+
+            await loadDrafts(); // Refresh drafts list
+
+            Alert.alert(
+                'Draft Saved',
+                `Your ${replyingTo ? 'reply' : 'comment'} has been saved as a draft and will be posted when you go back online.`,
+                [{ text: 'OK' }]
+            );
+        } catch (error) {
+            console.error('Error saving draft:', error);
+            Alert.alert('Error', 'Failed to save draft. Please try again.');
+        }
+    };
+
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'Just now';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -310,8 +453,9 @@ export default function DiscussionDetailScreen() {
                                 <Text style={styles.commentAuthor}>{comment.authorName}</Text>
                                 <View style={[
                                     styles.commentRoleTag,
-                                    comment.isAnonymous ? styles.studentTag :
-                                        comment.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                    comment.isAnonymous ? styles.anonymousTag :
+                                        comment.authorRole === 'teacher' ? styles.teacherTag :
+                                            comment.authorRole === 'admin' ? styles.adminTag : styles.studentTag
                                 ]}>
                                     <Text style={styles.commentRoleText}>
                                         {comment.authorRole}
@@ -323,6 +467,10 @@ export default function DiscussionDetailScreen() {
                                     </View>
                                 )}
                             </View>
+                        </View>
+
+                        <View style={styles.commentActionsRow}>
+                            <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
                             <View style={styles.commentActions}>
                                 {/* Reply button - show for all comments if not archived */}
                                 {!courseIsArchived && (
@@ -330,7 +478,7 @@ export default function DiscussionDetailScreen() {
                                         style={styles.replyButton}
                                         onPress={() => handleReplyToComment(comment)}
                                     >
-                                        <Ionicons name="chatbubble-outline" size={14} color="#81171b" />
+                                        <Ionicons name="chatbubble-outline" size={14} color="#4f46e5" />
                                     </TouchableOpacity>
                                 )}
                                 {/* Show edit/delete only for comment author and if not archived */}
@@ -352,8 +500,9 @@ export default function DiscussionDetailScreen() {
                                 )}
                             </View>
                         </View>
+
                         <Text style={styles.commentContent}>{comment.content}</Text>
-                        <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
+
                         {courseIsArchived && (
                             <View style={styles.archivedNotice}>
                                 <Ionicons name="archive" size={12} color="#666" />
@@ -390,12 +539,13 @@ export default function DiscussionDetailScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <Pressable style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#81171b" />
+                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                 </Pressable>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle}>{discussionTitle}</Text>
                     <Text style={styles.headerSubtitle}>{courseName}</Text>
                 </View>
+                <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
             </View>
 
             <ScrollView style={styles.content}>
@@ -422,21 +572,99 @@ export default function DiscussionDetailScreen() {
                 )}
 
                 <View style={styles.commentsSection}>
+                    {/* Offline/Cache Status Indicator */}
+                    {(!isOnline || isLoadingFromCache) && (
+                        <View style={styles.offlineIndicator}>
+                            <Ionicons
+                                name={!isOnline ? "cloud-offline" : "refresh"}
+                                size={16}
+                                color={!isOnline ? "#f59e0b" : "#4f46e5"}
+                            />
+                            <Text style={styles.offlineText}>
+                                {!isOnline ? "Offline - Showing cached comments" : "Loading cached comments..."}
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Draft Sync Status */}
+                    {syncingDrafts && (
+                        <View style={styles.syncIndicator}>
+                            <Ionicons name="sync" size={16} color="#4f46e5" />
+                            <Text style={styles.syncText}>Syncing drafts...</Text>
+                        </View>
+                    )}
+
                     <View style={styles.commentsSeparator}>
                         <View style={styles.separatorLine} />
                         <Text style={styles.commentsTitle}>
-                            Comments ({totalComments})
+                            Comments ({totalComments + drafts.filter(d => d.type === 'comment').length})
                         </Text>
                         <View style={styles.separatorLine} />
                     </View>
 
-                    {comments.length === 0 ? (
+                    {/* Draft Comments */}
+                    {drafts.filter(draft => draft.type === 'comment' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
+                        <View key={draft.id} style={[styles.commentCard, styles.draftCommentCard]}>
+                            <View style={styles.commentHeader}>
+                                <View style={styles.commentAuthorSection}>
+                                    <Text style={styles.commentAuthor}>
+                                        {draft.isAnonymous ? 'Anonymous Student' : `${draft.authorRole}`}
+                                    </Text>
+                                    <View style={[styles.statusBadge,
+                                    draft.status === 'pending' ? styles.pendingBadge :
+                                        draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
+                                    ]}>
+                                        <Ionicons
+                                            name={
+                                                draft.status === 'pending' ? "sync" :
+                                                    draft.status === 'failed' ? "alert-circle" : "document-text"
+                                            }
+                                            size={12}
+                                            color="#fff"
+                                        />
+                                        <Text style={styles.statusBadgeText}>
+                                            {draft.status === 'pending' ? 'Syncing' :
+                                                draft.status === 'failed' ? 'Failed' : 'Draft'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                            <Text style={styles.commentContent}>{draft.content}</Text>
+                            <View style={styles.commentActionsRow}>
+                                <Text style={styles.commentDate}>
+                                    {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                            </View>
+                            {draft.status === 'failed' && (
+                                <View style={styles.errorNotice}>
+                                    <Ionicons name="warning" size={14} color="#ef4444" />
+                                    <Text style={styles.errorNoticeText}>
+                                        Failed to sync. Will retry when online.
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    ))}
+
+                    {comments.length === 0 && drafts.filter(d => d.type === 'comment').length === 0 ? (
                         <View style={styles.emptyComments}>
-                            <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
+                            <Text style={styles.emptyText}>
+                                {!isOnline ? "No cached comments available" : "No comments yet. Be the first to comment!"}
+                            </Text>
                         </View>
                     ) : (
                         <View style={styles.commentsContainer}>
-                            {comments.map((comment) => renderComment(comment))}
+                            {comments.map((comment) => (
+                                <View key={comment.id}>
+                                    {renderComment(comment)}
+                                    {!isOnline && (
+                                        <View style={styles.cachedIndicator}>
+                                            <Ionicons name="download" size={12} color="#4f46e5" />
+                                            <Text style={styles.cachedText}>Cached content</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            ))}
                         </View>
                     )}
                 </View>
@@ -451,7 +679,7 @@ export default function DiscussionDetailScreen() {
                     {/* Reply context banner */}
                     {replyingTo && (
                         <View style={styles.replyContext}>
-                            <Ionicons name="chatbubble-outline" size={16} color="#81171b" />
+                            <Ionicons name="chatbubble-outline" size={16} color="#4f46e5" />
                             <Text style={styles.replyContextText}>
                                 Replying to {replyingTo.authorName}
                             </Text>
@@ -471,7 +699,7 @@ export default function DiscussionDetailScreen() {
                             <Switch
                                 value={isAnonymousComment}
                                 onValueChange={setIsAnonymousComment}
-                                trackColor={{ false: '#e0e0e0', true: '#81171b' }}
+                                trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
                                 thumbColor={isAnonymousComment ? '#fff' : '#f4f3f4'}
                             />
                         </View>
@@ -526,27 +754,27 @@ export default function DiscussionDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
-        backgroundColor: '#fff',
+        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 3,
+        elevation: 4,
     },
     backButton: {
         marginRight: 16,
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(129, 23, 27, 0.08)',
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
     },
     headerInfo: {
         flex: 1,
@@ -558,7 +786,7 @@ const styles = StyleSheet.create({
         letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#64748b',
         marginTop: 4,
         fontWeight: '500',
@@ -570,65 +798,80 @@ const styles = StyleSheet.create({
     discussionCard: {
         backgroundColor: '#fff',
         padding: 24,
-        borderRadius: 16,
+        borderRadius: 20,
         marginBottom: 24,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
         elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     postHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
     },
     discussionTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
         flex: 1,
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
+        lineHeight: 26,
     },
     roleTag: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 10,
+        borderRadius: 12,
         marginLeft: 12,
-        shadowColor: '#81171b',
+        shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 4,
         elevation: 2,
     },
     teacherTag: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
+    },
+    adminTag: {
+        backgroundColor: '#059669',
     },
     studentTag: {
-        backgroundColor: '#d97706',
+        backgroundColor: '#0891b2',
+    },
+    anonymousTag: {
+        backgroundColor: '#64748b',
     },
     roleTagText: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#fff',
         fontWeight: '700',
         letterSpacing: 0.5,
     },
     discussionContent: {
-        fontSize: 17,
+        fontSize: 16,
         color: '#475569',
-        lineHeight: 26,
+        lineHeight: 24,
         marginBottom: 20,
     },
     postMeta: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
     },
     postAuthor: {
-        fontSize: 15,
-        color: '#81171b',
+        fontSize: 14,
+        color: '#4f46e5',
         fontWeight: '600',
     },
     postDate: {
@@ -660,15 +903,17 @@ const styles = StyleSheet.create({
         padding: 32,
         alignItems: 'center',
         backgroundColor: '#fff',
-        borderRadius: 16,
+        borderRadius: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     emptyText: {
-        fontSize: 17,
+        fontSize: 16,
         color: '#64748b',
         textAlign: 'center',
         fontWeight: '500',
@@ -686,25 +931,27 @@ const styles = StyleSheet.create({
         top: 0,
         bottom: 0,
         width: 2,
-        backgroundColor: 'rgba(129, 23, 27, 0.2)',
+        backgroundColor: 'rgba(79, 70, 229, 0.2)',
         borderRadius: 1,
     },
     commentCard: {
         backgroundColor: '#fff',
         padding: 20,
-        borderRadius: 14,
+        borderRadius: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
         elevation: 3,
         borderLeftWidth: 3,
         borderLeftColor: '#f1f5f9',
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     replyCard: {
         backgroundColor: '#f8fafc',
         borderLeftWidth: 3,
-        borderLeftColor: '#81171b',
+        borderLeftColor: '#4f46e5',
         marginLeft: 10,
     },
     deepNestedCard: {
@@ -715,7 +962,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 12,
+        marginBottom: 8,
     },
     commentAuthorSection: {
         flexDirection: 'row',
@@ -723,13 +970,13 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     commentAuthor: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '600',
         color: '#1e293b',
         marginRight: 12,
     },
     commentRoleTag: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 8,
@@ -742,24 +989,35 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
     depthIndicator: {
-        backgroundColor: 'rgba(129, 23, 27, 0.1)',
+        backgroundColor: 'rgba(79, 70, 229, 0.1)',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 6,
     },
     depthText: {
         fontSize: 10,
-        color: '#81171b',
+        color: '#4f46e5',
         fontWeight: '600',
     },
-    commentContent: {
-        fontSize: 16,
-        color: '#475569',
-        lineHeight: 24,
+    commentActionsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 12,
     },
+    commentActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    commentContent: {
+        fontSize: 15,
+        color: '#475569',
+        lineHeight: 22,
+        marginBottom: 0,
+    },
     commentDate: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#94a3b8',
         fontWeight: '500',
     },
@@ -783,26 +1041,31 @@ const styles = StyleSheet.create({
         flex: 1,
         borderWidth: 2,
         borderColor: '#e2e8f0',
-        borderRadius: 20,
-        paddingHorizontal: 18,
-        paddingVertical: 14,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         maxHeight: 120,
-        fontSize: 16,
+        fontSize: 15,
         color: '#1e293b',
-        backgroundColor: '#f8fafc',
-        lineHeight: 22,
+        backgroundColor: '#fff',
+        lineHeight: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
     sendButton: {
-        backgroundColor: '#81171b',
+        backgroundColor: '#4f46e5',
         width: 44,
         height: 44,
         borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#81171b',
-        shadowOffset: { width: 0, height: 3 },
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 6,
+        shadowRadius: 8,
         elevation: 4,
     },
     buttonDisabled: {
@@ -811,10 +1074,11 @@ const styles = StyleSheet.create({
     },
     anonymityOption: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 16,
         backgroundColor: '#f8fafc',
-        padding: 12,
+        padding: 16,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#e2e8f0',
@@ -822,21 +1086,12 @@ const styles = StyleSheet.create({
     anonymityLabel: {
         fontSize: 15,
         color: '#1e293b',
-        marginRight: 12,
-        fontWeight: '500',
-    },
-    anonymousTag: {
-        backgroundColor: '#64748b',
-    },
-    commentActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
+        fontWeight: '600',
     },
     editButton: {
         padding: 8,
         borderRadius: 8,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     deleteButton: {
         padding: 8,
@@ -846,20 +1101,22 @@ const styles = StyleSheet.create({
     cancelButton: {
         padding: 8,
         borderRadius: 8,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     replyButton: {
         padding: 8,
         borderRadius: 8,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     archivedNotice: {
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: 8,
-        padding: 8,
-        backgroundColor: '#f8fafc',
+        padding: 10,
+        backgroundColor: '#fafbfc',
         borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
     },
     archivedNoticeText: {
         fontSize: 12,
@@ -889,11 +1146,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 12,
         backgroundColor: '#f8fafc',
-        borderRadius: 8,
+        borderRadius: 12,
         marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
     },
     replyContextText: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#1e293b',
         marginLeft: 12,
         fontWeight: '500',
@@ -903,5 +1162,105 @@ const styles = StyleSheet.create({
         padding: 8,
         borderRadius: 8,
         backgroundColor: '#f1f5f9',
+    },
+    offlineIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    offlineText: {
+        fontSize: 14,
+        color: '#1e293b',
+        marginLeft: 12,
+        fontWeight: '500',
+        flex: 1,
+    },
+    syncIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    syncText: {
+        fontSize: 14,
+        color: '#1e293b',
+        marginLeft: 12,
+        fontWeight: '500',
+        flex: 1,
+    },
+    draftCommentCard: {
+        backgroundColor: '#f8fafc',
+        borderLeftWidth: 3,
+        borderLeftColor: '#4f46e5',
+        marginLeft: 10,
+    },
+    statusBadge: {
+        backgroundColor: '#4f46e5',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginRight: 8,
+    },
+    statusBadgeText: {
+        fontSize: 11,
+        color: '#fff',
+        fontWeight: '700',
+        letterSpacing: 0.3,
+    },
+    pendingBadge: {
+        backgroundColor: '#f59e0b',
+    },
+    failedBadge: {
+        backgroundColor: '#ef4444',
+    },
+    draftBadge: {
+        backgroundColor: '#059669',
+    },
+    errorNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        padding: 10,
+        backgroundColor: '#fef2f2',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#ef4444',
+    },
+    errorNoticeText: {
+        fontSize: 12,
+        color: '#ef4444',
+        marginLeft: 6,
+        fontWeight: '500',
+    },
+    cachedIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    cachedText: {
+        fontSize: 14,
+        color: '#1e293b',
+        marginLeft: 12,
+        fontWeight: '500',
+        flex: 1,
+    },
+    connectivityIndicator: {
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 8,
+        marginLeft: 8,
     },
 }); 

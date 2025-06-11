@@ -7,6 +7,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationBadge from '../../components/NotificationBadge';
+import { getSchoolById } from '@/constants/Schools';
+import ConnectivityIndicator from '../../components/ConnectivityIndicator';
 
 export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
@@ -15,6 +17,7 @@ export default function DashboardScreen() {
   const [studentCourses, setStudentCourses] = useState<any[]>([]);
   const [teacherNames, setTeacherNames] = useState<Record<string, string>>({});
   const [user, setUser] = useState<User | null>(null);
+  const [schoolInfo, setSchoolInfo] = useState<any>(null);
 
   const loadUserAndCourses = async (user: User) => {
     if (!user) {
@@ -36,6 +39,12 @@ export default function DashboardScreen() {
 
       const userData = userDocSnap.data();
       setRole(userData.role);
+
+      // Get school information
+      if (userData.schoolId) {
+        const school = getSchoolById(userData.schoolId);
+        setSchoolInfo(school);
+      }
 
       // If student, get all their courses
       if (userData.role === 'student' && userData.courseIds) {
@@ -268,6 +277,13 @@ export default function DashboardScreen() {
     );
   };
 
+  const getTimeOfDay = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
@@ -283,14 +299,15 @@ export default function DashboardScreen() {
 
           <View style={styles.content}>
             <View style={styles.header}>
-              <TouchableOpacity style={styles.menuButton} onPress={() => {/* TODO: Add menu functionality */ }}>
-                <Ionicons name="menu" size={24} color="#1e293b" />
-              </TouchableOpacity>
-
               <View style={styles.logoContainer}>
                 <View style={styles.logoPlaceholder}>
-                  <Text style={styles.logoText}>LOGO</Text>
+                  <Text style={styles.logoText}>
+                    {schoolInfo?.shortName || 'LOGO'}
+                  </Text>
                 </View>
+                <Text style={styles.schoolFullName}>
+                  {schoolInfo?.name || 'Loading...'}
+                </Text>
               </View>
 
               <View style={styles.rightActions}>
@@ -305,9 +322,20 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.welcomeSection}>
-              <Text style={styles.welcomeText}>Welcome back! 👋</Text>
+              <View style={styles.welcomeHeader}>
+                <View style={styles.welcomeTextContainer}>
+                  <Text style={styles.welcomeGreeting}>Good {getTimeOfDay()}</Text>
+                  <Text style={styles.welcomeTitle}>
+                    {role === 'admin' ? 'Administrative Dashboard' :
+                      role === 'teacher' ? 'Teaching Dashboard' : 'Learning Dashboard'}
+                  </Text>
+                </View>
+                <ConnectivityIndicator size="medium" showText={true} style={styles.connectivityIndicator} />
+              </View>
               <Text style={styles.welcomeSubtext}>
-                {role === 'admin' ? 'Platform Overview' : 'Here are your courses'}
+                {role === 'admin' ? 'Monitor institutional performance and manage platform oversight' :
+                  role === 'teacher' ? 'Manage your courses, track student progress, and share resources' :
+                    'Access your enrolled courses, participate in discussions, and track your learning progress'}
               </Text>
             </View>
 
@@ -532,7 +560,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   scrollView: {
     flex: 1,
@@ -544,144 +572,152 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   content: {
     flex: 1,
-    padding: 24,
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 32,
-    backgroundColor: '#fff',
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 20,
+    borderRadius: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  menuButton: {
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   logoContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   logoPlaceholder: {
-    width: 50,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#81171b',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4f46e5',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#81171b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: '#4f46e5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   logoText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
     color: '#fff',
-    letterSpacing: 0.2,
+    letterSpacing: 0.5,
+  },
+  schoolFullName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 6,
+    maxWidth: 180,
   },
   rightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
     minWidth: 120,
     justifyContent: 'flex-end',
   },
   roleTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
     borderColor: '#e2e8f0',
   },
   roleTagText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
+    fontWeight: '700',
+    color: '#475569',
     textTransform: 'capitalize',
   },
   settingsButton: {
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    width: 36,
-    height: 36,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   courseContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   courseBox: {
     backgroundColor: '#fff',
     padding: 24,
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 6,
-    borderLeftWidth: 5,
-    borderLeftColor: '#81171b',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(241, 245, 249, 0.8)',
+    transform: [{ scale: 1 }],
   },
   courseHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
   courseName: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#81171b',
+    color: '#1e293b',
     marginBottom: 0,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
     flex: 1,
     marginRight: 12,
+    lineHeight: 28,
   },
   courseDetail: {
-    marginBottom: 12,
+    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 4,
   },
   courseLabel: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#64748b',
     marginBottom: 0,
-    marginRight: 8,
+    marginRight: 12,
     fontWeight: '600',
-    minWidth: 100,
+    minWidth: 110,
   },
   courseValue: {
-    fontSize: 16,
-    color: '#1e293b',
+    fontSize: 15,
+    color: '#334155',
     fontWeight: '500',
     flex: 1,
   },
   noCourseBox: {
     backgroundColor: '#fff',
-    padding: 32,
-    borderRadius: 16,
+    padding: 40,
+    borderRadius: 20,
     marginBottom: 32,
     alignItems: 'center',
     borderWidth: 2,
@@ -689,17 +725,17 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   noCourseText: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#64748b',
     fontWeight: '500',
     textAlign: 'center',
   },
   button: {
-    backgroundColor: '#81171b',
+    backgroundColor: '#4f46e5',
     padding: 18,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#81171b',
+    shadowColor: '#4f46e5',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -714,27 +750,29 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 120,
-    right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#81171b',
+    right: 20,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#4f46e5',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#81171b',
+    elevation: 12,
+    shadowColor: '#4f46e5',
     shadowOffset: {
       width: 0,
-      height: 6,
+      height: 8,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
   },
   subtleActionButton: {
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
     marginLeft: 4,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   subtleActionsGroup: {
     flexDirection: 'row',
@@ -744,18 +782,36 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   welcomeSection: {
-    marginBottom: 32,
+    marginBottom: 28,
+    paddingHorizontal: 4,
   },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#81171b',
+  welcomeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  welcomeTextContainer: {
+    flex: 1,
+  },
+  welcomeGreeting: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1e293b',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
-  welcomeSubtext: {
-    fontSize: 18,
+  welcomeTitle: {
+    fontSize: 16,
     color: '#64748b',
     fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  welcomeSubtext: {
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
   archivedCourseBox: {
     opacity: 0.7,
@@ -773,7 +829,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   adminButton: {
-    backgroundColor: '#81171b',
+    backgroundColor: '#4f46e5',
     padding: 12,
     borderRadius: 8,
     flexDirection: 'row',
@@ -784,5 +840,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  connectivityIndicator: {
+    marginLeft: 8,
   },
 });
