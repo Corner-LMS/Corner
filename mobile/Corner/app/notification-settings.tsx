@@ -48,8 +48,19 @@ export default function NotificationSettingsScreen() {
 
                 // Load notification settings
                 if (userData.notificationSettings) {
+                    // Create a new settings object with default values
+                    const defaultSettings: NotificationSettings = {
+                        announcementNotifications: true,
+                        discussionMilestoneNotifications: true,
+                        replyNotifications: true,
+                        teacherDiscussionMilestoneNotifications: true,
+                        soundEnabled: true,
+                        vibrationEnabled: true,
+                    };
+
+                    // Override defaults with saved settings
                     setSettings({
-                        ...settings,
+                        ...defaultSettings,
                         ...userData.notificationSettings
                     });
                 }
@@ -70,10 +81,14 @@ export default function NotificationSettingsScreen() {
                 return;
             }
 
+            // Save settings to Firestore
             await updateDoc(doc(db, 'users', user.uid), {
                 notificationSettings: settings,
                 settingsUpdatedAt: new Date()
             });
+
+            // Update local state to ensure consistency
+            setSettings(prevSettings => ({ ...prevSettings }));
 
             Alert.alert('Success', 'Notification settings saved!');
         } catch (error) {

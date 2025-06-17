@@ -33,6 +33,9 @@ class PresenceService {
 
         this.currentRole = userRole;
 
+        // Reset notification tracking for new session
+        this.resetNotificationTracking();
+
         if (userRole === 'teacher') {
             await this.initializeTeacherPresence();
         } else if (userRole === 'student') {
@@ -115,15 +118,15 @@ class PresenceService {
     // Listen to a specific teacher's presence
     private listenToTeacherPresence(teacherId: string, courseId: string, courseName: string): void {
         const teacherDocRef = doc(db, 'users', teacherId);
+        let previousOnlineStatus = false; // Track previous online status
 
         const unsubscribe = onSnapshot(teacherDocRef, (doc) => {
             if (doc.exists()) {
                 const userData = doc.data();
-                const wasOffline = !userData.isOnline;
-                const isNowOnline = userData.isOnline === true;
+                const currentOnlineStatus = userData.isOnline === true;
 
-                // Notify if teacher just came online and we haven't notified about this teacher this session
-                if (wasOffline && isNowOnline && !this.notifiedTeachers.has(teacherId)) {
+                // Only notify if teacher just came online (was offline before)
+                if (!previousOnlineStatus && currentOnlineStatus && !this.notifiedTeachers.has(teacherId)) {
                     this.notifiedTeachers.add(teacherId);
 
                     const notification: PresenceNotification = {
@@ -143,6 +146,9 @@ class PresenceService {
                         }
                     });
                 }
+
+                // Update previous status for next comparison
+                previousOnlineStatus = currentOnlineStatus;
             }
         }, (error) => {
             console.error(`Error listening to teacher ${teacherId} presence:`, error);
@@ -230,9 +236,10 @@ class PresenceService {
         }
     }
 
-    // Reset session notifications (call when app restarts)
-    resetSessionNotifications(): void {
+    // Reset notification tracking for new session
+    private resetNotificationTracking(): void {
         this.notifiedTeachers.clear();
+        console.log('Reset notification tracking for new session');
     }
 
     // Cleanup all listeners

@@ -9,19 +9,19 @@ const addCourse = async (req, res) => {
     const teacherId = user.userId;
     const { name, description } = req.body;
     try {
-        
+
         const course = new Course({ name, teacherId, description });
         await course.save();
         res.status(201).json({ message: 'Course added successfully', course });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to add course'+error.message });
+        res.status(500).json({ error: 'Failed to add course' + error.message });
     }
 };
 
 const getCoursesByTeacherId = async (req, res) => {
     try {
         const { teacherId } = req;
-        
+
         // Logic to fetch courses based on teacherId
         const courses = await Course.find({ teacherId });  // Replace with your actual model and query
         if (!courses) {
@@ -29,12 +29,12 @@ const getCoursesByTeacherId = async (req, res) => {
         }
         res.json({ courses });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch courses'+error.message });
+        res.status(500).json({ error: 'Failed to fetch courses' + error.message });
     }
 };
 
 const enrollInCourse = async (req, res) => {
-    const {  courses } = req.body;
+    const { courses } = req.body;
     try {
         const user = req.user
         const studentId = user.userId
@@ -89,7 +89,7 @@ const getCourseById = async (req, res) => {
                 return question;
             })
         );
-        
+
         res.status(200).json({ course, questions: sortedQuestions });
     } catch (error) {
         res.status(500).json({ msg: 'Failed to fetch course and questions', error: error.message });
@@ -249,7 +249,7 @@ const getAnnouncements = async (req, res) => {
 const getCourseQuestions = async (req, res) => {
     try {
         const { courseId } = req.params;
-        
+
         // Find all questions for this course and populate the creator and comments
         const questions = await Question.find({ courseId })
             .populate('createdBy', 'name role')
@@ -282,4 +282,4 @@ const deleteCourse = async (req, res) => {
     res.status(200).json({ message: 'Course deleted successfully' });
 };
 
-module.exports = { addCourse, getCoursesByTeacherId, getAllCourses, enrollInCourse,  getCourseById, getStudentCourses, getTeacherCourses, addAnnouncement, getAnnouncements, getCourseQuestions, updateCourse, deleteCourse };
+module.exports = { addCourse, getCoursesByTeacherId, getAllCourses, enrollInCourse, getCourseById, getStudentCourses, getTeacherCourses, addAnnouncement, getAnnouncements, getCourseQuestions, updateCourse, deleteCourse };

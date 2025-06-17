@@ -5,22 +5,26 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "corner",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "notification": {
-      "icon": "./assets/images/notification-icon.png",
-      "color": "#81171b"
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cornerbusinessgroup.corner"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.cornerbusinessgroup.corner"
     },
     "web": {
       "bundler": "metro",
@@ -37,10 +41,18 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin"
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    }
+    "scheme": "corner",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a9633406-bbb5-465d-bbbc-52a881060345"
+      }
+    },
+    "owner": "cynthia_m"
   }
 }

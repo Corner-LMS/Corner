@@ -12,7 +12,7 @@ export default function TeacherOnlineNotification({ style }: TeacherOnlineNotifi
     const [isVisible, setIsVisible] = useState(false);
     const slideAnim = useRef(new Animated.Value(-100)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
-    const dismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const dismissTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
         // Register for teacher online notifications

@@ -4,14 +4,14 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/ firebase-config';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
         shouldPlaySound: true,
-        shouldSetBadge: false,
+        shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
     }),
@@ -29,12 +29,36 @@ export interface NotificationData {
 class NotificationService {
     private expoPushToken: string | null = null;
 
-    async init() {
-        await this.registerForPushNotificationsAsync();
+    constructor() {
         this.setupNotificationListeners();
     }
 
-    private async registerForPushNotificationsAsync() {
+    async init() {
+        try {
+            // Register for push notifications
+            const token = await this.registerForPushNotifications();
+            if (token) {
+                // Store token locally
+                await AsyncStorage.setItem('expoPushToken', token.data);
+                this.expoPushToken = token.data;
+            }
+        } catch (error) {
+            console.error('Error initializing notification service:', error);
+        }
+    }
+
+    async updateUserNotificationToken(userId: string) {
+        try {
+            const token = await this.registerForPushNotifications();
+            if (token) {
+                await this.savePushToken(userId, token.data);
+            }
+        } catch (error) {
+            console.error('Error updating user notification token:', error);
+        }
+    }
+
+    async registerForPushNotifications() {
         let token;
 
         if (Platform.OS === 'android') {
@@ -42,7 +66,7 @@ class NotificationService {
                 name: 'default',
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#81171b',
+                lightColor: '#4f46e5',
             });
         }
 
@@ -56,111 +80,95 @@ class NotificationService {
             }
 
             if (finalStatus !== 'granted') {
-                return null;
+                console.log('Failed to get push token for push notification!');
+                return;
             }
 
-            // Get the Expo push token
-            try {
-                const pushTokenString = (
-                    await Notifications.getExpoPushTokenAsync({
-                        projectId: Constants.expoConfig?.extra?.eas?.projectId,
-                    })
-                ).data;
-
-                this.expoPushToken = pushTokenString;
-
-                // Store token locally
-                await AsyncStorage.setItem('expoPushToken', pushTokenString);
-
-                return pushTokenString;
-            } catch (error) {
-                console.error('Error getting Expo push token:', error);
-                return null;
-            }
-        } else {
-            return null;
-        }
-    }
-
-    private setupNotificationListeners() {
-        // Handle notification received while app is foregrounded
-        Notifications.addNotificationReceivedListener(notification => {
-            // Notification received in foreground
-        });
-
-        // Handle notification response (when user taps notification)
-        Notifications.addNotificationResponseReceivedListener(response => {
-            const data = response.notification.request.content.data;
-
-            // Handle navigation based on notification type
-            if (data?.type === 'announcement' || data?.type === 'discussion_milestone' || data?.type === 'discussion_replies' || data?.type === 'teacher_discussion_milestone') {
-                // Navigation logic can be added here
-            }
-        });
-    }
-
-    async getExpoPushToken(): Promise<string | null> {
-        if (this.expoPushToken) {
-            return this.expoPushToken;
-        }
-
-        // Try to get from AsyncStorage
-        const storedToken = await AsyncStorage.getItem('expoPushToken');
-        if (storedToken) {
-            this.expoPushToken = storedToken;
-            return storedToken;
-        }
-
-        // Register and get new token
-        return await this.registerForPushNotificationsAsync();
-    }
-
-    async updateUserNotificationToken(userId: string) {
-        const token = await this.getExpoPushToken();
-        if (token) {
-            try {
-                await updateDoc(doc(db, 'users', userId), {
-                    expoPushTokens: arrayUnion(token),
-                    lastTokenUpdate: new Date()
-                });
-            } catch (error) {
-                console.error('Error updating user notification token:', error);
-            }
-        }
-    }
-
-    async scheduleLocalNotification(notificationData: NotificationData) {
-        try {
-            await Notifications.scheduleNotificationAsync({
-                content: {
-                    title: notificationData.title,
-                    body: notificationData.body,
-                    data: notificationData.data || {},
-                    sound: 'default',
-                },
-                trigger: {
-                    type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-                    seconds: 1
-                },
+            // Get the token that uniquely identifies this device
+            token = await Notifications.getExpoPushTokenAsync({
+                projectId: Constants.expoConfig?.extra?.eas?.projectId,
             });
+        } else {
+            console.log('Must use physical device for Push Notifications');
+        }
+
+        return token;
+    }
+
+    async savePushToken(userId: string, token: string) {
+        try {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+                expoPushTokens: arrayUnion(token)
+            });
+
+            // Store token locally
+            await AsyncStorage.setItem('expoPushToken', token);
+            this.expoPushToken = token;
         } catch (error) {
-            console.error('Error scheduling local notification:', error);
+            console.error('Error saving push token:', error);
         }
     }
 
-    // Send push notification (this would typically be called from your backend)
-    async sendPushNotification(expoPushToken: string, notificationData: NotificationData) {
+    private async shouldSendNotification(userId: string, notificationType: string): Promise<boolean> {
         try {
+            const userDoc = await getDoc(doc(db, 'users', userId));
+            const userData = userDoc.data();
+            
+            if (!userData?.notificationSettings) {
+                return true; // Default to true if settings don't exist
+            }
+
+            const settings = userData.notificationSettings;
+            
+            switch (notificationType) {
+                case 'announcement':
+                    return settings.announcementNotifications;
+                case 'discussion_milestone':
+                    return settings.discussionMilestoneNotifications;
+                case 'discussion_replies':
+                    return settings.replyNotifications;
+                case 'teacher_discussion_milestone':
+                    return settings.teacherDiscussionMilestoneNotifications;
+                default:
+                    return true;
+            }
+        } catch (error) {
+            console.error('Error checking notification settings:', error);
+            return true; // Default to true if there's an error
+        }
+    }
+
+    async sendPushNotification(token: string, notificationData: NotificationData) {
+        try {
+            // Get user ID from token mapping or notification data
+            const userDoc = await getDocs(query(collection(db, 'users'), where('expoPushTokens', 'array-contains', token)));
+            if (userDoc.empty) {
+                console.error('No user found for token');
+                return;
+            }
+
+            const userId = userDoc.docs[0].id;
+            
+            // Check if notification should be sent based on user settings
+            const shouldSend = await this.shouldSendNotification(userId, notificationData.type);
+            if (!shouldSend) {
+                console.log('Notification blocked by user settings:', notificationData.type);
+                return;
+            }
+
             const message = {
-                to: expoPushToken,
+                to: token,
                 sound: 'default',
                 title: notificationData.title,
                 body: notificationData.body,
-                data: notificationData.data || {},
+                data: notificationData,
+                badge: 1,
+                priority: 'high',
                 channelId: 'default',
             };
 
-            const response = await fetch('https://exp.host/--/api/v2/push/send', {
+            await fetch('https://exp.host/--/api/v2/push/send', {
                 method: 'POST',
                 headers: {
                     Accept: 'application/json',
@@ -169,12 +177,45 @@ class NotificationService {
                 },
                 body: JSON.stringify(message),
             });
-
-            const result = await response.json();
-            return result;
         } catch (error) {
             console.error('Error sending push notification:', error);
-            throw error;
+        }
+    }
+
+    private setupNotificationListeners() {
+        // Handle notification received while app is foregrounded
+        Notifications.addNotificationReceivedListener(notification => {
+            // You can handle the notification here if needed
+            console.log('Notification received:', notification);
+        });
+
+        // Handle notification response (when user taps notification)
+        Notifications.addNotificationResponseReceivedListener(response => {
+            const data = response.notification.request.content.data;
+
+            // Handle navigation based on notification type
+            if (data?.type === 'announcement') {
+                // Navigate to announcement
+                // router.push(`/course/${data.courseId}/announcements`);
+            } else if (data?.type === 'discussion_milestone' || data?.type === 'discussion_replies') {
+                // Navigate to discussion
+                // router.push(`/course/${data.courseId}/discussions/${data.discussionId}`);
+            }
+        });
+    }
+
+    async removePushToken(userId: string, token: string) {
+        try {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+                expoPushTokens: arrayRemove(token)
+            });
+
+            // Remove token locally
+            await AsyncStorage.removeItem('expoPushToken');
+            this.expoPushToken = null;
+        } catch (error) {
+            console.error('Error removing push token:', error);
         }
     }
 }

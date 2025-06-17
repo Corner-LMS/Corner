@@ -11,6 +11,8 @@ import { getSchoolById } from '@/constants/Schools';
 import ConnectivityIndicator from '../../components/ConnectivityIndicator';
 
 export default function DashboardScreen() {
+
+
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<any[]>([]);
   const [role, setRole] = useState('');
@@ -21,24 +23,39 @@ export default function DashboardScreen() {
 
   const loadUserAndCourses = async (user: User) => {
     if (!user) {
+      console.log('No user found, setting loading to false');
       setLoading(false);
-      router.replace('/welcome');
       return;
     }
 
     try {
+      console.log('Loading user data for:', user.uid);
       // 🔎 Get user role from Firestore
       const userDocRef = doc(db, 'users', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-        console.error('User document does not exist');
+        console.error('User document does not exist for:', user.uid);
         setLoading(false);
         return;
       }
 
       const userData = userDocSnap.data();
-      setRole(userData.role);
+      console.log('User data retrieved:', {
+        uid: user.uid,
+        email: userData.email,
+        role: userData.role,
+        schoolId: userData.schoolId
+      });
+
+      // Set default role if not present
+      if (!userData.role) {
+        console.log('No role found, setting default role: student');
+        await updateDoc(userDocRef, { role: 'student' });
+        setRole('student');
+      } else {
+        setRole(userData.role);
+      }
 
       // Get school information
       if (userData.schoolId) {
@@ -284,10 +301,51 @@ export default function DashboardScreen() {
     return 'evening';
   };
 
+
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#81171b" />
+        <ActivityIndicator size="large" color="#4f46e5" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.content}>
+            <View style={styles.welcomeContent}>
+              <View style={styles.welcomeHeaderContainer}>
+                <View style={styles.welcomeLogoContainer}>
+                  <Ionicons name="school-outline" size={48} color="#4f46e5" />
+                </View>
+                <Text style={styles.welcomeTitle}>Welcome to Corner</Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Your hub for engaging in course discussions, asking questions, and collaborating with peers and instructors.
+                </Text>
+              </View>
+
+              <View style={styles.welcomeButtonContainer}>
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={() => router.replace('/(auth)/login')}
+                >
+                  <Text style={styles.buttonText}>Sign In</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, styles.secondaryButton]}
+                  onPress={() => router.replace('/(auth)/signup')}
+                >
+                  <Text style={[styles.buttonText, styles.secondaryButtonText]}>Create Account</Text>
+                  <Ionicons name="person-add-outline" size={20} color="#4f46e5" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -296,7 +354,6 @@ export default function DashboardScreen() {
     <>
       <SafeAreaView style={styles.container}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-
           <View style={styles.content}>
             <View style={styles.header}>
               <View style={styles.logoContainer}>
@@ -513,7 +570,6 @@ export default function DashboardScreen() {
                           </Text>
                         </View>
                       )}
-
                     </TouchableOpacity>
                   </View>
                 );
@@ -843,5 +899,53 @@ const styles = StyleSheet.create({
   },
   connectivityIndicator: {
     marginLeft: 8,
+  },
+  welcomeContent: {
+    flex: 1,
+    padding: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  welcomeHeaderContainer: {
+    alignItems: 'center',
+    marginBottom: 48,
+    width: '100%',
+  },
+  welcomeLogoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(79, 70, 229, 0.2)',
+  },
+  welcomeSubtitle: {
+    fontSize: 17,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '500',
+    maxWidth: 320,
+  },
+  welcomeButtonContainer: {
+    width: '100%',
+    gap: 16,
+    maxWidth: 320,
+  },
+  buttonContainer: {
+    width: '100%',
+    gap: 16,
+    maxWidth: 320,
+  },
+  secondaryButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#4f46e5',
+  },
+  secondaryButtonText: {
+    color: '#4f46e5',
   },
 });

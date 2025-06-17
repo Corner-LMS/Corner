@@ -201,6 +201,8 @@ export default function NotificationsScreen() {
                 return 'chatbubbles';
             case 'discussion_replies':
                 return 'chatbubble-ellipses';
+            case 'teacher_online':
+                return 'person';
             default:
                 return 'notifications';
         }

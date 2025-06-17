@@ -9,7 +9,8 @@ import {
     updateDoc,
     increment,
     serverTimestamp,
-    addDoc
+    addDoc,
+    orderBy
 } from 'firebase/firestore';
 import { notificationService, NotificationData } from './notificationService';
 
@@ -43,35 +44,78 @@ class NotificationHelpers {
         }
     }
 
-    // Send notification when teacher posts an announcement
+    private async shouldCreateNotification(userId: string, notificationType: string): Promise<boolean> {
+        try {
+            const userDoc = await getDoc(doc(db, 'users', userId));
+            const userData = userDoc.data();
+
+            if (!userData?.notificationSettings) {
+                return true; // Default to true if settings don't exist
+            }
+
+            const settings = userData.notificationSettings;
+
+            switch (notificationType) {
+                case 'announcement':
+                    return settings.announcementNotifications;
+                case 'discussion_milestone':
+                    return settings.discussionMilestoneNotifications;
+                case 'discussion_replies':
+                    return settings.replyNotifications;
+                case 'teacher_discussion_milestone':
+                    return settings.teacherDiscussionMilestoneNotifications;
+                default:
+                    return true;
+            }
+        } catch (error) {
+            console.error('Error checking notification settings:', error);
+            return true; // Default to true if there's an error
+        }
+    }
+
+    // Notify students of new announcement
     async notifyStudentsOfAnnouncement(courseId: string, announcementData: any, teacherId: string) {
         try {
-
+            // Get course details
+            const courseRef = doc(db, 'courses', courseId);
+            const courseDoc = await getDoc(courseRef);
+            const courseName = courseDoc.data()?.name || 'Course';
 
             // Get all students in the course
-            const students = await this.getStudentsInCourse(courseId);
-
-            // Get course details
-            const courseDoc = await getDoc(doc(db, 'courses', courseId));
-            const courseData = courseDoc.data();
-            const courseName = courseData?.name || 'Unknown Course';
+            const studentsQuery = query(
+                collection(db, 'users'),
+                where('role', '==', 'student'),
+                where('courseIds', 'array-contains', courseId)
+            );
+            const studentsSnapshot = await getDocs(studentsQuery);
+            const students = studentsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as StudentUser[];
 
             const notificationData: NotificationData = {
                 type: 'announcement',
                 courseId: courseId,
                 courseName: courseName,
                 title: `New Announcement in ${courseName}`,
-                body: `${announcementData.title}`,
+                body: announcementData.title,
                 data: {
                     type: 'announcement',
                     courseId: courseId,
-                    announcementId: announcementData.id || 'unknown',
-                    courseName: courseName
+                    courseName: courseName,
+                    announcementId: announcementData.id
                 }
             };
 
-            // Send notifications to all students and update their badge counts
+            // Send notifications to all students
             const notificationPromises = students.map(async (student: StudentUser) => {
+                // Check if notification should be created based on user settings
+                const shouldCreate = await this.shouldCreateNotification(student.id, 'announcement');
+                if (!shouldCreate) {
+                    console.log('Notification blocked by user settings for student:', student.id);
+                    return;
+                }
+
                 // Save notification to Firestore
                 await addDoc(collection(db, 'notifications'), {
                     userId: student.id,
@@ -88,9 +132,8 @@ class NotificationHelpers {
                 // Update badge count
                 await this.updateUserBadgeCount(student.id, 1);
 
-                // Then send push notification if they have tokens
+                // Send push notification if they have tokens
                 if (student.expoPushTokens && student.expoPushTokens.length > 0) {
-                    // Send to each token (user might have multiple devices)
                     return Promise.all(
                         student.expoPushTokens.map((token: string) =>
                             notificationService.sendPushNotification(token, notificationData)
@@ -100,7 +143,6 @@ class NotificationHelpers {
             });
 
             await Promise.all(notificationPromises);
-
 
             // Track notification in Firestore
             await this.logNotification({
@@ -118,58 +160,44 @@ class NotificationHelpers {
         }
     }
 
-    // Check and notify after every 10 discussion posts
-    async checkDiscussionMilestone(courseId: string, newPostAuthorId: string) {
-        try {
-
-
-            // Get total discussion count
-            const discussionsQuery = query(collection(db, 'courses', courseId, 'discussions'));
-            const discussionsSnapshot = await getDocs(discussionsQuery);
-            const totalDiscussions = discussionsSnapshot.size;
-
-
-
-            // Check if we hit a milestone (every 10 posts)
-            if (totalDiscussions > 0 && totalDiscussions % 10 === 0) {
-                // Get course details first
-                const courseDoc = await getDoc(doc(db, 'courses', courseId));
-                const courseData = courseDoc.data();
-                const courseName = courseData?.name || 'Unknown Course';
-
-                // Notify students (existing functionality)
-                await this.notifyStudentsOfDiscussionMilestone(courseId, newPostAuthorId, totalDiscussions, courseName);
-
-                // Notify teacher (new functionality)
-                await this.notifyTeacherOfDiscussionMilestone(courseId, courseData?.teacherId, totalDiscussions, courseName);
-            }
-        } catch (error) {
-            console.error('Error checking discussion milestone:', error);
-        }
-    }
-
-    // Notify students of discussion milestone (extracted from checkDiscussionMilestone)
+    // Notify students of discussion milestone
     private async notifyStudentsOfDiscussionMilestone(courseId: string, newPostAuthorId: string, totalDiscussions: number, courseName: string) {
         try {
-            // Get all students in the course (except the one who just posted)
-            const students = await this.getStudentsInCourse(courseId, newPostAuthorId);
+            // Get all students in the course
+            const studentsQuery = query(
+                collection(db, 'users'),
+                where('role', '==', 'student'),
+                where('courseIds', 'array-contains', courseId)
+            );
+            const studentsSnapshot = await getDocs(studentsQuery);
+            const students = studentsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as StudentUser[];
 
             const notificationData: NotificationData = {
                 type: 'discussion_milestone',
                 courseId: courseId,
                 courseName: courseName,
-                title: `Active Discussion in ${courseName}`,
-                body: `${totalDiscussions} discussions and counting! Join the conversation.`,
+                title: `Discussion Milestone in ${courseName}`,
+                body: `The class has reached ${totalDiscussions} discussion posts!`,
                 data: {
                     type: 'discussion_milestone',
                     courseId: courseId,
                     courseName: courseName,
-                    discussionCount: totalDiscussions
+                    milestone: totalDiscussions
                 }
             };
 
-            // Send notifications to all students and update their badge counts
+            // Send notifications to all students
             const notificationPromises = students.map(async (student: StudentUser) => {
+                // Check if notification should be created based on user settings
+                const shouldCreate = await this.shouldCreateNotification(student.id, 'discussion_milestone');
+                if (!shouldCreate) {
+                    console.log('Notification blocked by user settings for student:', student.id);
+                    return;
+                }
+
                 // Save notification to Firestore
                 await addDoc(collection(db, 'notifications'), {
                     userId: student.id,
@@ -186,7 +214,7 @@ class NotificationHelpers {
                 // Update badge count
                 await this.updateUserBadgeCount(student.id, 1);
 
-                // Then send push notification if they have tokens
+                // Send push notification if they have tokens
                 if (student.expoPushTokens && student.expoPushTokens.length > 0) {
                     return Promise.all(
                         student.expoPushTokens.map((token: string) =>
@@ -217,25 +245,34 @@ class NotificationHelpers {
     // Notify teacher of discussion milestone (new method)
     private async notifyTeacherOfDiscussionMilestone(courseId: string, teacherId: string, totalDiscussions: number, courseName: string) {
         try {
-            if (!teacherId) return;
-
-            // Get teacher details
-            const teacherDoc = await getDoc(doc(db, 'users', teacherId));
+            // Get teacher data
+            const teacherRef = doc(db, 'users', teacherId);
+            const teacherDoc = await getDoc(teacherRef);
             const teacherData = teacherDoc.data();
 
-            if (!teacherData) return;
+            if (!teacherData) {
+                console.error('Teacher not found:', teacherId);
+                return;
+            }
+
+            // Check if notification should be created based on user settings
+            const shouldCreate = await this.shouldCreateNotification(teacherId, 'teacher_discussion_milestone');
+            if (!shouldCreate) {
+                console.log('Notification blocked by user settings for teacher:', teacherId);
+                return;
+            }
 
             const notificationData: NotificationData = {
                 type: 'teacher_discussion_milestone',
                 courseId: courseId,
                 courseName: courseName,
-                title: `Discussion Activity in ${courseName}`,
-                body: `Your course has reached ${totalDiscussions} discussions! Students are actively engaged.`,
+                title: `Course Activity Milestone`,
+                body: `${courseName} has reached ${totalDiscussions} discussion posts!`,
                 data: {
                     type: 'teacher_discussion_milestone',
                     courseId: courseId,
                     courseName: courseName,
-                    discussionCount: totalDiscussions
+                    milestone: totalDiscussions
                 }
             };
 
@@ -262,7 +299,6 @@ class NotificationHelpers {
                 );
 
                 await Promise.all(notificationPromises);
-
             }
 
             // Track notification
@@ -282,46 +318,57 @@ class NotificationHelpers {
         }
     }
 
-    // Notify when student's discussion post gets 3+ replies
+    // Check and notify for discussion replies
     async checkDiscussionReplies(courseId: string, discussionId: string, newReplyAuthorId: string) {
         try {
-
-
             // Get discussion details
-            const discussionDoc = await getDoc(doc(db, 'courses', courseId, 'discussions', discussionId));
+            const discussionRef = doc(db, 'discussions', discussionId);
+            const discussionDoc = await getDoc(discussionRef);
             const discussionData = discussionDoc.data();
 
-            if (!discussionData) return;
+            if (!discussionData) {
+                console.error('Discussion not found:', discussionId);
+                return;
+            }
 
-            const replies = discussionData.replies || 0;
             const originalAuthorId = discussionData.authorId;
+            const courseName = discussionData.courseName || 'Course';
 
+            // Count replies
+            const repliesQuery = query(
+                collection(db, 'discussions', discussionId, 'replies'),
+                orderBy('timestamp', 'asc')
+            );
+            const repliesSnapshot = await getDocs(repliesQuery);
+            const replies = repliesSnapshot.size;
 
-
-            // Notify if we hit exactly 2 replies and the original author is a student
-            if (replies === 5 && discussionData.authorRole === 'student' && originalAuthorId !== newReplyAuthorId) {
-                // Get course details
-                const courseDoc = await getDoc(doc(db, 'courses', courseId));
-                const courseData = courseDoc.data();
-                const courseName = courseData?.name || 'Unknown Course';
+            // Notify when exactly 5 replies
+            if (replies === 5) {
+                // Check if notification should be created based on user settings
+                const shouldCreate = await this.shouldCreateNotification(originalAuthorId, 'discussion_replies');
+                if (!shouldCreate) {
+                    console.log('Notification blocked by user settings for user:', originalAuthorId);
+                    return;
+                }
 
                 const notificationData: NotificationData = {
                     type: 'discussion_replies',
                     courseId: courseId,
                     courseName: courseName,
-                    title: `Your Discussion is Popular!`,
-                    body: `Your post "${discussionData.title}" has received 3 replies in ${courseName}`,
+                    title: 'Your Discussion is Popular!',
+                    body: `Your post "${discussionData.title}" has received 5 replies in ${courseName}`,
                     data: {
                         type: 'discussion_replies',
                         courseId: courseId,
-                        discussionId: discussionId,
                         courseName: courseName,
+                        discussionId: discussionId,
                         discussionTitle: discussionData.title
                     }
                 };
 
-                // Get the original discussion author's notification tokens
-                const authorDoc = await getDoc(doc(db, 'users', originalAuthorId));
+                // Get author details
+                const authorRef = doc(db, 'users', originalAuthorId);
+                const authorDoc = await getDoc(authorRef);
                 const authorData = authorDoc.data();
 
                 if (authorData) {
@@ -341,15 +388,13 @@ class NotificationHelpers {
                     // Update badge count
                     await this.updateUserBadgeCount(originalAuthorId, 1);
 
-                    // Then send push notification if they have tokens
+                    // Send push notification if they have tokens
                     if (authorData.expoPushTokens && authorData.expoPushTokens.length > 0) {
-                        // Send notification to all author's devices
                         const notificationPromises = authorData.expoPushTokens.map((token: string) =>
                             notificationService.sendPushNotification(token, notificationData)
                         );
 
                         await Promise.all(notificationPromises);
-
                     }
 
                     // Track notification
@@ -408,17 +453,12 @@ class NotificationHelpers {
         }
     }
 
-    // Log notification for tracking/analytics
-    private async logNotification(trigger: NotificationTrigger) {
+    // Log notification for analytics
+    private async logNotification(data: any) {
         try {
-            const notificationLog = {
-                ...trigger,
-                timestamp: serverTimestamp(),
-                processed: true
-            };
-
-            await updateDoc(doc(db, 'courses', trigger.courseId), {
-                [`notificationLogs.${Date.now()}`]: notificationLog
+            await addDoc(collection(db, 'notificationLogs'), {
+                ...data,
+                timestamp: serverTimestamp()
             });
         } catch (error) {
             console.error('Error logging notification:', error);
