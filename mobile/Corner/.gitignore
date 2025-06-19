@@ -39,3 +39,4 @@ config/
 *.tsbuildinfo
 
 app-example
+app.json

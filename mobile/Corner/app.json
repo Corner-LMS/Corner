@@ -7,9 +7,9 @@
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-test.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#8B5CF6"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -21,7 +21,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#8B5CF6"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.cornerbusinessgroup.corner"
@@ -36,14 +36,20 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-test.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#8B5CF6"
         }
       ],
       [
-        "@react-native-google-signin/google-signin"
+        "@react-native-google-signin/google-signin",
+        {
+          "androidClientId": "899702669451-l2146kmtd6qvmq9j8h9f6ajvticfvavo.apps.googleusercontent.com",
+          "webClientId": "899702669451-2nk8tic847gjvv3m57rb5okdic1bs0vc.apps.googleusercontent.com",
+          "iosClientId": "899702669451-uvgne6e07q59ifeuur306f8sscs9i0ir.apps.googleusercontent.com",
+          "iosUrlScheme": "com.googleusercontent.apps.899702669451-uvgne6e07q59ifeuur306f8sscs9i0ir"
+        }
       ]
     ],
     "scheme": "corner",

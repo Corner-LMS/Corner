@@ -2,3 +2,7 @@ web_backup/
 backend_backup/
 mobile/Corner/config/
 mobile/Corner/.env
+mobile/Corner/ios/
+mobile/Corner/android/
+mobile/Corner/app.json
+mobile/Corner/corner-70a1e-firebase-adminsdk-fbsvc-10c9a337c5.json

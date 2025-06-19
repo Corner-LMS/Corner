@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from '../config/ firebase-config';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { notificationHelpers } from '../services/notificationHelpers';
 import { offlineCacheService, CachedAnnouncement, CachedDiscussion } from '../services/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
@@ -19,6 +19,7 @@ interface Announcement {
     authorName: string;
     authorRole: string;
     authorId: string;
+    views?: { [userId: string]: any }; // Track who viewed the announcement and when
 }
 
 interface Discussion {
@@ -31,6 +32,7 @@ interface Discussion {
     replies: number;
     authorId: string;
     isAnonymous?: boolean;
+    likes?: { [userId: string]: any }; // Track who liked the discussion and when
 }
 
 export default function CourseDetailScreen() {
@@ -454,6 +456,55 @@ export default function CourseDetailScreen() {
         });
     };
 
+    const recordAnnouncementView = async (announcementId: string) => {
+        if (!auth.currentUser || !courseId) return;
+
+        try {
+            const announcementRef = doc(db, 'courses', courseId as string, 'announcements', announcementId);
+            const announcementDoc = await getDoc(announcementRef);
+
+            if (announcementDoc.exists()) {
+                const views = announcementDoc.data().views || {};
+                // Only record view if user hasn't viewed it before
+                if (!views[auth.currentUser.uid]) {
+                    await updateDoc(announcementRef, {
+                        [`views.${auth.currentUser.uid}`]: serverTimestamp()
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error recording announcement view:', error);
+        }
+    };
+
+    const handleLikeDiscussion = async (discussionId: string) => {
+        if (!auth.currentUser || !courseId) return;
+
+        try {
+            const discussionRef = doc(db, 'courses', courseId as string, 'discussions', discussionId);
+            const discussionDoc = await getDoc(discussionRef);
+
+            if (discussionDoc.exists()) {
+                const likes = discussionDoc.data().likes || {};
+                const hasLiked = likes[auth.currentUser.uid];
+
+                if (hasLiked) {
+                    // Unlike
+                    await updateDoc(discussionRef, {
+                        [`likes.${auth.currentUser.uid}`]: deleteField()
+                    });
+                } else {
+                    // Like
+                    await updateDoc(discussionRef, {
+                        [`likes.${auth.currentUser.uid}`]: serverTimestamp()
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling discussion like:', error);
+        }
+    };
+
     const renderAnnouncements = () => (
         <ScrollView style={styles.contentContainer}>
             {/* Offline/Cache Status Indicator */}
@@ -478,7 +529,11 @@ export default function CourseDetailScreen() {
                 </View>
             ) : (
                 announcements.map((announcement) => (
-                    <View key={announcement.id} style={styles.postCard}>
+                    <TouchableOpacity
+                        key={announcement.id}
+                        style={styles.postCard}
+                        onPress={() => recordAnnouncementView(announcement.id)}
+                    >
                         <View style={styles.postHeader}>
                             <Text style={styles.postTitle}>{announcement.title}</Text>
                             <View style={styles.postHeaderRight}>
@@ -513,6 +568,12 @@ export default function CourseDetailScreen() {
                             <Text style={styles.postAuthor}>By {announcement.authorName}</Text>
                             <Text style={styles.postDate}>{formatDate(announcement.createdAt)}</Text>
                         </View>
+                        <View style={styles.viewCount}>
+                            <Ionicons name="eye-outline" size={16} color="#64748b" />
+                            <Text style={styles.viewCountText}>
+                                {announcement.views ? Object.keys(announcement.views).length : 0} views
+                            </Text>
+                        </View>
                         {courseIsArchived && (
                             <View style={styles.archivedNotice}>
                                 <Ionicons name="archive" size={14} color="#666" />
@@ -525,7 +586,7 @@ export default function CourseDetailScreen() {
                                 <Text style={styles.cachedText}>Cached content</Text>
                             </View>
                         )}
-                    </View>
+                    </TouchableOpacity>
                 ))
             )}
         </ScrollView>
@@ -659,9 +720,27 @@ export default function CourseDetailScreen() {
                             <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
                         </View>
                         <View style={styles.discussionFooter}>
-                            <Text style={styles.repliesCount}>
-                                <Ionicons name="chatbubble-outline" size={14} color="#666" /> {discussion.replies} replies
-                            </Text>
+                            <View style={styles.discussionStats}>
+                                <TouchableOpacity
+                                    style={styles.likeButton}
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        handleLikeDiscussion(discussion.id);
+                                    }}
+                                >
+                                    <Ionicons
+                                        name={discussion.likes?.[auth.currentUser?.uid || ''] ? "thumbs-up" : "thumbs-up-outline"}
+                                        size={16}
+                                        color={discussion.likes?.[auth.currentUser?.uid || ''] ? "#4f46e5" : "#64748b"}
+                                    />
+                                    <Text style={styles.likeCount}>
+                                        {discussion.likes ? Object.keys(discussion.likes).length : 0}
+                                    </Text>
+                                </TouchableOpacity>
+                                <Text style={styles.repliesCount}>
+                                    <Ionicons name="chatbubble-outline" size={14} color="#666" /> {discussion.replies} replies
+                                </Text>
+                            </View>
                             {!courseIsArchived && <Ionicons name="chevron-forward" size={16} color="#666" />}
                         </View>
                         {courseIsArchived && (
@@ -1269,5 +1348,32 @@ const styles = StyleSheet.create({
     connectivityIndicator: {
         backgroundColor: 'rgba(79, 70, 229, 0.08)',
         borderRadius: 8,
+    },
+    viewCount: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        gap: 4,
+    },
+    viewCountText: {
+        fontSize: 13,
+        color: '#64748b',
+        fontWeight: '500',
+    },
+    discussionStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    likeButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        padding: 4,
+    },
+    likeCount: {
+        fontSize: 14,
+        color: '#64748b',
+        fontWeight: '500',
     },
 }); 

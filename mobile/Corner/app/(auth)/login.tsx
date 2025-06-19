@@ -15,14 +15,11 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        console.log('=== LOGIN SCREEN MOUNTED ===');
-        // Verify Google Sign-In configuration
         const checkGoogleSignIn = async () => {
             try {
-                const isConfigured = await GoogleSignin.hasPlayServices();
-                console.log('Google Play Services available:', isConfigured);
+                await GoogleSignin.hasPlayServices();
             } catch (error) {
-                console.error('Google Play Services check failed:', error);
+                setError('Google Play Services not available');
             }
         };
         checkGoogleSignIn();
@@ -42,28 +39,11 @@ export default function Login() {
 
     const startSignInFlow = async () => {
         try {
-            console.log('=== STARTING GOOGLE SIGN-IN FLOW ===');
             setLoading(true);
-
-            console.log('Checking Play Services...');
             await GoogleSignin.hasPlayServices();
-            console.log('Play Services check passed');
-
-            console.log('Initiating Google Sign-In...');
             const userInfo = await GoogleSignin.signIn();
-            console.log('Google Sign-In successful, user info:', JSON.stringify(userInfo, null, 2));
-
-            console.log('Proceeding with successful login...');
             await handleSuccessfulLogin();
-            console.log('Login flow completed successfully');
         } catch (err: any) {
-            console.error('Detailed Google Sign-In Error:', {
-                name: err?.name,
-                message: err?.message,
-                code: err?.code,
-                stack: err?.stack,
-                fullError: JSON.stringify(err, null, 2)
-            });
             setError(err instanceof Error ? err.message : 'An error occurred');
         } finally {
             setLoading(false);
@@ -75,7 +55,6 @@ export default function Login() {
         if (!userId) {
             throw new Error('User not found');
         }
-        // fetch role from Firestore
         const userDoc = await getDoc(doc(db, "users", userId));
         const userData = userDoc.data();
         if (!userData) {
@@ -83,11 +62,11 @@ export default function Login() {
         }
         const role = userData.role;
         if (role === 'student') {
-            router.replace('/');
+            router.replace('/(tabs)');
         } else if (role === 'teacher' || role === 'admin') {
             router.replace('/(tabs)');
         } else {
-            router.replace('/');
+            router.replace('/(tabs)');
         }
     };
 

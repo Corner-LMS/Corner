@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,25 @@ interface NotificationSettings {
     soundEnabled: boolean;
     vibrationEnabled: boolean;
 }
+
+const faqs = [
+    {
+        question: "How do notifications work?",
+        answer: "You'll receive notifications for new announcements, discussion milestones, and replies based on your settings. Make sure to enable notifications for the app in your device settings."
+    },
+    {
+        question: "Why am I not receiving notifications?",
+        answer: "First, check if notifications are enabled in your device settings. Then, verify that the specific notification type is enabled in these settings. If issues persist, try the 'Test Notification' button."
+    },
+    {
+        question: "How do I manage notification sounds?",
+        answer: "You can toggle notification sounds using the 'Sound' switch in these settings. When enabled, you'll hear a sound for each notification."
+    },
+    {
+        question: "Can I clear all notifications?",
+        answer: "Yes, you can clear all notifications by tapping the 'Clear All Notifications' button at the bottom of this screen."
+    }
+];
 
 export default function NotificationSettingsScreen() {
     const [settings, setSettings] = useState<NotificationSettings>({
@@ -137,6 +156,10 @@ export default function NotificationSettingsScreen() {
             console.error('Error clearing notifications:', error);
             Alert.alert('Error', 'Failed to clear notifications.');
         }
+    };
+
+    const handleContactSupport = () => {
+        Linking.openURL('mailto:support@corner.com');
     };
 
     if (loading) {
@@ -276,23 +299,29 @@ export default function NotificationSettingsScreen() {
                     </View>
                 </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Test & Troubleshoot</Text>
-
+                <View style={styles.buttonContainer}>
                     <TouchableOpacity
-                        style={styles.testButton}
+                        style={[styles.button, styles.testButton]}
                         onPress={testNotification}
                     >
-                        <Ionicons name="notifications" size={20} color="#4f46e5" />
-                        <Text style={styles.testButtonText}>Send Test Notification</Text>
+                        <Ionicons name="notifications-outline" size={20} color="#fff" />
+                        <Text style={styles.buttonText}>Test Notification</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.testButton, { marginTop: 12 }]}
+                        style={[styles.button, styles.clearButton]}
                         onPress={clearAllNotifications}
                     >
-                        <Ionicons name="trash" size={20} color="#4f46e5" />
-                        <Text style={styles.testButtonText}>Clear All Notifications</Text>
+                        <Ionicons name="trash-outline" size={20} color="#fff" />
+                        <Text style={styles.buttonText}>Clear All Notifications</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.button, styles.supportButton]}
+                        onPress={() => router.push('/support')}
+                    >
+                        <Ionicons name="help-circle-outline" size={20} color="#fff" />
+                        <Text style={styles.buttonText}>Help & Support</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -423,24 +452,11 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     testButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 18,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: 'rgba(79, 70, 229, 0.2)',
-        marginVertical: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
+        backgroundColor: '#4f46e5',
     },
     testButtonText: {
         fontSize: 16,
-        color: '#4f46e5',
+        color: '#fff',
         fontWeight: '700',
         marginLeft: 12,
         letterSpacing: 0.3,
@@ -467,5 +483,45 @@ const styles = StyleSheet.create({
     buttonDisabled: {
         opacity: 0.6,
         shadowOpacity: 0.1,
+    },
+    faqItem: {
+        marginBottom: 20,
+        paddingBottom: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e2e8f0',
+    },
+    question: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 8,
+    },
+    answer: {
+        fontSize: 15,
+        color: '#64748b',
+        lineHeight: 22,
+    },
+    buttonContainer: {
+        padding: 16,
+        gap: 12,
+    },
+    button: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        borderRadius: 12,
+        gap: 8,
+    },
+    clearButton: {
+        backgroundColor: '#ef4444',
+    },
+    supportButton: {
+        backgroundColor: '#0ea5e9',
+    },
+    buttonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 }); 

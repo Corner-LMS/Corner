@@ -16,21 +16,17 @@ export default function Signup() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        console.log('=== SIGNUP SCREEN MOUNTED ===');
-        // Verify Google Sign-In configuration
         const checkGoogleSignIn = async () => {
             try {
-                const isConfigured = await GoogleSignin.hasPlayServices();
-                console.log('Google Play Services available:', isConfigured);
+                await GoogleSignin.hasPlayServices();
             } catch (error) {
-                console.error('Google Play Services check failed:', error);
+                setError('Google Play Services not available');
             }
         };
         checkGoogleSignIn();
     }, []);
 
     const validatePassword = (password: string) => {
-        // Password must be at least 8 characters long and contain at least one number and one special character
         const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
         return passwordRegex.test(password);
     };
@@ -42,19 +38,10 @@ export default function Signup() {
         }
 
         try {
-            console.log('Starting email/password sign-up process...');
             setLoading(true);
             const result = await signUp(email, password);
-            console.log('Account created successfully');
             await handleSuccessfulLogin(result.user);
         } catch (err: any) {
-            console.error('Detailed Sign-Up Error:', {
-                name: err?.name,
-                message: err?.message,
-                code: err?.code,
-                stack: err?.stack,
-                fullError: JSON.stringify(err, null, 2)
-            });
             setError(err instanceof Error ? err.message : 'An error occurred');
         } finally {
             setLoading(false);
@@ -63,53 +50,35 @@ export default function Signup() {
 
     const handleGoogleSignIn = async () => {
         try {
-            console.log('Starting Google Sign-In process...');
             const result = await signInWithGoogle();
 
             if (!result) {
-                // New user - redirect to role selection
-                console.log('New user detected, redirecting to role selection...');
                 router.replace('/role');
                 return;
             }
 
-            // Existing user - handle successful login
-            console.log('Existing user detected, handling login...');
             await handleSuccessfulLogin(result.user);
         } catch (error: any) {
-            console.error('Detailed Google Sign-In Error:', {
-                name: error?.name,
-                message: error?.message,
-                code: error?.code,
-                stack: error?.stack,
-                fullError: JSON.stringify(error, null, 2)
-            });
             Alert.alert('Error', error.message);
         }
     };
 
     const handleSuccessfulLogin = async (user: any) => {
         try {
-            console.log('Fetching user data from Firestore...');
             const userDoc = await getDoc(doc(db, "users", user.uid));
 
             if (!userDoc.exists()) {
-                console.error('User document not found in Firestore');
-                router.replace('/role-selection');
+                router.replace('/role');
                 return;
             }
 
             const userData = userDoc.data();
-            console.log('User data retrieved:', userData);
 
-            // Check if user has both role and schoolId
             if (!userData.role || !userData.schoolId) {
-                console.log('User missing role or schoolId, redirecting to role selection');
-                router.replace('/role-selection');
+                router.replace('/role');
                 return;
             }
 
-            // Navigate based on role
             if (userData.role === 'admin') {
                 router.replace('/(tabs)');
             } else if (userData.role === 'teacher') {
@@ -117,12 +86,10 @@ export default function Signup() {
             } else if (userData.role === 'student') {
                 router.replace('/(tabs)');
             } else {
-                console.log('Invalid role found, redirecting to role selection');
-                router.replace('/role-selection');
+                router.replace('/role');
             }
         } catch (error) {
-            console.error('Error in handleSuccessfulLogin:', error);
-            router.replace('/role-selection');
+            router.replace('/role');
         }
     };
 

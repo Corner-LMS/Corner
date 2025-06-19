@@ -481,6 +481,36 @@ class NotificationHelpers {
             console.error('Error initializing course notifications:', error);
         }
     }
+
+    async checkDiscussionMilestone(courseId: string, userId: string) {
+        try {
+            const courseRef = doc(db, 'courses', courseId);
+            const courseDoc = await getDoc(courseRef);
+            const courseData = courseDoc.data();
+            const courseName = courseData?.name || 'Course';
+
+            // Get total discussions count
+            const discussionsQuery = query(
+                collection(db, 'courses', courseId, 'discussions'),
+                orderBy('createdAt', 'desc')
+            );
+            const discussionsSnapshot = await getDocs(discussionsQuery);
+            const totalDiscussions = discussionsSnapshot.size;
+
+            // Check if we've hit a milestone (every 10 posts)
+            if (totalDiscussions % 10 === 0 && totalDiscussions > 0) {
+                // Notify students
+                await this.notifyStudentsOfDiscussionMilestone(courseId, userId, totalDiscussions, courseName);
+
+                // Notify teacher if they have notifications enabled
+                if (courseData?.instructorId) {
+                    await this.notifyTeacherOfDiscussionMilestone(courseId, courseData.instructorId, totalDiscussions, courseName);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking discussion milestone:', error);
+        }
+    }
 }
 
 export const notificationHelpers = new NotificationHelpers(); 
