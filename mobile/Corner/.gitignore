@@ -40,3 +40,4 @@ config/
 
 app-example
 app.json
+google-services.json

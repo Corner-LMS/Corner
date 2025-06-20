@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { auth, db } from '../../config/ firebase-config';
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ProfileInitials } from '@/components/ui/ProfileInitials';
 import { getSchoolById } from '@/constants/Schools';
 import ConnectivityIndicator from '../../components/ConnectivityIndicator';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface UserData {
     name: string;
@@ -75,26 +76,39 @@ export default function Profile() {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.center}>
-                <ActivityIndicator size="large" color="#4f46e5" />
-                <Text style={styles.loadingText}>Loading profile...</Text>
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+                <LinearGradient
+                    colors={['#4f46e5', '#3730a3']}
+                    style={styles.header}
+                >
+                    <View style={{ width: 24 }} />
+                    <Text style={styles.title}>Your Profile</Text>
+                    <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
+                </LinearGradient>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#4f46e5" />
+                    <Text style={styles.loadingText}>Loading profile...</Text>
+                </View>
             </SafeAreaView>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
+                <View style={{ width: 24 }} />
+                <Text style={styles.title}>Profile</Text>
+                <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
+            </LinearGradient>
+
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {user && userData ? (
                     <>
-                        {/* Header Section */}
-                        <View style={styles.header}>
-                            <View style={styles.headerContent}>
-                                <Text style={styles.headerTitle}>Profile</Text>
-                                <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
-                            </View>
-                        </View>
-
                         {/* Profile Card */}
                         <View style={styles.profileCard}>
                             <View style={styles.profileHeader}>
@@ -226,20 +240,39 @@ export default function Profile() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingTop: 20,
+    },
+    title: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#fff',
+        letterSpacing: -0.3,
+    },
+    connectivityIndicator: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: 8,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f8fafc',
     },
     scrollView: {
         flex: 1,
+        backgroundColor: '#f8fafc',
     },
     scrollContent: {
         padding: 20,
         paddingBottom: 120,
-    },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f1f5f9',
     },
     loadingText: {
         fontSize: 16,
@@ -247,44 +280,15 @@ const styles = StyleSheet.create({
         marginTop: 12,
         fontWeight: '500',
     },
-    header: {
-        marginBottom: 24,
-    },
-    headerContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
+    profileCard: {
+        backgroundColor: '#fff',
         borderRadius: 20,
+        marginBottom: 24,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.08,
         shadowRadius: 20,
         elevation: 4,
-        borderWidth: 1,
-        borderColor: 'rgba(241, 245, 249, 0.8)',
-    },
-    headerTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: '#1e293b',
-        letterSpacing: -0.3,
-    },
-    connectivityIndicator: {
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
-        borderRadius: 8,
-    },
-    profileCard: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        marginBottom: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.1,
-        shadowRadius: 24,
-        elevation: 6,
         borderWidth: 1,
         borderColor: 'rgba(241, 245, 249, 0.8)',
         overflow: 'hidden',
@@ -293,7 +297,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 32,
         paddingHorizontal: 24,
-        backgroundColor: 'linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(79, 70, 229, 0.02) 100%)',
+        backgroundColor: 'rgba(79, 70, 229, 0.05)',
     },
     avatarContainer: {
         marginBottom: 16,

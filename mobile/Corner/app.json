@@ -21,7 +21,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#8B5CF6"
+        "backgroundColor": "#8B5CF6",
+        "googleServicesFile": "./google-services.json"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.cornerbusinessgroup.corner"

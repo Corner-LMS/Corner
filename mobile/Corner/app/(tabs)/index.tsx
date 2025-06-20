@@ -34,6 +34,7 @@ export default function DashboardScreen() {
     const [teacherNames, setTeacherNames] = useState<Record<string, string>>({});
     const [user, setUser] = useState<User | null>(null);
     const [schoolInfo, setSchoolInfo] = useState<any>(null);
+    const [userData, setUserData] = useState<any>(null);
 
     const loadUserAndCourses = async (user: User) => {
         if (!user) {
@@ -58,6 +59,9 @@ export default function DashboardScreen() {
             } else {
                 setRole(userData.role);
             }
+
+            // Store userData for display purposes
+            setUserData(userData);
 
             if (userData.schoolId) {
                 const school = getSchoolById(userData.schoolId);
@@ -156,6 +160,36 @@ export default function DashboardScreen() {
             console.error('Error in loadUserAndCourses:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Function to get user initials
+    const getUserInitials = (user: User, userData: any) => {
+        if (userData?.name) {
+            const nameParts = userData.name.trim().split(' ');
+            if (nameParts.length >= 2) {
+                // First and last name initials
+                return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+            } else {
+                // Only first name - first two letters
+                return nameParts[0].substring(0, 2).toUpperCase();
+            }
+        } else {
+            // Fallback to email
+            return user.email?.split('@')[0]?.substring(0, 2).toUpperCase() || 'U';
+        }
+    };
+
+    // Function to get display name
+    const getDisplayName = (user: User, userData: any) => {
+        if (userData?.name) {
+            const nameParts = userData.name.trim().split(' ');
+            // Capitalize first letter of first name
+            return nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase();
+        } else {
+            // Fallback to email username with capitalization
+            const emailUsername = user.email?.split('@')[0] || '';
+            return emailUsername.charAt(0).toUpperCase() + emailUsername.slice(1).toLowerCase();
         }
     };
 
@@ -338,13 +372,13 @@ export default function DashboardScreen() {
                     <View style={styles.userInfo}>
                         <View style={styles.avatar}>
                             <Text style={styles.avatarText}>
-                                {user.email?.split('@')[0]?.substring(0, 2).toUpperCase() || 'U'}
+                                {getUserInitials(user, userData)}
                             </Text>
                         </View>
                         <View>
                             <Text style={styles.schoolName}>{schoolInfo?.name || 'Your School'}</Text>
                             <Text style={styles.greeting}>Good {getTimeOfDay()}</Text>
-                            <Text style={styles.userName}>{user.email?.split('@')[0]}</Text>
+                            <Text style={styles.userName}>{getDisplayName(user, userData)}</Text>
                         </View>
                     </View>
 
