@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert, Linking, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { auth, db } from '../config/ firebase-config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { notificationService } from '../services/notificationService';
 import { notificationHelpers } from '../services/notificationHelpers';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface NotificationSettings {
     announcementNotifications: boolean;
@@ -165,6 +166,17 @@ export default function NotificationSettingsScreen() {
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+                <LinearGradient
+                    colors={['#4f46e5', '#3730a3']}
+                    style={styles.header}
+                >
+                    <TouchableOpacity onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Notification Settings</Text>
+                    <View style={styles.headerSpacer} />
+                </LinearGradient>
                 <View style={styles.loadingContainer}>
                     <Text style={styles.loadingText}>Loading settings...</Text>
                 </View>
@@ -174,16 +186,17 @@ export default function NotificationSettingsScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => router.back()}
-                >
-                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
+                <TouchableOpacity onPress={() => router.back()}>
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notification Settings</Text>
                 <View style={styles.headerSpacer} />
-            </View>
+            </LinearGradient>
 
             <ScrollView style={styles.content}>
                 <View style={styles.section}>
@@ -205,7 +218,7 @@ export default function NotificationSettingsScreen() {
                                 <Switch
                                     value={settings.announcementNotifications}
                                     onValueChange={(value) => updateSetting('announcementNotifications', value)}
-                                    trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                                    trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
                                     thumbColor={settings.announcementNotifications ? '#fff' : '#f4f3f4'}
                                 />
                             </View>
@@ -221,7 +234,7 @@ export default function NotificationSettingsScreen() {
                                 <Switch
                                     value={settings.discussionMilestoneNotifications}
                                     onValueChange={(value) => updateSetting('discussionMilestoneNotifications', value)}
-                                    trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                                    trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
                                     thumbColor={settings.discussionMilestoneNotifications ? '#fff' : '#f4f3f4'}
                                 />
                             </View>
@@ -237,7 +250,7 @@ export default function NotificationSettingsScreen() {
                                 <Switch
                                     value={settings.replyNotifications}
                                     onValueChange={(value) => updateSetting('replyNotifications', value)}
-                                    trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                                    trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
                                     thumbColor={settings.replyNotifications ? '#fff' : '#f4f3f4'}
                                 />
                             </View>
@@ -256,7 +269,7 @@ export default function NotificationSettingsScreen() {
                             <Switch
                                 value={settings.teacherDiscussionMilestoneNotifications}
                                 onValueChange={(value) => updateSetting('teacherDiscussionMilestoneNotifications', value)}
-                                trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                                trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
                                 thumbColor={settings.teacherDiscussionMilestoneNotifications ? '#fff' : '#f4f3f4'}
                             />
                         </View>
@@ -277,7 +290,7 @@ export default function NotificationSettingsScreen() {
                         <Switch
                             value={settings.soundEnabled}
                             onValueChange={(value) => updateSetting('soundEnabled', value)}
-                            trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                            trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
                             thumbColor={settings.soundEnabled ? '#fff' : '#f4f3f4'}
                         />
                     </View>
@@ -293,7 +306,7 @@ export default function NotificationSettingsScreen() {
                         <Switch
                             value={settings.vibrationEnabled}
                             onValueChange={(value) => updateSetting('vibrationEnabled', value)}
-                            trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                            trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
                             thumbColor={settings.vibrationEnabled ? '#fff' : '#f4f3f4'}
                         />
                     </View>
@@ -304,24 +317,39 @@ export default function NotificationSettingsScreen() {
                         style={[styles.button, styles.testButton]}
                         onPress={testNotification}
                     >
-                        <Ionicons name="notifications-outline" size={20} color="#fff" />
-                        <Text style={styles.buttonText}>Test Notification</Text>
+                        <LinearGradient
+                            colors={['#4f46e5', '#3730a3']}
+                            style={styles.buttonGradient}
+                        >
+                            <Ionicons name="notifications-outline" size={20} color="#fff" />
+                            <Text style={styles.buttonText}>Test Notification</Text>
+                        </LinearGradient>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[styles.button, styles.clearButton]}
                         onPress={clearAllNotifications}
                     >
-                        <Ionicons name="trash-outline" size={20} color="#fff" />
-                        <Text style={styles.buttonText}>Clear All Notifications</Text>
+                        <LinearGradient
+                            colors={['#ef4444', '#dc2626']}
+                            style={styles.buttonGradient}
+                        >
+                            <Ionicons name="trash-outline" size={20} color="#fff" />
+                            <Text style={styles.buttonText}>Clear All Notifications</Text>
+                        </LinearGradient>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[styles.button, styles.supportButton]}
                         onPress={() => router.push('/support')}
                     >
-                        <Ionicons name="help-circle-outline" size={20} color="#fff" />
-                        <Text style={styles.buttonText}>Help & Support</Text>
+                        <LinearGradient
+                            colors={['#0ea5e9', '#0284c7']}
+                            style={styles.buttonGradient}
+                        >
+                            <Ionicons name="help-circle-outline" size={20} color="#fff" />
+                            <Text style={styles.buttonText}>Help & Support</Text>
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
 
@@ -330,9 +358,14 @@ export default function NotificationSettingsScreen() {
                     onPress={saveNotificationSettings}
                     disabled={saving}
                 >
-                    <Text style={styles.saveButtonText}>
-                        {saving ? 'Saving...' : 'Save Settings'}
-                    </Text>
+                    <LinearGradient
+                        colors={saving ? ['#94a3b8', '#64748b'] : ['#4f46e5', '#3730a3']}
+                        style={styles.saveButtonGradient}
+                    >
+                        <Text style={styles.saveButtonText}>
+                            {saving ? 'Saving...' : 'Save Settings'}
+                        </Text>
+                    </LinearGradient>
                 </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
@@ -342,13 +375,13 @@ export default function NotificationSettingsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     loadingText: {
         fontSize: 16,
@@ -360,31 +393,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    backButton: {
-        padding: 8,
-        marginRight: 8,
-        borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        paddingTop: 20,
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#1e293b',
+        color: '#fff',
         flex: 1,
         textAlign: 'center',
         letterSpacing: -0.3,
     },
     headerSpacer: {
-        width: 40,
+        width: 24,
     },
     content: {
         flex: 1,
@@ -392,36 +412,34 @@ const styles = StyleSheet.create({
     },
     section: {
         backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.08,
-        shadowRadius: 20,
-        elevation: 4,
-        borderWidth: 1,
-        borderColor: 'rgba(241, 245, 249, 0.8)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
     },
     sectionTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
-        color: '#1e293b',
+        color: '#1a202c',
         marginBottom: 8,
         letterSpacing: -0.3,
     },
     sectionDescription: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#64748b',
-        marginBottom: 24,
-        lineHeight: 22,
+        marginBottom: 20,
+        lineHeight: 20,
         fontWeight: '500',
     },
     settingItem: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 18,
+        paddingVertical: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#f1f5f9',
     },
@@ -431,7 +449,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     settingIcon: {
-        marginRight: 16,
+        marginRight: 12,
         width: 24,
         textAlign: 'center',
     },
@@ -439,40 +457,65 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     settingTitle: {
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '600',
-        color: '#1e293b',
-        marginBottom: 6,
-        lineHeight: 22,
+        color: '#1a202c',
+        marginBottom: 4,
+        lineHeight: 20,
     },
     settingSubtitle: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#64748b',
-        lineHeight: 20,
+        lineHeight: 18,
         fontWeight: '500',
     },
-    testButton: {
-        backgroundColor: '#4f46e5',
+    buttonContainer: {
+        gap: 12,
+        marginBottom: 20,
     },
-    testButtonText: {
-        fontSize: 16,
+    button: {
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    buttonGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        borderRadius: 12,
+        gap: 8,
+    },
+    testButton: {
+        // Gradient handled by buttonGradient
+    },
+    clearButton: {
+        // Gradient handled by buttonGradient
+    },
+    supportButton: {
+        // Gradient handled by buttonGradient
+    },
+    buttonText: {
         color: '#fff',
-        fontWeight: '700',
-        marginLeft: 12,
-        letterSpacing: 0.3,
+        fontSize: 15,
+        fontWeight: '600',
     },
     saveButton: {
-        backgroundColor: '#4f46e5',
-        padding: 20,
         borderRadius: 16,
-        alignItems: 'center',
-        marginTop: 32,
-        marginBottom: 40,
         shadowColor: '#4f46e5',
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 16,
+        shadowRadius: 8,
         elevation: 6,
+        marginBottom: 40,
+    },
+    saveButtonGradient: {
+        borderRadius: 16,
+        padding: 20,
+        alignItems: 'center',
     },
     saveButtonText: {
         color: '#fff',
@@ -481,47 +524,6 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     buttonDisabled: {
-        opacity: 0.6,
         shadowOpacity: 0.1,
-    },
-    faqItem: {
-        marginBottom: 20,
-        paddingBottom: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
-    },
-    question: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1e293b',
-        marginBottom: 8,
-    },
-    answer: {
-        fontSize: 15,
-        color: '#64748b',
-        lineHeight: 22,
-    },
-    buttonContainer: {
-        padding: 16,
-        gap: 12,
-    },
-    button: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        borderRadius: 12,
-        gap: 8,
-    },
-    clearButton: {
-        backgroundColor: '#ef4444',
-    },
-    supportButton: {
-        backgroundColor: '#0ea5e9',
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
     },
 }); 

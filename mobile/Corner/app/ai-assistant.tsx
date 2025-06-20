@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { db, auth } from '../config/ firebase-config.js';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
 import { openaiService } from '../services/openaiService';
@@ -446,9 +447,13 @@ export default function AIAssistantScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
                 <Pressable style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </Pressable>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle}>AI Assistant</Text>
@@ -457,9 +462,9 @@ export default function AIAssistantScreen() {
                     </Text>
                 </View>
                 <View style={styles.aiIndicator}>
-                    <Ionicons name="sparkles" size={20} color="#4f46e5" />
+                    <Ionicons name="sparkles" size={20} color="#fff" />
                 </View>
-            </View>
+            </LinearGradient>
 
             <ScrollView
                 ref={scrollViewRef}
@@ -514,20 +519,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 4,
     },
     backButton: {
         marginRight: 16,
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'transparent',
     },
     headerInfo: {
         flex: 1,
@@ -535,19 +532,19 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#1e293b',
+        color: '#fff',
         letterSpacing: -0.3,
     },
     headerSubtitle: {
         fontSize: 14,
-        color: '#64748b',
+        color: 'rgba(255, 255, 255, 0.8)',
         marginTop: 4,
         fontWeight: '500',
     },
     aiIndicator: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     messagesContainer: {
         flex: 1,

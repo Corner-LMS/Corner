@@ -321,14 +321,14 @@ class NotificationHelpers {
     // Check and notify for discussion replies
     async checkDiscussionReplies(courseId: string, discussionId: string, newReplyAuthorId: string) {
         try {
-            // Get discussion details
-            const discussionRef = doc(db, 'discussions', discussionId);
+            // Get discussion details - FIXED: Use correct collection path
+            const discussionRef = doc(db, 'courses', courseId, 'discussions', discussionId);
             const discussionDoc = await getDoc(discussionRef);
             const discussionData = discussionDoc.data();
 
             if (!discussionData) {
-                console.error('Discussion not found:', discussionId);
-                return;
+                console.warn(`Discussion not found: ${discussionId} in course: ${courseId}`);
+                return; // Silently return without showing error
             }
 
             const originalAuthorId = discussionData.authorId;
@@ -336,8 +336,8 @@ class NotificationHelpers {
 
             // Count replies
             const repliesQuery = query(
-                collection(db, 'discussions', discussionId, 'replies'),
-                orderBy('timestamp', 'asc')
+                collection(db, 'courses', courseId, 'discussions', discussionId, 'comments'),
+                orderBy('createdAt', 'asc')
             );
             const repliesSnapshot = await getDocs(repliesQuery);
             const replies = repliesSnapshot.size;

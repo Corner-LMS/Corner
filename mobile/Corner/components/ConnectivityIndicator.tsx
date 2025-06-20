@@ -79,9 +79,9 @@ export default function ConnectivityIndicator({
             {/* Connection Status Icon (alternative to dot) */}
             {!showText && (
                 <Ionicons
-                    name={isOnline ? "wifi" : "wifi-off"}
+                    name={isOnline ? "wifi" : "cloud-offline"}
                     size={sizeStyles.icon}
-                    color={isOnline ? "#059669" : "#ef4444"}
+                    color={isOnline ? "#ffffff" : "#ef4444"}
                     style={styles.icon}
                 />
             )}
@@ -135,8 +135,8 @@ const styles = StyleSheet.create({
 
     // Status colors
     onlineDot: {
-        backgroundColor: '#059669',
-        shadowColor: '#059669',
+        backgroundColor: '#ffffff',
+        shadowColor: '#ffffff',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.3,
         shadowRadius: 2,
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
 
     // Text colors
     onlineText: {
-        color: '#059669',
+        color: '#ffffff',
     },
     offlineText: {
         color: '#ef4444',
@@ -178,12 +178,12 @@ const styles = StyleSheet.create({
 
     // Reconnection styles
     reconnectedContainer: {
-        backgroundColor: 'rgba(5, 150, 105, 0.1)',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         borderWidth: 1,
-        borderColor: 'rgba(5, 150, 105, 0.2)',
+        borderColor: 'rgba(255, 255, 255, 0.3)',
     },
     reconnectedText: {
-        color: '#059669',
+        color: '#ffffff',
         marginLeft: 4,
     },
 

@@ -98,7 +98,7 @@ export default function CourseResourcesScreen() {
             setResources(cachedResources as CourseResource[]);
 
             if (cachedResources.length > 0) {
-                console.log(`Loaded ${cachedResources.length} cached resources`);
+                // Cached resources loaded successfully
             }
         } catch (error) {
             console.error('Error loading cached resources:', error);

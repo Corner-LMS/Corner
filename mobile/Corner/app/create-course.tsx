@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../config/ firebase-config';
 import { doc, getDoc } from 'firebase/firestore';
 import { createCourse } from './(auth)/useCourses';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function CreateCourseScreen() {
     const [name, setName] = useState('');
@@ -61,64 +64,78 @@ export default function CreateCourseScreen() {
     };
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
-        >
-            <Pressable
-                style={styles.backButton}
-                onPress={() => router.back()}
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
             >
-                <Text style={styles.backButtonText}>← Back</Text>
-            </Pressable>
-            <View style={styles.formContainer}>
-                <Text style={styles.title}>Create a Course</Text>
-
-                {/* Display teacher name instead of input */}
-                <View style={styles.teacherInfo}>
-                    <Text style={styles.teacherLabel}>Instructor:</Text>
-                    <Text style={styles.teacherName}>{teacherName}</Text>
-                </View>
-
-                <TextInput
-                    style={styles.input}
-                    placeholder="Course Name"
-                    placeholderTextColor="#666"
-                    value={name}
-                    onChangeText={setName}
-                />
-
-                <TextInput
-                    style={[styles.input, styles.textArea]}
-                    placeholder="Description (optional)"
-                    placeholderTextColor="#666"
-                    value={desc}
-                    onChangeText={setDesc}
-                    multiline
-                    numberOfLines={4}
-                />
-
-                {error && <Text style={styles.errorText}>{error}</Text>}
-
-                <TouchableOpacity
-                    style={[styles.button, loading && styles.buttonDisabled]}
-                    onPress={handleCreate}
-                    disabled={loading}
+                <Pressable
+                    style={styles.backButton}
+                    onPress={() => router.back()}
                 >
-                    <Text style={styles.buttonText}>
-                        {loading ? 'Creating...' : 'Create Course'}
-                    </Text>
-                </TouchableOpacity>
-
-                {code && (
-                    <View style={styles.successContainer}>
-                        <Text style={styles.successText}>Course created successfully!</Text>
-                        <Text style={styles.codeText}>Course Code: {code}</Text>
-                        <Text style={styles.redirectText}>Redirecting to dashboard...</Text>
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                </Pressable>
+                <View style={styles.headerContent}>
+                    <View style={styles.headerIcon}>
+                        <Ionicons name="school" size={32} color="#fff" />
                     </View>
-                )}
-            </View>
-        </KeyboardAvoidingView>
+                    <Text style={styles.headerTitle}>Create Course</Text>
+                    <Text style={styles.headerSubtitle}>Set up your new course</Text>
+                </View>
+            </LinearGradient>
+
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.content}
+            >
+                <View style={styles.formContainer}>
+                    {/* Display teacher name instead of input */}
+                    <View style={styles.teacherInfo}>
+                        <Text style={styles.teacherLabel}>Instructor:</Text>
+                        <Text style={styles.teacherName}>{teacherName}</Text>
+                    </View>
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Course Name"
+                        placeholderTextColor="#666"
+                        value={name}
+                        onChangeText={setName}
+                    />
+
+                    <TextInput
+                        style={[styles.input, styles.textArea]}
+                        placeholder="Description (optional)"
+                        placeholderTextColor="#666"
+                        value={desc}
+                        onChangeText={setDesc}
+                        multiline
+                        numberOfLines={4}
+                    />
+
+                    {error && <Text style={styles.errorText}>{error}</Text>}
+
+                    <TouchableOpacity
+                        style={[styles.button, loading && styles.buttonDisabled]}
+                        onPress={handleCreate}
+                        disabled={loading}
+                    >
+                        <Text style={styles.buttonText}>
+                            {loading ? 'Creating...' : 'Create Course'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {code && (
+                        <View style={styles.successContainer}>
+                            <Text style={styles.successText}>Course created successfully!</Text>
+                            <Text style={styles.codeText}>Course Code: {code}</Text>
+                            <Text style={styles.redirectText}>Redirecting to dashboard...</Text>
+                        </View>
+                    )}
+                </View>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
@@ -126,43 +143,55 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f8fafc',
-        justifyContent: 'center',
-        padding: 20,
+    },
+    header: {
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingTop: 20,
     },
     backButton: {
-        position: 'absolute',
-        top: 50,
-        left: 20,
-        padding: 10,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        borderRadius: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        padding: 8,
+        borderRadius: 12,
+        backgroundColor: 'transparent',
+        marginBottom: 16,
     },
-    backButtonText: {
-        color: '#81171b',
-        fontSize: 16,
-        fontWeight: '600',
+    headerContent: {
+        alignItems: 'center',
+    },
+    headerIcon: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: 16,
+        padding: 12,
+        marginBottom: 12,
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#fff',
+        marginBottom: 4,
+        letterSpacing: -0.3,
+    },
+    headerSubtitle: {
+        fontSize: 14,
+        color: 'rgba(255, 255, 255, 0.8)',
+        fontWeight: '500',
+    },
+    content: {
+        flex: 1,
+        padding: 20,
+        paddingTop: 40,
     },
     formContainer: {
         backgroundColor: '#fff',
-        borderRadius: 16,
+        borderRadius: 20,
         padding: 24,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 6,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 24,
-        textAlign: 'center',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     teacherInfo: {
         backgroundColor: '#f8fafc',
@@ -181,37 +210,37 @@ const styles = StyleSheet.create({
     teacherName: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#81171b',
+        color: '#4f46e5',
     },
     input: {
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: '#e2e8f0',
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 16,
         fontSize: 16,
         color: '#1e293b',
         backgroundColor: '#fff',
         marginBottom: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
     textArea: {
         height: 100,
         textAlignVertical: 'top',
     },
     button: {
-        backgroundColor: '#81171b',
-        borderRadius: 12,
-        padding: 16,
+        backgroundColor: '#4f46e5',
+        borderRadius: 16,
+        padding: 18,
         alignItems: 'center',
-        shadowColor: '#81171b',
-        shadowOffset: { width: 0, height: 4 },
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowRadius: 12,
+        elevation: 6,
     },
     buttonDisabled: {
         backgroundColor: '#94a3b8',
@@ -219,8 +248,9 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 17,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     errorText: {
         color: '#ef4444',

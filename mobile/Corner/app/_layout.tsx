@@ -138,6 +138,7 @@ export default function RootLayout() {
           <Stack.Screen name="ai-assistant" options={{ headerShown: false }} />
           <Stack.Screen name="course-resources" options={{ headerShown: false }} />
           <Stack.Screen name="migrate-data" options={{ headerShown: false }} />
+          <Stack.Screen name="support" options={{ headerShown: false }} />
         </Stack>
 
         {/* Global teacher online notification - only for students */}

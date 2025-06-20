@@ -13,7 +13,7 @@ interface NotificationBadgeProps {
 
 export default function NotificationBadge({
     size = 'medium',
-    color = '#4f46e5',
+    color = '#ffffff',
     onPress
 }: NotificationBadgeProps) {
     const [unreadCount, setUnreadCount] = useState(0);
@@ -112,9 +112,9 @@ export default function NotificationBadge({
 
 const styles = StyleSheet.create({
     container: {
-        padding: 12,
-        borderRadius: 16,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     iconContainer: {
         position: 'relative',

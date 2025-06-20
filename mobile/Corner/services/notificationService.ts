@@ -114,13 +114,13 @@ class NotificationService {
         try {
             const userDoc = await getDoc(doc(db, 'users', userId));
             const userData = userDoc.data();
-            
+
             if (!userData?.notificationSettings) {
                 return true; // Default to true if settings don't exist
             }
 
             const settings = userData.notificationSettings;
-            
+
             switch (notificationType) {
                 case 'announcement':
                     return settings.announcementNotifications;
@@ -149,7 +149,7 @@ class NotificationService {
             }
 
             const userId = userDoc.docs[0].id;
-            
+
             // Check if notification should be sent based on user settings
             const shouldSend = await this.shouldSendNotification(userId, notificationData.type);
             if (!shouldSend) {
@@ -216,6 +216,23 @@ class NotificationService {
             this.expoPushToken = null;
         } catch (error) {
             console.error('Error removing push token:', error);
+        }
+    }
+
+    async scheduleLocalNotification(notificationData: NotificationData) {
+        try {
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: notificationData.title,
+                    body: notificationData.body,
+                    data: notificationData,
+                    sound: 'default',
+                },
+                trigger: null, // Send immediately
+            });
+        } catch (error) {
+            console.error('Error scheduling local notification:', error);
+            throw error;
         }
     }
 }

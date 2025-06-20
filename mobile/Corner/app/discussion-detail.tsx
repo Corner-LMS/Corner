@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import MarkdownRenderer from 'react-native-markdown-renderer';
 import { db, auth } from '../config/ firebase-config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
 import { notificationHelpers } from '../services/notificationHelpers';
@@ -52,6 +54,9 @@ export default function DiscussionDetailScreen() {
     const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
     const [drafts, setDrafts] = useState<DraftPost[]>([]);
     const [syncingDrafts, setSyncingDrafts] = useState(false);
+    const textInputRef = useRef<TextInput>(null);
+    const [showFormattingToolbar, setShowFormattingToolbar] = useState(false);
+    const [selection, setSelection] = useState({ start: 0, end: 0 });
 
     // Build nested comment tree from flat array
     const buildCommentTree = (allComments: Comment[]): Comment[] => {
@@ -151,12 +156,20 @@ export default function DiscussionDetailScreen() {
 
         // Get discussion details
         const getDiscussion = async () => {
-            const discussionDoc = await getDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string));
-            if (discussionDoc.exists()) {
-                setDiscussion({
-                    id: discussionDoc.id,
-                    ...discussionDoc.data()
-                } as Discussion);
+            try {
+                const discussionDoc = await getDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string));
+                if (discussionDoc.exists()) {
+                    setDiscussion({
+                        id: discussionDoc.id,
+                        ...discussionDoc.data()
+                    } as Discussion);
+                } else {
+                    console.warn(`Discussion not found: ${discussionId}`);
+                    // Don't show error to user, just log it
+                }
+            } catch (error) {
+                console.error('Error fetching discussion:', error);
+                // Don't show error to user, just log it
             }
         };
 
@@ -410,6 +423,87 @@ export default function DiscussionDetailScreen() {
         }
     };
 
+    // MarkdownText component to render formatted text
+    const MarkdownText = ({ text, style }: { text: string; style?: any }) => {
+        if (!text) return null;
+
+        try {
+            // Parse markdown and create styled text components
+            const parts = [];
+            let currentIndex = 0;
+            let keyCounter = 0;
+
+            // Create a single regex that matches all markdown patterns
+            // Order matters: bold (**) should be processed before italic (*)
+            const markdownRegex = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(~~([^~]+)~~)|(`([^`]+)`)/g;
+
+            let match;
+            while ((match = markdownRegex.exec(text)) !== null) {
+                // Add text before the match
+                if (match.index > currentIndex) {
+                    parts.push(
+                        <Text key={`text-${keyCounter++}`} style={style}>
+                            {text.slice(currentIndex, match.index)}
+                        </Text>
+                    );
+                }
+
+                // Determine which pattern matched and apply appropriate styling
+                if (match[1]) {
+                    // Bold: **text**
+                    parts.push(
+                        <Text key={`bold-${keyCounter++}`} style={[style, { fontWeight: 'bold' }]}>
+                            {match[2]}
+                        </Text>
+                    );
+                } else if (match[3]) {
+                    // Italic: *text*
+                    parts.push(
+                        <Text key={`italic-${keyCounter++}`} style={[style, { fontStyle: 'italic' }]}>
+                            {match[4]}
+                        </Text>
+                    );
+                } else if (match[5]) {
+                    // Strikethrough: ~~text~~
+                    parts.push(
+                        <Text key={`strike-${keyCounter++}`} style={[style, { textDecorationLine: 'line-through' }]}>
+                            {match[6]}
+                        </Text>
+                    );
+                } else if (match[7]) {
+                    // Code: `text`
+                    parts.push(
+                        <Text key={`code-${keyCounter++}`} style={[style, { fontFamily: 'monospace', backgroundColor: '#f1f5f9', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }]}>
+                            {match[8]}
+                        </Text>
+                    );
+                }
+
+                currentIndex = match.index + match[0].length;
+            }
+
+            // Add remaining text
+            if (currentIndex < text.length) {
+                parts.push(
+                    <Text key={`text-${keyCounter++}`} style={style}>
+                        {text.slice(currentIndex)}
+                    </Text>
+                );
+            }
+
+            // If no formatting found, return plain text
+            if (parts.length === 0) {
+                return <Text style={style}>{text}</Text>;
+            }
+
+            return <Text>{parts}</Text>;
+        } catch (error) {
+            console.error('Error rendering markdown text:', error);
+            // Fallback to plain text if markdown rendering fails
+            return <Text style={style}>{text}</Text>;
+        }
+    };
+
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'Just now';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -430,6 +524,134 @@ export default function DiscussionDetailScreen() {
         });
         setNewComment('');
     };
+
+    // Formatting functions
+    const applyFormatting = (prefix: string, suffix: string = '') => {
+        try {
+            if (!textInputRef.current) {
+                console.log('TextInput ref not available');
+                Alert.alert('Formatting Error', 'Unable to apply formatting. Please try again.');
+                return;
+            }
+
+            const currentText = newComment;
+            const { start, end } = selection;
+
+            console.log('Applying formatting:', { prefix, suffix, start, end, currentTextLength: currentText.length });
+
+            // Validate selection values
+            if (start === undefined || end === undefined || start < 0 || end < 0 || start > currentText.length || end > currentText.length) {
+                Alert.alert('Formatting Error', 'Invalid text selection. Please try selecting the text again.');
+                return;
+            }
+
+            // If text is selected, wrap it with formatting
+            if (start !== end) {
+                const selectedText = currentText.substring(start, end);
+                const newText =
+                    currentText.substring(0, start) +
+                    prefix + selectedText + suffix +
+                    currentText.substring(end);
+                setNewComment(newText);
+
+                // Set cursor position after the formatted text
+                setTimeout(() => {
+                    if (textInputRef.current) {
+                        textInputRef.current.focus();
+                        textInputRef.current.setNativeProps({
+                            selection: {
+                                start: start + prefix.length,
+                                end: start + prefix.length + selectedText.length
+                            }
+                        });
+                    }
+                }, 50);
+            } else {
+                // No selection - insert formatting markers at cursor
+                const newText =
+                    currentText.substring(0, start) +
+                    prefix + suffix +
+                    currentText.substring(start);
+                setNewComment(newText);
+
+                // Position cursor between the markers
+                setTimeout(() => {
+                    if (textInputRef.current) {
+                        textInputRef.current.focus();
+                        textInputRef.current.setNativeProps({
+                            selection: {
+                                start: start + prefix.length,
+                                end: start + prefix.length
+                            }
+                        });
+                    }
+                }, 50);
+            }
+        } catch (error) {
+            console.error('Error applying formatting:', error);
+            Alert.alert('Formatting Error', 'An error occurred while applying formatting. Please try again.');
+        }
+    };
+
+    const toggleFormattingToolbar = () => {
+        setShowFormattingToolbar(!showFormattingToolbar);
+    };
+
+    // Formatting toolbar component
+    const FormattingToolbar = () => (
+        <View style={styles.toolbarContainer}>
+            <View style={styles.formattingRow}>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('**', '**')}
+                >
+                    <Text style={{ fontWeight: 'bold' }}>B</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('*', '*')}
+                >
+                    <Text style={{ fontStyle: 'italic' }}>I</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('~~', '~~')}
+                >
+                    <Text style={{ textDecorationLine: 'line-through' }}>S</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('`', '`')}
+                >
+                    <Text style={{ fontFamily: 'monospace' }}>{'</>'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('\n- ', '')}
+                >
+                    <Text>•</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('\n1. ', '')}
+                >
+                    <Text>1.</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('[', '](url)')}
+                >
+                    <Text>🔗</Text>
+                </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+                style={styles.closeToolbarButton}
+                onPress={() => setShowFormattingToolbar(false)}
+            >
+                <Ionicons name="chevron-down" size={16} color="#64748b" />
+            </TouchableOpacity>
+        </View>
+    );
 
     const renderComment = (comment: Comment, depth: number = 0) => {
         const maxDepth = 8; // Prevent excessive nesting for UI readability
@@ -501,7 +723,9 @@ export default function DiscussionDetailScreen() {
                             </View>
                         </View>
 
-                        <Text style={styles.commentContent}>{comment.content}</Text>
+                        <View style={styles.commentContent}>
+                            <MarkdownText text={comment.content} style={styles.commentText} />
+                        </View>
 
                         {courseIsArchived && (
                             <View style={styles.archivedNotice}>
@@ -537,16 +761,20 @@ export default function DiscussionDetailScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
                 <Pressable style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </Pressable>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle}>{discussionTitle}</Text>
                     <Text style={styles.headerSubtitle}>{courseName}</Text>
                 </View>
                 <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
-            </View>
+            </LinearGradient>
 
             <ScrollView style={styles.content}>
                 {discussion && (
@@ -629,7 +857,9 @@ export default function DiscussionDetailScreen() {
                                     </View>
                                 </View>
                             </View>
-                            <Text style={styles.commentContent}>{draft.content}</Text>
+                            <View style={styles.commentContent}>
+                                <MarkdownText text={draft.content} style={styles.commentText} />
+                            </View>
                             <View style={styles.commentActionsRow}>
                                 <Text style={styles.commentDate}>
                                     {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -705,8 +935,27 @@ export default function DiscussionDetailScreen() {
                         </View>
                     )}
 
+                    {/* Formatting toolbar toggle button */}
+                    <TouchableOpacity
+                        style={styles.formattingToggleButton}
+                        onPress={toggleFormattingToolbar}
+                    >
+                        <Ionicons
+                            name={showFormattingToolbar ? "chevron-up" : "text"}
+                            size={20}
+                            color="#4f46e5"
+                        />
+                        <Text style={styles.formattingToggleText}>
+                            {showFormattingToolbar ? "Hide formatting" : "Formatting"}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {/* Formatting toolbar */}
+                    {showFormattingToolbar && <FormattingToolbar />}
+
                     <View style={styles.commentInputRow}>
                         <TextInput
+                            ref={textInputRef}
                             style={styles.commentInput}
                             placeholder={
                                 editingComment ? "Edit your comment..." :
@@ -717,6 +966,9 @@ export default function DiscussionDetailScreen() {
                             onChangeText={setNewComment}
                             multiline
                             placeholderTextColor="#666"
+                            onSelectionChange={(e) => {
+                                setSelection(e.nativeEvent.selection);
+                            }}
                         />
                         {(editingComment || replyingTo) && (
                             <TouchableOpacity
@@ -761,20 +1013,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 4,
     },
     backButton: {
         marginRight: 16,
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'transparent',
     },
     headerInfo: {
         flex: 1,
@@ -782,12 +1026,12 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#1e293b',
+        color: '#fff',
         letterSpacing: -0.3,
     },
     headerSubtitle: {
         fontSize: 14,
-        color: '#64748b',
+        color: 'rgba(255, 255, 255, 0.8)',
         marginTop: 4,
         fontWeight: '500',
     },
@@ -1259,8 +1503,54 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     connectivityIndicator: {
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         borderRadius: 8,
         marginLeft: 8,
+    },
+    toolbarContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#fff',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e2e8f0',
+        justifyContent: 'space-between',
+    },
+    formattingButton: {
+        padding: 8,
+        borderRadius: 4,
+        backgroundColor: '#f1f5f9',
+        marginHorizontal: 2,
+    },
+    activeFormattingButton: {
+        backgroundColor: '#e0e7ff',
+    },
+    formattingRow: {
+        flexDirection: 'row',
+    },
+    closeToolbarButton: {
+        padding: 8,
+        borderRadius: 4,
+        backgroundColor: '#f1f5f9',
+    },
+    formattingToggleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+        backgroundColor: '#f1f5f9',
+        borderRadius: 8,
+        marginBottom: 8,
+        alignSelf: 'flex-start',
+    },
+    formattingToggleText: {
+        marginLeft: 8,
+        color: '#4f46e5',
+        fontWeight: '500',
+    },
+    commentText: {
+        fontSize: 15,
+        color: '#475569',
+        lineHeight: 22,
+        marginBottom: 0,
     },
 }); 

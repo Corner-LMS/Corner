@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { db, auth } from '../config/ firebase-config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { notificationHelpers } from '../services/notificationHelpers';
@@ -55,6 +56,10 @@ export default function CourseDetailScreen() {
     const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
     const [drafts, setDrafts] = useState<DraftPost[]>([]);
     const [syncingDrafts, setSyncingDrafts] = useState(false);
+    const [expandedAnnouncements, setExpandedAnnouncements] = useState<Set<string>>(new Set());
+    const textInputRef = useRef<TextInput>(null);
+    const [showFormattingToolbar, setShowFormattingToolbar] = useState(false);
+    const [selection, setSelection] = useState({ start: 0, end: 0 });
 
     // Initialize cache on component mount
     useEffect(() => {
@@ -505,6 +510,252 @@ export default function CourseDetailScreen() {
         }
     };
 
+    const handleAnnouncementPress = async (announcement: Announcement) => {
+        // Record view if not already viewed
+        await recordAnnouncementView(announcement.id);
+
+        // Toggle expansion
+        const newExpanded = new Set(expandedAnnouncements);
+        if (newExpanded.has(announcement.id)) {
+            newExpanded.delete(announcement.id);
+        } else {
+            newExpanded.add(announcement.id);
+        }
+        setExpandedAnnouncements(newExpanded);
+    };
+
+    const getAnnouncementPreview = (content: string, maxLength: number = 100) => {
+        if (content.length <= maxLength) return content;
+        return content.substring(0, maxLength) + '...';
+    };
+
+    // Formatting functions
+    const applyFormatting = (prefix: string, suffix: string = '') => {
+        if (!textInputRef.current) return;
+
+        const currentText = newContent;
+        const { start, end } = selection;
+
+        // If text is selected, wrap it with formatting
+        if (start !== end) {
+            const selectedText = currentText.substring(start, end);
+            const newText =
+                currentText.substring(0, start) +
+                prefix + selectedText + suffix +
+                currentText.substring(end);
+            setNewContent(newText);
+
+            // Set cursor position after the formatted text
+            setTimeout(() => {
+                if (textInputRef.current) {
+                    textInputRef.current.focus();
+                    textInputRef.current.setNativeProps({
+                        selection: {
+                            start: start + prefix.length,
+                            end: start + prefix.length + selectedText.length
+                        }
+                    });
+                }
+            }, 50);
+        } else {
+            // No selection - insert formatting markers at cursor
+            const newText =
+                currentText.substring(0, start) +
+                prefix + suffix +
+                currentText.substring(start);
+            setNewContent(newText);
+
+            // Position cursor between the markers
+            setTimeout(() => {
+                if (textInputRef.current) {
+                    textInputRef.current.focus();
+                    textInputRef.current.setNativeProps({
+                        selection: {
+                            start: start + prefix.length,
+                            end: start + prefix.length
+                        }
+                    });
+                }
+            }, 50);
+        }
+    };
+
+    const toggleFormattingToolbar = () => {
+        setShowFormattingToolbar(!showFormattingToolbar);
+    };
+
+    // MarkdownText component to render formatted text
+    const MarkdownText = ({ text, style }: { text: string; style?: any }) => {
+        if (!text) return null;
+
+        const parts = [];
+        let currentIndex = 0;
+
+        // Bold: **text**
+        const boldRegex = /\*\*(.*?)\*\*/g;
+        let boldMatch;
+        while ((boldMatch = boldRegex.exec(text)) !== null) {
+            // Add text before the match
+            if (boldMatch.index > currentIndex) {
+                parts.push(
+                    <Text key={`text-${currentIndex}`} style={style}>
+                        {text.slice(currentIndex, boldMatch.index)}
+                    </Text>
+                );
+            }
+
+            // Add bold text
+            parts.push(
+                <Text key={`bold-${currentIndex}`} style={[style, { fontWeight: 'bold' }]}>
+                    {boldMatch[1]}
+                </Text>
+            );
+
+            currentIndex = boldMatch.index + boldMatch[0].length;
+        }
+
+        // Italic: *text*
+        const italicRegex = /\*(.*?)\*/g;
+        let italicMatch;
+        while ((italicMatch = italicRegex.exec(text)) !== null) {
+            // Add text before the match
+            if (italicMatch.index > currentIndex) {
+                parts.push(
+                    <Text key={`text-${currentIndex}`} style={style}>
+                        {text.slice(currentIndex, italicMatch.index)}
+                    </Text>
+                );
+            }
+
+            // Add italic text
+            parts.push(
+                <Text key={`italic-${currentIndex}`} style={[style, { fontStyle: 'italic' }]}>
+                    {italicMatch[1]}
+                </Text>
+            );
+
+            currentIndex = italicMatch.index + italicMatch[0].length;
+        }
+
+        // Strikethrough: ~~text~~
+        const strikeRegex = /~~(.*?)~~/g;
+        let strikeMatch;
+        while ((strikeMatch = strikeRegex.exec(text)) !== null) {
+            // Add text before the match
+            if (strikeMatch.index > currentIndex) {
+                parts.push(
+                    <Text key={`text-${currentIndex}`} style={style}>
+                        {text.slice(currentIndex, strikeMatch.index)}
+                    </Text>
+                );
+            }
+
+            // Add strikethrough text
+            parts.push(
+                <Text key={`strike-${currentIndex}`} style={[style, { textDecorationLine: 'line-through' }]}>
+                    {strikeMatch[1]}
+                </Text>
+            );
+
+            currentIndex = strikeMatch.index + strikeMatch[0].length;
+        }
+
+        // Code: `text`
+        const codeRegex = /`(.*?)`/g;
+        let codeMatch;
+        while ((codeMatch = codeRegex.exec(text)) !== null) {
+            // Add text before the match
+            if (codeMatch.index > currentIndex) {
+                parts.push(
+                    <Text key={`text-${currentIndex}`} style={style}>
+                        {text.slice(currentIndex, codeMatch.index)}
+                    </Text>
+                );
+            }
+
+            // Add code text
+            parts.push(
+                <Text key={`code-${currentIndex}`} style={[style, { fontFamily: 'monospace', backgroundColor: '#f1f5f9', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }]}>
+                    {codeMatch[1]}
+                </Text>
+            );
+
+            currentIndex = codeMatch.index + codeMatch[0].length;
+        }
+
+        // Add remaining text
+        if (currentIndex < text.length) {
+            parts.push(
+                <Text key={`text-${currentIndex}`} style={style}>
+                    {text.slice(currentIndex)}
+                </Text>
+            );
+        }
+
+        // If no formatting found, return plain text
+        if (parts.length === 0) {
+            return <Text style={style}>{text}</Text>;
+        }
+
+        return <Text>{parts}</Text>;
+    };
+
+    // Formatting toolbar component
+    const FormattingToolbar = () => (
+        <View style={styles.toolbarContainer}>
+            <View style={styles.formattingRow}>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('**', '**')}
+                >
+                    <Text style={{ fontWeight: 'bold' }}>B</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('*', '*')}
+                >
+                    <Text style={{ fontStyle: 'italic' }}>I</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('~~', '~~')}
+                >
+                    <Text style={{ textDecorationLine: 'line-through' }}>S</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('`', '`')}
+                >
+                    <Text style={{ fontFamily: 'monospace' }}>{'</>'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('\n- ', '')}
+                >
+                    <Text>•</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('\n1. ', '')}
+                >
+                    <Text>1.</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.formattingButton}
+                    onPress={() => applyFormatting('[', '](url)')}
+                >
+                    <Text>🔗</Text>
+                </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+                style={styles.closeToolbarButton}
+                onPress={() => setShowFormattingToolbar(false)}
+            >
+                <Ionicons name="chevron-down" size={16} color="#64748b" />
+            </TouchableOpacity>
+        </View>
+    );
+
     const renderAnnouncements = () => (
         <ScrollView style={styles.contentContainer}>
             {/* Offline/Cache Status Indicator */}
@@ -532,7 +783,7 @@ export default function CourseDetailScreen() {
                     <TouchableOpacity
                         key={announcement.id}
                         style={styles.postCard}
-                        onPress={() => recordAnnouncementView(announcement.id)}
+                        onPress={() => handleAnnouncementPress(announcement)}
                     >
                         <View style={styles.postHeader}>
                             <Text style={styles.postTitle}>{announcement.title}</Text>
@@ -563,7 +814,37 @@ export default function CourseDetailScreen() {
                                 )}
                             </View>
                         </View>
-                        <Text style={styles.postContent}>{announcement.content}</Text>
+                        <Text style={styles.postContent}>
+                            {expandedAnnouncements.has(announcement.id)
+                                ? announcement.content
+                                : getAnnouncementPreview(announcement.content)
+                            }
+                        </Text>
+
+                        {/* Show "read more" indicator if content is truncated and not expanded */}
+                        {announcement.content.length > 100 && !expandedAnnouncements.has(announcement.id) && (
+                            <View style={styles.readMoreIndicator}>
+                                <Ionicons name="chevron-down" size={16} color="#4f46e5" />
+                                <Text style={styles.readMoreText}>Read more</Text>
+                            </View>
+                        )}
+
+                        {/* Show "read less" indicator if expanded */}
+                        {expandedAnnouncements.has(announcement.id) && (
+                            <View style={styles.readMoreIndicator}>
+                                <Ionicons name="chevron-up" size={16} color="#4f46e5" />
+                                <Text style={styles.readMoreText}>Read less</Text>
+                            </View>
+                        )}
+
+                        {/* Unread indicator */}
+                        {!announcement.views?.[auth.currentUser?.uid || ''] && (
+                            <View style={styles.unreadIndicator}>
+                                <View style={styles.unreadDot} />
+                                <Text style={styles.unreadText}>New</Text>
+                            </View>
+                        )}
+
                         <View style={styles.postMeta}>
                             <Text style={styles.postAuthor}>By {announcement.authorName}</Text>
                             <Text style={styles.postDate}>{formatDate(announcement.createdAt)}</Text>
@@ -714,7 +995,7 @@ export default function CourseDetailScreen() {
                                 )}
                             </View>
                         </View>
-                        <Text style={styles.postContent}>{discussion.content}</Text>
+                        <MarkdownText text={discussion.content} style={styles.postContent} />
                         <View style={styles.postMeta}>
                             <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
                             <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
@@ -786,11 +1067,35 @@ export default function CourseDetailScreen() {
                         placeholderTextColor="#666"
                     />
 
+                    {/* Formatting toolbar toggle button - only for discussions */}
+                    {activeTab === 'discussions' && (
+                        <TouchableOpacity
+                            style={styles.formattingToggleButton}
+                            onPress={toggleFormattingToolbar}
+                        >
+                            <Ionicons
+                                name={showFormattingToolbar ? "chevron-up" : "text"}
+                                size={20}
+                                color="#4f46e5"
+                            />
+                            <Text style={styles.formattingToggleText}>
+                                {showFormattingToolbar ? "Hide formatting" : "Formatting"}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Formatting toolbar - only for discussions */}
+                    {activeTab === 'discussions' && showFormattingToolbar && <FormattingToolbar />}
+
                     <TextInput
+                        ref={textInputRef}
                         style={styles.contentInput}
                         placeholder="Content"
                         value={newContent}
                         onChangeText={setNewContent}
+                        onSelectionChange={(e) => {
+                            setSelection(e.nativeEvent.selection);
+                        }}
                         multiline
                         numberOfLines={6}
                         textAlignVertical="top"
@@ -826,9 +1131,13 @@ export default function CourseDetailScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
                 <Pressable style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </Pressable>
                 <View style={styles.headerInfo}>
                     <View style={styles.headerTitleRow}>
@@ -855,7 +1164,7 @@ export default function CourseDetailScreen() {
                                 }
                             })}
                         >
-                            <Ionicons name="folder" size={20} color="#4f46e5" />
+                            <Ionicons name="folder" size={20} color="#fff" />
                         </TouchableOpacity>
                     )}
                     <TouchableOpacity
@@ -871,10 +1180,10 @@ export default function CourseDetailScreen() {
                             }
                         })}
                     >
-                        <Ionicons name="sparkles" size={20} color="#4f46e5" />
+                        <Ionicons name="sparkles" size={20} color="#fff" />
                     </TouchableOpacity>
                 </View>
-            </View>
+            </LinearGradient>
 
             <View style={styles.tabContainer}>
                 <TouchableOpacity
@@ -924,19 +1233,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 4,
     },
     backButton: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'transparent',
         marginRight: 16,
     },
     headerInfo: {
@@ -949,11 +1250,11 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#1e293b',
+        color: '#fff',
         letterSpacing: -0.3,
     },
     archivedBadge: {
-        backgroundColor: '#6b7280',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
@@ -961,7 +1262,7 @@ const styles = StyleSheet.create({
     },
     headerSubtitle: {
         fontSize: 14,
-        color: '#64748b',
+        color: 'rgba(255, 255, 255, 0.8)',
         marginTop: 4,
         fontWeight: '500',
     },
@@ -1258,7 +1559,7 @@ const styles = StyleSheet.create({
     aiAssistantButton: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     headerActions: {
         flexDirection: 'row',
@@ -1268,7 +1569,7 @@ const styles = StyleSheet.create({
     resourcesButton: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     offlineIndicator: {
         flexDirection: 'row',
@@ -1346,7 +1647,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     connectivityIndicator: {
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         borderRadius: 8,
     },
     viewCount: {
@@ -1374,6 +1675,78 @@ const styles = StyleSheet.create({
     likeCount: {
         fontSize: 14,
         color: '#64748b',
+        fontWeight: '500',
+    },
+    readMoreIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        padding: 8,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        gap: 4,
+    },
+    readMoreText: {
+        fontSize: 14,
+        color: '#4f46e5',
+        fontWeight: '500',
+        marginLeft: 4,
+    },
+    unreadIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        padding: 8,
+        backgroundColor: '#fef3c7',
+        borderRadius: 8,
+        gap: 6,
+    },
+    unreadDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#f59e0b',
+    },
+    unreadText: {
+        fontSize: 12,
+        color: '#92400e',
+        fontWeight: '600',
+    },
+    toolbarContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
+    },
+    formattingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    formattingButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f8fafc',
+    },
+    closeToolbarButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f8fafc',
+    },
+    formattingToggleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+        backgroundColor: '#f1f5f9',
+        borderRadius: 8,
+        marginBottom: 8,
+        alignSelf: 'flex-start',
+    },
+    formattingToggleText: {
+        marginLeft: 8,
+        color: '#4f46e5',
         fontWeight: '500',
     },
 }); 

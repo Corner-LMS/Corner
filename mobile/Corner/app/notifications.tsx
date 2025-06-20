@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated, PanResponder, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../config/ firebase-config';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Notification {
     id: string;
@@ -372,13 +373,17 @@ export default function NotificationsScreen() {
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
+                <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+                <LinearGradient
+                    colors={['#4f46e5', '#3730a3']}
+                    style={styles.header}
+                >
                     <TouchableOpacity onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+                        <Ionicons name="arrow-back" size={24} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.title}>Notifications</Text>
                     <View style={{ width: 24 }} />
-                </View>
+                </LinearGradient>
                 <View style={styles.loadingContainer}>
                     <Text>Loading notifications...</Text>
                 </View>
@@ -388,22 +393,26 @@ export default function NotificationsScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
                 <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.title}>Notifications</Text>
                 {notifications.length > 0 && (
                     <TouchableOpacity onPress={clearAllNotifications}>
-                        <Ionicons name="trash-outline" size={20} color="#4f46e5" />
+                        <Ionicons name="trash-outline" size={20} color="#fff" />
                     </TouchableOpacity>
                 )}
-            </View>
+            </LinearGradient>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {notifications.length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Ionicons name="notifications-outline" size={64} color="#ccc" />
+                        <Ionicons name="notifications-outline" size={64} color="#cbd5e1" />
                         <Text style={styles.emptyText}>No notifications yet</Text>
                         <Text style={styles.emptySubtext}>
                             You'll receive notifications for announcements, discussion milestones, and replies to your posts.
@@ -433,7 +442,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     header: {
         flexDirection: 'row',
@@ -441,30 +450,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 4,
+        paddingTop: 20,
     },
     title: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#1e293b',
+        color: '#fff',
         letterSpacing: -0.3,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     scrollView: {
         flex: 1,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     emptyContainer: {
         flex: 1,
@@ -491,28 +493,28 @@ const styles = StyleSheet.create({
     },
     notificationCard: {
         backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 24,
+        borderRadius: 16,
+        padding: 20,
     },
     unreadCard: {
-        borderLeftWidth: 6,
+        borderLeftWidth: 4,
         borderLeftColor: '#4f46e5',
         backgroundColor: '#fefefe',
         shadowColor: '#4f46e5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
         elevation: 3,
     },
     notificationHeader: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        gap: 20,
+        gap: 16,
     },
     iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: 'rgba(79, 70, 229, 0.08)',
         justifyContent: 'center',
         alignItems: 'center',
@@ -522,49 +524,49 @@ const styles = StyleSheet.create({
     },
     notificationContent: {
         flex: 1,
-        gap: 8,
+        gap: 6,
     },
     notificationTitle: {
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '700',
-        color: '#1e293b',
-        lineHeight: 24,
-        marginBottom: 6,
+        color: '#1a202c',
+        lineHeight: 22,
+        marginBottom: 4,
         letterSpacing: -0.2,
     },
     notificationBody: {
-        fontSize: 15,
-        color: '#475569',
-        lineHeight: 22,
-        marginBottom: 12,
+        fontSize: 14,
+        color: '#4a5568',
+        lineHeight: 20,
+        marginBottom: 8,
         fontWeight: '500',
     },
     notificationTime: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#94a3b8',
         fontWeight: '600',
     },
     unreadDot: {
-        width: 14,
-        height: 14,
-        borderRadius: 7,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
         backgroundColor: '#4f46e5',
-        marginTop: 8,
+        marginTop: 6,
         shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.4,
-        shadowRadius: 6,
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
     },
     swipeContainer: {
         marginHorizontal: 20,
         marginVertical: 8,
-        borderRadius: 20,
+        borderRadius: 16,
         overflow: 'hidden',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.08,
-        shadowRadius: 20,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
     },
     deleteBackground: {
         position: 'absolute',
@@ -575,39 +577,39 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'flex-end',
         backgroundColor: '#ef4444',
-        paddingRight: 32,
+        paddingRight: 24,
         flexDirection: 'row',
-        gap: 12,
+        gap: 8,
     },
     deleteText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '700',
         letterSpacing: 0.5,
     },
     notificationWrapper: {
         flex: 1,
         backgroundColor: '#fff',
-        borderRadius: 20,
+        borderRadius: 16,
     },
     swipeHint: {
         color: '#64748b',
-        fontSize: 14,
+        fontSize: 13,
         textAlign: 'center',
-        marginTop: 20,
-        marginBottom: 16,
+        marginTop: 16,
+        marginBottom: 12,
         marginHorizontal: 20,
         fontWeight: '600',
         backgroundColor: '#fff',
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: '#e2e8f0',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
     },
 }); 

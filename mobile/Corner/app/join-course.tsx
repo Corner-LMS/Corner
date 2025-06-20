@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar } from 'react-native';
 import { db, auth } from '../config/ firebase-config';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function JoinCourseScreen() {
     const [code, setCode] = useState('');
@@ -116,37 +118,63 @@ export default function JoinCourseScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
-            <Pressable
-                style={styles.backButton}
-                onPress={() => router.back()}
-            >
-                <Text style={styles.backButtonText}>← Back</Text>
-            </Pressable>
-            <View style={styles.formContainer}>
-                <Text style={styles.title}>Join a Course</Text>
-                <Text style={styles.subtitle}>Enter the course code provided by your teacher</Text>
-                <Text style={styles.note}>
-                    Note: You can only join courses from your school
-                </Text>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
 
-                <TextInput
-                    placeholder="Enter course code (e.g., ABC123)"
-                    value={code}
-                    onChangeText={setCode}
-                    autoCapitalize="characters"
-                    style={styles.input}
-                    placeholderTextColor="#666"
-                    maxLength={8}
-                />
+            {/* Header Gradient */}
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
+                <Pressable
+                    style={styles.backButton}
+                    onPress={() => router.back()}
+                >
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                </Pressable>
+
+                <View style={styles.headerContent}>
+                    <View style={styles.headerIcon}>
+                        <Ionicons name="school" size={32} color="#fff" />
+                    </View>
+                    <Text style={styles.headerTitle}>Join Course</Text>
+                    <Text style={styles.headerSubtitle}>Enter your course code</Text>
+                </View>
+            </LinearGradient>
+
+            <View style={styles.formContainer}>
+                <View style={styles.inputSection}>
+                    <Text style={styles.inputLabel}>Course Code</Text>
+                    <TextInput
+                        placeholder="ABC123"
+                        value={code}
+                        onChangeText={setCode}
+                        autoCapitalize="characters"
+                        style={styles.input}
+                        placeholderTextColor="#9ca3af"
+                        maxLength={8}
+                    />
+                </View>
+
+                <View style={styles.noteContainer}>
+                    <Ionicons name="information-circle" size={20} color="#4f46e5" />
+                    <Text style={styles.note}>
+                        You can only join courses from your school
+                    </Text>
+                </View>
 
                 <TouchableOpacity
                     style={[styles.button, loading && styles.buttonDisabled]}
                     onPress={handleJoin}
                     disabled={loading || !code.trim()}
                 >
-                    <Text style={styles.buttonText}>
-                        {loading ? 'Joining...' : 'Join Course'}
-                    </Text>
+                    <LinearGradient
+                        colors={loading ? ['#94a3b8', '#64748b'] : ['#4f46e5', '#3730a3']}
+                        style={styles.buttonGradient}
+                    >
+                        <Text style={styles.buttonText}>
+                            {loading ? 'Joining...' : 'Join Course'}
+                        </Text>
+                    </LinearGradient>
                 </TouchableOpacity>
             </View>
         </KeyboardAvoidingView>
@@ -156,105 +184,108 @@ export default function JoinCourseScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f1f5f9',
-        justifyContent: 'center',
-        padding: 20,
+        backgroundColor: '#f8fafc',
+    },
+    header: {
+        paddingTop: 60,
+        paddingBottom: 40,
+        paddingHorizontal: 20,
     },
     backButton: {
-        position: 'absolute',
-        top: 50,
-        left: 20,
-        padding: 12,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        alignSelf: 'flex-start',
+        paddingVertical: 8,
+        paddingHorizontal: 8,
         borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
-        flexDirection: 'row',
+        marginBottom: 20,
+    },
+    headerContent: {
         alignItems: 'center',
-        gap: 8,
     },
-    backButtonText: {
-        color: '#4f46e5',
-        fontSize: 16,
-        fontWeight: '700',
-        letterSpacing: 0.3,
-    },
-    formContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 32,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 24,
-        elevation: 8,
-        borderWidth: 1,
-        borderColor: 'rgba(241, 245, 249, 0.8)',
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: '800',
-        color: '#1e293b',
+    headerIcon: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginBottom: 16,
-        textAlign: 'center',
-        letterSpacing: -0.5,
     },
-    subtitle: {
-        fontSize: 17,
-        color: '#64748b',
+    headerTitle: {
+        fontSize: 28,
+        fontWeight: '700',
+        color: '#fff',
+        marginBottom: 8,
         textAlign: 'center',
-        marginBottom: 12,
-        lineHeight: 24,
+    },
+    headerSubtitle: {
+        fontSize: 16,
+        color: 'rgba(255, 255, 255, 0.8)',
+        textAlign: 'center',
         fontWeight: '500',
     },
-    note: {
-        fontSize: 15,
-        color: '#4f46e5',
-        textAlign: 'center',
-        marginBottom: 32,
+    formContainer: {
+        flex: 1,
+        padding: 20,
+        paddingTop: 40,
+    },
+    inputSection: {
+        marginBottom: 24,
+    },
+    inputLabel: {
+        fontSize: 16,
         fontWeight: '600',
-        fontStyle: 'italic',
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(79, 70, 229, 0.2)',
+        color: '#1a202c',
+        marginBottom: 12,
     },
     input: {
         borderWidth: 2,
         borderColor: '#e2e8f0',
         borderRadius: 16,
         padding: 20,
-        fontSize: 20,
-        color: '#1e293b',
+        fontSize: 24,
+        color: '#1a202c',
         backgroundColor: '#fff',
-        marginBottom: 32,
         textAlign: 'center',
         fontWeight: '700',
-        letterSpacing: 3,
+        letterSpacing: 4,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
         elevation: 3,
     },
+    noteContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
+        marginBottom: 32,
+    },
+    note: {
+        fontSize: 14,
+        color: '#4f46e5',
+        fontWeight: '500',
+        marginLeft: 8,
+        flex: 1,
+    },
     button: {
-        backgroundColor: '#4f46e5',
+        borderRadius: 16,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    buttonGradient: {
         borderRadius: 16,
         padding: 20,
         alignItems: 'center',
-        shadowColor: '#4f46e5',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 6,
     },
     buttonDisabled: {
-        backgroundColor: '#94a3b8',
         shadowOpacity: 0.1,
     },
     buttonText: {

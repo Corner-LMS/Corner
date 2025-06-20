@@ -124,7 +124,7 @@ class OfflineCacheService {
             ];
 
             await AsyncStorage.setItem(this.ANNOUNCEMENTS_KEY, JSON.stringify(updatedCache));
-            console.log(`Cached ${cachedAnnouncements.length} announcements for course ${courseId}`);
+            // Cached announcements successfully
         } catch (error) {
             console.error('Error caching announcements:', error);
         }
@@ -165,7 +165,7 @@ class OfflineCacheService {
             ];
 
             await AsyncStorage.setItem(this.RESOURCES_KEY, JSON.stringify(updatedCache));
-            console.log(`Cached ${cachedResources.length} resources for course ${courseId}`);
+            // Cached resources successfully
         } catch (error) {
             console.error('Error caching resources:', error);
         }
@@ -206,7 +206,7 @@ class OfflineCacheService {
             ];
 
             await AsyncStorage.setItem(this.DISCUSSIONS_KEY, JSON.stringify(updatedCache));
-            console.log(`Cached ${cachedDiscussions.length} discussions for course ${courseId}`);
+            // Cached discussions successfully
         } catch (error) {
             console.error('Error caching discussions:', error);
         }
@@ -247,7 +247,7 @@ class OfflineCacheService {
             ];
 
             await AsyncStorage.setItem(this.COMMENTS_KEY, JSON.stringify(updatedCache));
-            console.log(`Cached ${cachedComments.length} comments for discussion ${discussionId}`);
+            // Cached comments successfully
         } catch (error) {
             console.error('Error caching comments:', error);
         }

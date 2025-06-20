@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Linking, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const faqs = [
     {
@@ -46,16 +47,17 @@ export default function SupportPage() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => router.back()}
-                >
-                    <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
+            <LinearGradient
+                colors={['#4f46e5', '#3730a3']}
+                style={styles.header}
+            >
+                <TouchableOpacity onPress={() => router.back()}>
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Support & Help</Text>
                 <View style={styles.headerSpacer} />
-            </View>
+            </LinearGradient>
 
             <ScrollView style={styles.content}>
                 <View style={styles.section}>
@@ -86,8 +88,13 @@ export default function SupportPage() {
                     style={styles.contactButton}
                     onPress={handleContactSupport}
                 >
-                    <Ionicons name="mail-outline" size={20} color="#fff" />
-                    <Text style={styles.contactButtonText}>Contact Support</Text>
+                    <LinearGradient
+                        colors={['#4f46e5', '#3730a3']}
+                        style={styles.contactButtonGradient}
+                    >
+                        <Ionicons name="mail-outline" size={20} color="#fff" />
+                        <Text style={styles.contactButtonText}>Contact Support</Text>
+                    </LinearGradient>
                 </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
@@ -97,38 +104,25 @@ export default function SupportPage() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(241, 245, 249, 0.8)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    backButton: {
-        padding: 8,
-        marginRight: 8,
-        borderRadius: 12,
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        paddingTop: 20,
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#1e293b',
+        color: '#fff',
         flex: 1,
         textAlign: 'center',
         letterSpacing: -0.3,
     },
     headerSpacer: {
-        width: 40,
+        width: 24,
     },
     content: {
         flex: 1,
@@ -136,40 +130,38 @@ const styles = StyleSheet.create({
     },
     section: {
         backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.08,
-        shadowRadius: 20,
-        elevation: 4,
-        borderWidth: 1,
-        borderColor: 'rgba(241, 245, 249, 0.8)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
     },
     sectionTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
-        color: '#1e293b',
-        marginBottom: 24,
+        color: '#1a202c',
+        marginBottom: 20,
         letterSpacing: -0.3,
     },
     faqItem: {
-        marginBottom: 24,
-        paddingBottom: 24,
+        marginBottom: 20,
+        paddingBottom: 20,
         borderBottomWidth: 1,
         borderBottomColor: '#e2e8f0',
     },
     question: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#1e293b',
+        color: '#1a202c',
         marginBottom: 8,
     },
     answer: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#64748b',
-        lineHeight: 22,
+        lineHeight: 20,
     },
     linkItem: {
         flexDirection: 'row',
@@ -180,19 +172,26 @@ const styles = StyleSheet.create({
     },
     linkText: {
         flex: 1,
-        fontSize: 16,
-        color: '#1e293b',
+        fontSize: 15,
+        color: '#1a202c',
         marginLeft: 12,
         fontWeight: '500',
     },
     contactButton: {
+        borderRadius: 12,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+        marginBottom: 40,
+    },
+    contactButtonGradient: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#4f46e5',
         padding: 16,
         borderRadius: 12,
-        marginBottom: 40,
         gap: 8,
     },
     contactButtonText: {
