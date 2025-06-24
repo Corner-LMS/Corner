@@ -11,9 +11,42 @@ export default function WelcomeScreen() {
                 <View style={styles.content}>
                     {/* Header */}
                     <View style={styles.header}>
+                        {/* Option 1: Current Style (100x100 container, 80x80 logo) */}
                         <View style={styles.logoContainer}>
-                            <Ionicons name="school" size={48} color="#4f46e5" />
+                            <Image
+                                source={require('../assets/images/corner-splash-logo.png')}
+                                style={styles.logoImage}
+                                resizeMode="contain"
+                            />
                         </View>
+
+                        {/* Option 2: Larger, more prominent logo */}
+                        {/* <View style={styles.logoContainerLarge}>
+                            <Image
+                                source={require('../assets/images/corner-splash-logo.png')}
+                                style={styles.logoImageLarge}
+                                resizeMode="contain"
+                            />
+                        </View> */}
+
+                        {/* Option 3: Square container with rounded logo */}
+                        {/* <View style={styles.logoContainerSquare}>
+                            <Image
+                                source={require('../assets/images/corner-splash-logo.png')}
+                                style={styles.logoImageSquare}
+                                resizeMode="contain"
+                            />
+                        </View> */}
+
+                        {/* Option 4: Minimal style with no background */}
+                        {/* <View style={styles.logoContainerMinimal}>
+                            <Image
+                                source={require('../assets/images/corner-splash-logo.png')}
+                                style={styles.logoImageMinimal}
+                                resizeMode="contain"
+                            />
+                        </View> */}
+
                         <Text style={styles.appName}>Corner</Text>
                         <Text style={styles.tagline}>Connect • Learn • Grow</Text>
                     </View>
@@ -116,17 +149,81 @@ const styles = StyleSheet.create({
         marginTop: 20,
     },
     logoContainer: {
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
-        borderRadius: 24,
-        padding: 16,
+        width: 100,
+        height: 100,
+        borderRadius: 20,
+        backgroundColor: '#f0f4ff',
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 16,
-        borderWidth: 2,
-        borderColor: 'rgba(79, 70, 229, 0.2)',
+        borderWidth: 1,
+        borderColor: '#e0e7ff',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.06,
         shadowRadius: 12,
         elevation: 3,
+    },
+    logoImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 16,
+    },
+    // Option 2: Larger, more prominent logo
+    logoContainerLarge: {
+        width: 120,
+        height: 120,
+        borderRadius: 24,
+        backgroundColor: '#f0f4ff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        borderWidth: 2,
+        borderColor: '#e0e7ff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 4,
+    },
+    logoImageLarge: {
+        width: 100,
+        height: 100,
+        borderRadius: 20,
+    },
+    // Option 3: Square container with rounded logo
+    logoContainerSquare: {
+        width: 90,
+        height: 90,
+        borderRadius: 12,
+        backgroundColor: '#ffffff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        borderWidth: 2,
+        borderColor: '#4f46e5',
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 4,
+    },
+    logoImageSquare: {
+        width: 70,
+        height: 70,
+        borderRadius: 8,
+    },
+    // Option 4: Minimal style with no background
+    logoContainerMinimal: {
+        width: 80,
+        height: 80,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    logoImageMinimal: {
+        width: 80,
+        height: 80,
     },
     appName: {
         fontSize: 32,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, StatusBar } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, StatusBar, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../config/ firebase-config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -38,6 +38,9 @@ export default function CreateCourseScreen() {
     }, []);
 
     const handleCreate = async () => {
+        // Dismiss keyboard when creating course
+        Keyboard.dismiss();
+
         if (!name.trim()) {
             setError('Please enter a course name');
             return;
@@ -61,6 +64,10 @@ export default function CreateCourseScreen() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const dismissKeyboard = () => {
+        Keyboard.dismiss();
     };
 
     return (
@@ -88,52 +95,62 @@ export default function CreateCourseScreen() {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.content}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
-                <View style={styles.formContainer}>
-                    {/* Display teacher name instead of input */}
-                    <View style={styles.teacherInfo}>
-                        <Text style={styles.teacherLabel}>Instructor:</Text>
-                        <Text style={styles.teacherName}>{teacherName}</Text>
-                    </View>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Course Name"
-                        placeholderTextColor="#666"
-                        value={name}
-                        onChangeText={setName}
-                    />
-
-                    <TextInput
-                        style={[styles.input, styles.textArea]}
-                        placeholder="Description (optional)"
-                        placeholderTextColor="#666"
-                        value={desc}
-                        onChangeText={setDesc}
-                        multiline
-                        numberOfLines={4}
-                    />
-
-                    {error && <Text style={styles.errorText}>{error}</Text>}
-
-                    <TouchableOpacity
-                        style={[styles.button, loading && styles.buttonDisabled]}
-                        onPress={handleCreate}
-                        disabled={loading}
-                    >
-                        <Text style={styles.buttonText}>
-                            {loading ? 'Creating...' : 'Create Course'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    {code && (
-                        <View style={styles.successContainer}>
-                            <Text style={styles.successText}>Course created successfully!</Text>
-                            <Text style={styles.codeText}>Course Code: {code}</Text>
-                            <Text style={styles.redirectText}>Redirecting to dashboard...</Text>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <Pressable style={styles.formContainer} onPress={dismissKeyboard}>
+                        {/* Display teacher name instead of input */}
+                        <View style={styles.teacherInfo}>
+                            <Text style={styles.teacherLabel}>Instructor:</Text>
+                            <Text style={styles.teacherName}>{teacherName}</Text>
                         </View>
-                    )}
-                </View>
+
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Course Name"
+                            placeholderTextColor="#666"
+                            value={name}
+                            onChangeText={setName}
+                            returnKeyType="next"
+                        />
+
+                        <TextInput
+                            style={[styles.input, styles.textArea]}
+                            placeholder="Description (optional)"
+                            placeholderTextColor="#666"
+                            value={desc}
+                            onChangeText={setDesc}
+                            multiline
+                            numberOfLines={4}
+                            returnKeyType="done"
+                            blurOnSubmit={true}
+                        />
+
+                        {error && <Text style={styles.errorText}>{error}</Text>}
+
+                        <TouchableOpacity
+                            style={[styles.button, loading && styles.buttonDisabled]}
+                            onPress={handleCreate}
+                            disabled={loading}
+                        >
+                            <Text style={styles.buttonText}>
+                                {loading ? 'Creating...' : 'Create Course'}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {code && (
+                            <View style={styles.successContainer}>
+                                <Text style={styles.successText}>Course created successfully!</Text>
+                                <Text style={styles.codeText}>Course Code: {code}</Text>
+                                <Text style={styles.redirectText}>Redirecting to dashboard...</Text>
+                            </View>
+                        )}
+                    </Pressable>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -178,8 +195,12 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         padding: 20,
         paddingTop: 40,
+        paddingBottom: 40,
     },
     formContainer: {
         backgroundColor: '#fff',
@@ -192,6 +213,7 @@ const styles = StyleSheet.create({
         elevation: 4,
         borderWidth: 1,
         borderColor: 'rgba(241, 245, 249, 0.8)',
+        minHeight: 400,
     },
     teacherInfo: {
         backgroundColor: '#f8fafc',

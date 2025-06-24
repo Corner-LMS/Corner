@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Pressable, TextInput, Alert, ScrollView, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Pressable, TextInput, Alert, ScrollView, Dimensions, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { saveUserRole, saveUserName, saveUserSchool } from './(auth)/useAuth';
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { SCHOOLS, School } from '../constants/Schools';
 
@@ -77,7 +77,11 @@ export default function RoleSelectionScreen() {
         <>
             <View style={[styles.header, isShortScreen && styles.headerShort]}>
                 <View style={[styles.logoContainer, isShortScreen && styles.logoContainerShort]}>
-                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#4f46e5" />
+                    <Image
+                        source={require('../assets/images/corner-splash-logo.png')}
+                        style={styles.logoImage}
+                        resizeMode="contain"
+                    />
                 </View>
                 <Text style={[styles.welcomeText, isShortScreen && styles.welcomeTextShort]}>Welcome to Corner</Text>
                 <Text style={styles.subtitle}>Select your school to get started</Text>
@@ -111,7 +115,11 @@ export default function RoleSelectionScreen() {
         <>
             <View style={[styles.header, isShortScreen && styles.headerShort]}>
                 <View style={[styles.logoContainer, isShortScreen && styles.logoContainerShort]}>
-                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#4f46e5" />
+                    <Image
+                        source={require('../assets/images/corner-splash-logo.png')}
+                        style={styles.logoImage}
+                        resizeMode="contain"
+                    />
                 </View>
                 <Text style={[styles.welcomeText, isShortScreen && styles.welcomeTextShort]}>Welcome to Corner</Text>
                 <Text style={styles.subtitle}>
@@ -153,7 +161,11 @@ export default function RoleSelectionScreen() {
         <>
             <View style={[styles.header, isShortScreen && styles.headerShort]}>
                 <View style={[styles.logoContainer, isShortScreen && styles.logoContainerShort]}>
-                    <Ionicons name="school-outline" size={isShortScreen ? 36 : 48} color="#4f46e5" />
+                    <Image
+                        source={require('../assets/images/corner-splash-logo.png')}
+                        style={styles.logoImage}
+                        resizeMode="contain"
+                    />
                 </View>
                 <Text style={[styles.welcomeText, isShortScreen && styles.welcomeTextShort]}>Welcome {name}!</Text>
                 <Text style={styles.subtitle}>
@@ -313,21 +325,30 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     logoContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-        justifyContent: 'center',
+        width: 100,
+        height: 100,
+        borderRadius: 20,
+        backgroundColor: '#f0f4ff',
         alignItems: 'center',
-        marginBottom: 20,
-        borderWidth: 2,
-        borderColor: 'rgba(79, 70, 229, 0.2)',
+        justifyContent: 'center',
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: '#e0e7ff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 3,
     },
     logoContainerShort: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        marginBottom: 16,
+        width: 80,
+        height: 80,
+        marginBottom: 20,
+    },
+    logoImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 16,
     },
     welcomeText: {
         fontSize: 32,

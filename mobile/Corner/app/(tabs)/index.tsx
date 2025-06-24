@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, Dimensions, StatusBar } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, Dimensions, StatusBar, Image } from 'react-native';
 import { auth, db } from '../../config/ firebase-config';
 import { collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, arrayRemove } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -12,6 +12,11 @@ import { getSchoolById } from '@/constants/Schools';
 import ConnectivityIndicator from '../../components/ConnectivityIndicator';
 
 const { width, height } = Dimensions.get('window');
+
+// Cache for dashboard data
+let dashboardCache: any = null;
+let cacheTimestamp: number = 0;
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 // Type definition for CourseCard props
 interface CourseCardProps {
@@ -36,13 +41,58 @@ export default function DashboardScreen() {
     const [schoolInfo, setSchoolInfo] = useState<any>(null);
     const [userData, setUserData] = useState<any>(null);
 
-    const loadUserAndCourses = async (user: User) => {
+    // Memoized helper functions
+    const getUserInitials = useCallback((user: User, userData: any) => {
+        if (userData?.name) {
+            const nameParts = userData.name.trim().split(' ');
+            if (nameParts.length >= 2) {
+                return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+            } else {
+                return nameParts[0].substring(0, 2).toUpperCase();
+            }
+        } else {
+            return user.email?.split('@')[0]?.substring(0, 2).toUpperCase() || 'U';
+        }
+    }, []);
+
+    const getDisplayName = useCallback((user: User, userData: any) => {
+        if (userData?.name) {
+            const nameParts = userData.name.trim().split(' ');
+            return nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase();
+        } else {
+            const emailUsername = user.email?.split('@')[0] || '';
+            return emailUsername.charAt(0).toUpperCase() + emailUsername.slice(1).toLowerCase();
+        }
+    }, []);
+
+    const getTimeOfDay = useMemo(() => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'morning';
+        if (hour < 17) return 'afternoon';
+        return 'evening';
+    }, []);
+
+    const loadUserAndCourses = useCallback(async (user: User, forceRefresh = false) => {
         if (!user) {
             setLoading(false);
             return;
         }
 
         try {
+            // Check cache first
+            const now = Date.now();
+            if (!forceRefresh && dashboardCache && (now - cacheTimestamp) < CACHE_DURATION) {
+                const cached = dashboardCache;
+                setRole(cached.role);
+                setUserData(cached.userData);
+                setSchoolInfo(cached.schoolInfo);
+                setStudentCourses(cached.studentCourses);
+                setCourses(cached.courses);
+                setTeacherNames(cached.teacherNames);
+                setLoading(false);
+                return;
+            }
+
             const userDocRef = doc(db, 'users', user.uid);
             const userDocSnap = await getDoc(userDocRef);
 
@@ -60,7 +110,6 @@ export default function DashboardScreen() {
                 setRole(userData.role);
             }
 
-            // Store userData for display purposes
             setUserData(userData);
 
             if (userData.schoolId) {
@@ -68,130 +117,122 @@ export default function DashboardScreen() {
                 setSchoolInfo(school);
             }
 
-            // Load student courses
+            let coursesList: any[] = [];
+            let teacherNamesMap: Record<string, string> = {};
+
+            // Optimized: Load data based on role with efficient queries
             if (userData.role === 'student' && userData.courseIds) {
-                try {
-                    const coursesList = [];
-                    const teacherNamesMap: Record<string, string> = {};
+                // For students, fetch only their enrolled courses
+                const studentCoursesList = [];
+                const studentTeacherNamesMap: Record<string, string> = {};
 
-                    for (const courseId of userData.courseIds) {
-                        const courseRef = doc(db, 'courses', courseId);
-                        const courseSnap = await getDoc(courseRef);
-                        if (courseSnap.exists()) {
-                            const courseData = courseSnap.data();
-                            coursesList.push({
-                                ...courseData,
-                                id: courseId,
-                                joinedAt: userData.courseJoinDates?.[courseId] || new Date().toISOString()
-                            });
+                // Batch fetch course data
+                const coursePromises = userData.courseIds.map(async (courseId: string) => {
+                    const courseRef = doc(db, 'courses', courseId);
+                    return getDoc(courseRef);
+                });
 
+                const courseSnaps = await Promise.all(coursePromises);
+
+                for (let i = 0; i < courseSnaps.length; i++) {
+                    const courseSnap = courseSnaps[i];
+                    const courseId = userData.courseIds[i];
+
+                    if (courseSnap.exists()) {
+                        const courseData = courseSnap.data();
+                        studentCoursesList.push({
+                            ...courseData,
+                            id: courseId,
+                            joinedAt: userData.courseJoinDates?.[courseId] || new Date().toISOString()
+                        });
+
+                        // Fetch teacher name if not already cached
+                        if (courseData.teacherId && !studentTeacherNamesMap[courseId]) {
                             const teacherRef = doc(db, 'users', courseData.teacherId);
                             const teacherSnap = await getDoc(teacherRef);
                             if (teacherSnap.exists()) {
-                                teacherNamesMap[courseId] = teacherSnap.data().name || 'Unknown Teacher';
+                                studentTeacherNamesMap[courseId] = teacherSnap.data().name || 'Unknown Teacher';
                             }
                         }
                     }
-                    setStudentCourses(coursesList);
-                    setTeacherNames(teacherNamesMap);
-                } catch (error) {
-                    console.error('Error fetching student courses:', error);
-                    setStudentCourses([]);
-                    setTeacherNames({});
                 }
+
+                setStudentCourses(studentCoursesList);
+                setTeacherNames(studentTeacherNamesMap);
+                coursesList = studentCoursesList;
+                teacherNamesMap = studentTeacherNamesMap;
             }
 
-            // Load teacher courses
             if (userData.role === 'teacher') {
-                try {
+                // For teachers, fetch only their courses
+                const q = query(
+                    collection(db, 'courses'),
+                    where('teacherId', '==', user.uid)
+                );
+                const snapshot = await getDocs(q);
+                const teacherCoursesList = snapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter((course: any) => course.archived !== true);
+                setCourses(teacherCoursesList);
+                coursesList = teacherCoursesList;
+            }
+
+            if (userData.role === 'admin') {
+                const adminSchoolId = userData.schoolId;
+
+                if (!adminSchoolId) {
+                    setCourses([]);
+                    setTeacherNames({});
+                } else {
+                    // For admins, fetch courses from their school only
                     const q = query(
                         collection(db, 'courses'),
-                        where('teacherId', '==', user.uid)
+                        where('schoolId', '==', adminSchoolId)
                     );
                     const snapshot = await getDocs(q);
-                    const coursesList = snapshot.docs
-                        .map(doc => ({ id: doc.id, ...doc.data() }))
-                        .filter((course: any) => course.archived !== true);
-                    setCourses(coursesList);
-                } catch (error) {
-                    console.error('Error fetching teacher courses:', error);
-                    setCourses([]);
-                }
-            }
+                    const adminCoursesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setCourses(adminCoursesList);
 
-            // Load admin courses
-            if (userData.role === 'admin') {
-                try {
-                    const adminSchoolId = userData.schoolId;
+                    // Batch fetch teacher names
+                    const teacherIds = [...new Set(adminCoursesList.map((course: any) => course.teacherId).filter(Boolean))];
+                    const adminTeacherNamesMap: Record<string, string> = {};
 
-                    if (!adminSchoolId) {
-                        setCourses([]);
-                        setTeacherNames({});
-                    } else {
-                        const snapshot = await getDocs(collection(db, 'courses'));
-                        const allCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        const coursesList = allCourses.filter((course: any) => course.schoolId === adminSchoolId);
-                        setCourses(coursesList);
+                    const teacherPromises = teacherIds.map(async (teacherId: string) => {
+                        const teacherRef = doc(db, 'users', teacherId);
+                        return getDoc(teacherRef);
+                    });
 
-                        const teacherNamesMap: Record<string, string> = {};
-                        for (const course of coursesList) {
-                            const courseData = course as any;
-                            if (courseData.teacherId && !teacherNamesMap[courseData.teacherId]) {
-                                try {
-                                    const teacherRef = doc(db, 'users', courseData.teacherId);
-                                    const teacherSnap = await getDoc(teacherRef);
-                                    if (teacherSnap.exists()) {
-                                        teacherNamesMap[courseData.teacherId] = teacherSnap.data().name || 'Unknown Teacher';
-                                    }
-                                } catch (error) {
-                                    console.error('Error fetching teacher name:', error);
-                                    teacherNamesMap[courseData.teacherId] = 'Unknown Teacher';
-                                }
-                            }
+                    const teacherSnaps = await Promise.all(teacherPromises);
+
+                    teacherSnaps.forEach((teacherSnap, index) => {
+                        if (teacherSnap.exists()) {
+                            adminTeacherNamesMap[teacherIds[index]] = teacherSnap.data().name || 'Unknown Teacher';
                         }
-                        setTeacherNames(teacherNamesMap);
-                    }
-                } catch (error) {
-                    console.error('Error fetching admin courses:', error);
-                    setCourses([]);
+                    });
+
+                    setTeacherNames(adminTeacherNamesMap);
+                    coursesList = adminCoursesList;
+                    teacherNamesMap = adminTeacherNamesMap;
                 }
             }
+
+            // Cache the results
+            dashboardCache = {
+                role: userData.role || 'student',
+                userData,
+                schoolInfo: userData.schoolId ? getSchoolById(userData.schoolId) : null,
+                studentCourses: userData.role === 'student' ? coursesList : [],
+                courses: userData.role === 'teacher' || userData.role === 'admin' ? coursesList : [],
+                teacherNames: teacherNamesMap
+            };
+            cacheTimestamp = now;
+
         } catch (error) {
             console.error('Error in loadUserAndCourses:', error);
         } finally {
             setLoading(false);
         }
-    };
-
-    // Function to get user initials
-    const getUserInitials = (user: User, userData: any) => {
-        if (userData?.name) {
-            const nameParts = userData.name.trim().split(' ');
-            if (nameParts.length >= 2) {
-                // First and last name initials
-                return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
-            } else {
-                // Only first name - first two letters
-                return nameParts[0].substring(0, 2).toUpperCase();
-            }
-        } else {
-            // Fallback to email
-            return user.email?.split('@')[0]?.substring(0, 2).toUpperCase() || 'U';
-        }
-    };
-
-    // Function to get display name
-    const getDisplayName = (user: User, userData: any) => {
-        if (userData?.name) {
-            const nameParts = userData.name.trim().split(' ');
-            // Capitalize first letter of first name
-            return nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase();
-        } else {
-            // Fallback to email username with capitalization
-            const emailUsername = user.email?.split('@')[0] || '';
-            return emailUsername.charAt(0).toUpperCase() + emailUsername.slice(1).toLowerCase();
-        }
-    };
+    }, []);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -205,17 +246,17 @@ export default function DashboardScreen() {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [loadUserAndCourses]);
 
     useFocusEffect(
         React.useCallback(() => {
             if (auth.currentUser) {
-                loadUserAndCourses(auth.currentUser);
+                loadUserAndCourses(auth.currentUser, true); // Force refresh on focus
             }
-        }, [])
+        }, [loadUserAndCourses])
     );
 
-    const handleUnjoinCourse = async (courseId: string, courseName: string) => {
+    const handleUnjoinCourse = useCallback(async (courseId: string, courseName: string) => {
         Alert.alert(
             'Leave Course',
             `Are you sure you want to leave "${courseName}"?`,
@@ -244,9 +285,9 @@ export default function DashboardScreen() {
                 }
             ]
         );
-    };
+    }, []);
 
-    const handleDeleteCourse = async (courseId: string, courseName: string) => {
+    const handleDeleteCourse = useCallback(async (courseId: string, courseName: string) => {
         Alert.alert(
             'Delete Course',
             `Are you sure you want to delete "${courseName}"?`,
@@ -268,9 +309,9 @@ export default function DashboardScreen() {
                 }
             ]
         );
-    };
+    }, []);
 
-    const handleArchiveCourse = async (courseId: string, courseName: string) => {
+    const handleArchiveCourse = useCallback(async (courseId: string, courseName: string) => {
         Alert.alert(
             'Archive Course',
             `Are you sure you want to archive "${courseName}"?`,
@@ -294,14 +335,7 @@ export default function DashboardScreen() {
                 }
             ]
         );
-    };
-
-    const getTimeOfDay = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'morning';
-        if (hour < 17) return 'afternoon';
-        return 'evening';
-    };
+    }, []);
 
     if (loading) {
         return (
@@ -313,7 +347,11 @@ export default function DashboardScreen() {
                 >
                     <View style={styles.loadingContent}>
                         <View style={styles.loadingIcon}>
-                            <Ionicons name="school" size={40} color="#fff" />
+                            <Image
+                                source={require('../../assets/images/corner-splash-logo.png')}
+                                style={styles.loadingLogo}
+                                resizeMode="contain"
+                            />
                         </View>
                         <Text style={styles.loadingText}>Loading...</Text>
                     </View>
@@ -332,7 +370,11 @@ export default function DashboardScreen() {
                 >
                     <View style={styles.welcomeContent}>
                         <View style={styles.welcomeIcon}>
-                            <Ionicons name="school" size={60} color="#fff" />
+                            <Image
+                                source={require('../../assets/images/corner-splash-logo.png')}
+                                style={styles.welcomeLogo}
+                                resizeMode="contain"
+                            />
                         </View>
                         <Text style={styles.welcomeTitle}>Welcome to Corner</Text>
                         <Text style={styles.welcomeSubtitle}>
@@ -377,7 +419,7 @@ export default function DashboardScreen() {
                         </View>
                         <View>
                             <Text style={styles.schoolName}>{schoolInfo?.name || 'Your School'}</Text>
-                            <Text style={styles.greeting}>Good {getTimeOfDay()}</Text>
+                            <Text style={styles.greeting}>Good {getTimeOfDay}</Text>
                             <Text style={styles.userName}>{getDisplayName(user, userData)}</Text>
                         </View>
                     </View>
@@ -465,7 +507,11 @@ export default function DashboardScreen() {
                         ))
                     ) : (
                         <View style={styles.emptyState}>
-                            <Ionicons name="school-outline" size={48} color="#cbd5e1" />
+                            <Image
+                                source={require('../../assets/images/corner-splash-logo.png')}
+                                style={styles.emptyStateLogo}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.emptyStateText}>
                                 {role === 'student' ? 'No courses enrolled yet' :
                                     role === 'teacher' ? 'Create your first course' :
@@ -609,11 +655,16 @@ const styles = StyleSheet.create({
     loadingIcon: {
         width: 80,
         height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center',
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 20,
+    },
+    loadingLogo: {
+        width: 60,
+        height: 60,
+        borderRadius: 12,
     },
     loadingText: {
         color: '#fff',
@@ -624,33 +675,41 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 40,
+        padding: 24,
     },
     welcomeContent: {
         alignItems: 'center',
-        width: '100%',
+        maxWidth: 300,
     },
     welcomeIcon: {
         width: 120,
         height: 120,
-        borderRadius: 60,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center',
+        borderRadius: 24,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         alignItems: 'center',
-        marginBottom: 30,
+        justifyContent: 'center',
+        marginBottom: 24,
+    },
+    welcomeLogo: {
+        width: 90,
+        height: 90,
+        borderRadius: 18,
     },
     welcomeTitle: {
         fontSize: 32,
-        fontWeight: '700',
+        fontWeight: '800',
         color: '#fff',
-        marginBottom: 10,
+        marginBottom: 12,
         textAlign: 'center',
+        letterSpacing: -0.5,
     },
     welcomeSubtitle: {
-        fontSize: 16,
-        color: 'rgba(255,255,255,0.8)',
+        fontSize: 18,
+        color: 'rgba(255, 255, 255, 0.8)',
         textAlign: 'center',
         marginBottom: 40,
+        lineHeight: 24,
+        fontWeight: '500',
     },
     welcomeButtons: {
         width: '100%',
@@ -847,10 +906,14 @@ const styles = StyleSheet.create({
     },
     emptyState: {
         alignItems: 'center',
-        padding: 40,
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        marginTop: 20,
+        paddingVertical: 60,
+        paddingHorizontal: 24,
+    },
+    emptyStateLogo: {
+        width: 80,
+        height: 80,
+        marginBottom: 16,
+        opacity: 0.5,
     },
     emptyStateText: {
         fontSize: 16,

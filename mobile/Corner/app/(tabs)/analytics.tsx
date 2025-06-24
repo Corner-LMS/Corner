@@ -1,15 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StatusBar, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from '../../config/ firebase-config';
-import { collection, getDocs, query, where, orderBy, limit, doc, getDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, doc, getDoc, Timestamp, onSnapshot } from 'firebase/firestore';
 import { router } from 'expo-router';
 import { getSchoolById } from '@/constants/Schools';
 import { LinearGradient } from 'expo-linear-gradient';
 import ConnectivityIndicator from '../../components/ConnectivityIndicator';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// Cache for analytics data
+let analyticsCache: any = null;
+let cacheTimestamp: number = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 interface AnalyticsData {
     totalCourses: number;
@@ -146,8 +151,8 @@ export default function AnalyticsScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Helper function to get date string for the last 7 days
-    const getLast7Days = () => {
+    // Memoized helper functions
+    const getLast7Days = useMemo(() => {
         const dates = [];
         for (let i = 6; i >= 0; i--) {
             const date = new Date();
@@ -155,21 +160,30 @@ export default function AnalyticsScreen() {
             dates.push(date.toISOString().split('T')[0]);
         }
         return dates;
-    };
+    }, []);
 
-    // Helper function to check if a timestamp is within last 7 days
-    const isWithinLast7Days = (timestamp: any) => {
+    const isWithinLast7Days = useCallback((timestamp: any) => {
         if (!timestamp) return false;
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const timestampDate = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
         return timestampDate >= sevenDaysAgo;
-    };
+    }, []);
 
-    const fetchAnalyticsData = async () => {
+    // Optimized analytics fetching with caching
+    const fetchAnalyticsData = useCallback(async (forceRefresh = false) => {
         try {
             const user = auth.currentUser;
             if (!user) return;
+
+            // Check cache first
+            const now = Date.now();
+            if (!forceRefresh && analyticsCache && (now - cacheTimestamp) < CACHE_DURATION) {
+                setAnalytics(analyticsCache);
+                setLoading(false);
+                setRefreshing(false);
+                return;
+            }
 
             // Check if user is admin and get their school
             const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -196,147 +210,124 @@ export default function AnalyticsScreen() {
                 return;
             }
 
-            // Fetch only courses from admin's school
-            const coursesSnapshot = await getDocs(collection(db, 'courses'));
-            const allCourses = coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const courses = allCourses.filter((course: any) => course.schoolId === adminSchoolId);
+            // Optimized: Use where clause to filter by schoolId instead of fetching all
+            const coursesQuery = query(
+                collection(db, 'courses'),
+                where('schoolId', '==', adminSchoolId)
+            );
+            const coursesSnapshot = await getDocs(coursesQuery);
+            const courses = coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Fetch only users from admin's school
-            const usersSnapshot = await getDocs(collection(db, 'users'));
-            const allUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const users = allUsers.filter((user: any) => user.schoolId === adminSchoolId);
+            // Optimized: Use where clause to filter users by schoolId
+            const usersQuery = query(
+                collection(db, 'users'),
+                where('schoolId', '==', adminSchoolId)
+            );
+            const usersSnapshot = await getDocs(usersQuery);
+            const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Count users by role (only from admin's school)
+            // Count users by role
             const roleCount = users.reduce((acc, user) => {
                 const userData = user as any;
                 acc[userData.role] = (acc[userData.role] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>);
 
-            // Fetch recent courses from admin's school (last 5)
+            // Get recent courses
             const recentCourses = courses
                 .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .slice(0, 5);
 
-            // Count announcements and discussions across courses from admin's school only
-            let totalAnnouncements = 0;
-            let totalDiscussions = 0;
-            const courseActivity = [];
+            // Optimized: Batch fetch announcements and discussions counts
+            const courseActivityPromises = courses.map(async (course) => {
+                const [announcementsSnapshot, discussionsSnapshot] = await Promise.all([
+                    getDocs(collection(db, 'courses', course.id, 'announcements')),
+                    getDocs(collection(db, 'courses', course.id, 'discussions'))
+                ]);
 
-            for (const course of courses) {
-                const announcementsSnapshot = await getDocs(
-                    collection(db, 'courses', course.id, 'announcements')
-                );
-                const discussionsSnapshot = await getDocs(
-                    collection(db, 'courses', course.id, 'discussions')
-                );
-
-                const announcementCount = announcementsSnapshot.size;
-                const discussionCount = discussionsSnapshot.size;
-
-                totalAnnouncements += announcementCount;
-                totalDiscussions += discussionCount;
-
-                courseActivity.push({
+                return {
                     ...course,
-                    announcements: announcementCount,
-                    discussions: discussionCount,
-                    totalActivity: announcementCount + discussionCount
-                });
-            }
+                    announcements: announcementsSnapshot.size,
+                    discussions: discussionsSnapshot.size,
+                    totalActivity: announcementsSnapshot.size + discussionsSnapshot.size
+                };
+            });
 
-            // Sort courses by activity (only from admin's school)
+            const courseActivity = await Promise.all(courseActivityPromises);
+            const totalAnnouncements = courseActivity.reduce((sum, course) => sum + course.announcements, 0);
+            const totalDiscussions = courseActivity.reduce((sum, course) => sum + course.discussions, 0);
+
+            // Get most active courses
             const mostActiveCourses = courseActivity
                 .sort((a, b) => b.totalActivity - a.totalActivity)
                 .slice(0, 5);
 
-            // NEW ANALYTICS: Calculate participation rates and activity data
-            const last7Days = getLast7Days();
+            // Optimized: Simplified activity tracking for last 7 days
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-            // Initialize daily post counters
-            const postsPerDay = last7Days.map(date => ({ date, count: 0 }));
-            const studentPostsPerDay = last7Days.map(date => ({ date, count: 0 }));
-            const teacherPostsPerDay = last7Days.map(date => ({ date, count: 0 }));
+            const postsPerDay = getLast7Days.map(date => ({ date, count: 0 }));
+            const studentPostsPerDay = getLast7Days.map(date => ({ date, count: 0 }));
+            const teacherPostsPerDay = getLast7Days.map(date => ({ date, count: 0 }));
 
-            // Track active users and participation
             const activeUsers = new Set<string>();
             const activeTeachers = new Set<string>();
             const activeStudents = new Set<string>();
 
-            // Collect all posts from the last 7 days
-            for (const course of courses) {
-                // Check announcements
-                const announcementsSnapshot = await getDocs(
-                    collection(db, 'courses', course.id, 'announcements')
-                );
+            // Optimized: Only fetch recent posts instead of all posts
+            const recentActivityPromises = courses.map(async (course) => {
+                const [recentAnnouncements, recentDiscussions] = await Promise.all([
+                    getDocs(query(
+                        collection(db, 'courses', course.id, 'announcements'),
+                        where('createdAt', '>=', sevenDaysAgo),
+                        orderBy('createdAt', 'desc')
+                    )),
+                    getDocs(query(
+                        collection(db, 'courses', course.id, 'discussions'),
+                        where('createdAt', '>=', sevenDaysAgo),
+                        orderBy('createdAt', 'desc')
+                    ))
+                ]);
 
-                for (const announcementDoc of announcementsSnapshot.docs) {
-                    const announcementData = announcementDoc.data();
-                    if (isWithinLast7Days(announcementData.createdAt)) {
-                        const date = announcementData.createdAt.toDate().toISOString().split('T')[0];
-                        const dayIndex = last7Days.indexOf(date);
-                        if (dayIndex !== -1) {
-                            postsPerDay[dayIndex].count++;
+                return { course, recentAnnouncements, recentDiscussions };
+            });
+
+            const recentActivity = await Promise.all(recentActivityPromises);
+
+            // Process recent activity
+            for (const { course, recentAnnouncements, recentDiscussions } of recentActivity) {
+                // Process announcements
+                recentAnnouncements.docs.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.createdAt.toDate().toISOString().split('T')[0];
+                    const dayIndex = getLast7Days.indexOf(date);
+                    if (dayIndex !== -1) {
+                        postsPerDay[dayIndex].count++;
+                        teacherPostsPerDay[dayIndex].count++;
+                        activeUsers.add(data.authorId);
+                        activeTeachers.add(data.authorId);
+                    }
+                });
+
+                // Process discussions
+                recentDiscussions.docs.forEach(doc => {
+                    const data = doc.data();
+                    const date = data.createdAt.toDate().toISOString().split('T')[0];
+                    const dayIndex = getLast7Days.indexOf(date);
+                    if (dayIndex !== -1) {
+                        postsPerDay[dayIndex].count++;
+                        const authorUser = users.find(u => u.id === data.authorId) as any;
+                        const authorRole = authorUser?.role;
+                        if (authorRole === 'student') {
+                            studentPostsPerDay[dayIndex].count++;
+                            activeStudents.add(data.authorId);
+                        } else if (authorRole === 'teacher') {
                             teacherPostsPerDay[dayIndex].count++;
-                            activeUsers.add(announcementData.authorId);
-                            activeTeachers.add(announcementData.authorId);
+                            activeTeachers.add(data.authorId);
                         }
+                        activeUsers.add(data.authorId);
                     }
-                }
-
-                // Check discussions
-                const discussionsSnapshot = await getDocs(
-                    collection(db, 'courses', course.id, 'discussions')
-                );
-
-                for (const discussionDoc of discussionsSnapshot.docs) {
-                    const discussionData = discussionDoc.data();
-                    if (isWithinLast7Days(discussionData.createdAt)) {
-                        const date = discussionData.createdAt.toDate().toISOString().split('T')[0];
-                        const dayIndex = last7Days.indexOf(date);
-                        if (dayIndex !== -1) {
-                            postsPerDay[dayIndex].count++;
-                            const authorUser = users.find(u => u.id === discussionData.authorId) as any;
-                            const authorRole = authorUser?.role;
-                            if (authorRole === 'student') {
-                                studentPostsPerDay[dayIndex].count++;
-                                activeStudents.add(discussionData.authorId);
-                            } else if (authorRole === 'teacher') {
-                                teacherPostsPerDay[dayIndex].count++;
-                                activeTeachers.add(discussionData.authorId);
-                            }
-                            activeUsers.add(discussionData.authorId);
-                        }
-                    }
-
-                    // Check comments in discussions
-                    const commentsSnapshot = await getDocs(
-                        collection(db, 'courses', course.id, 'discussions', discussionDoc.id, 'comments')
-                    );
-
-                    for (const commentDoc of commentsSnapshot.docs) {
-                        const commentData = commentDoc.data();
-                        if (isWithinLast7Days(commentData.createdAt)) {
-                            const date = commentData.createdAt.toDate().toISOString().split('T')[0];
-                            const dayIndex = last7Days.indexOf(date);
-                            if (dayIndex !== -1) {
-                                postsPerDay[dayIndex].count++;
-                                const authorUser = users.find(u => u.id === commentData.authorId) as any;
-                                const authorRole = authorUser?.role;
-                                if (authorRole === 'student') {
-                                    studentPostsPerDay[dayIndex].count++;
-                                    activeStudents.add(commentData.authorId);
-                                } else if (authorRole === 'teacher') {
-                                    teacherPostsPerDay[dayIndex].count++;
-                                    activeTeachers.add(commentData.authorId);
-                                }
-                                activeUsers.add(commentData.authorId);
-                            }
-                        }
-                    }
-                }
+                });
             }
 
             // Calculate participation rates
@@ -345,7 +336,7 @@ export default function AnalyticsScreen() {
             const teacherParticipationRate = totalTeachers > 0 ? Math.round((activeTeachers.size / totalTeachers) * 100) : 0;
             const studentParticipationRate = totalStudents > 0 ? Math.round((activeStudents.size / totalStudents) * 100) : 0;
 
-            setAnalytics({
+            const analyticsData = {
                 totalCourses: courses.length,
                 totalUsers: users.length,
                 totalStudents: roleCount.student || 0,
@@ -360,14 +351,19 @@ export default function AnalyticsScreen() {
                     name: schoolInfo.name,
                     shortName: schoolInfo.shortName
                 },
-                // New analytics
                 teacherParticipationRate,
                 studentParticipationRate,
                 weeklyActiveUsers: activeUsers.size,
                 postsPerDay,
                 studentPostsPerDay,
                 teacherPostsPerDay,
-            });
+            };
+
+            // Cache the results
+            analyticsCache = analyticsData;
+            cacheTimestamp = now;
+
+            setAnalytics(analyticsData);
         } catch (error) {
             console.error('Error fetching analytics:', error);
             Alert.alert('Error', 'Failed to load analytics data.');
@@ -375,16 +371,20 @@ export default function AnalyticsScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [getLast7Days, isWithinLast7Days]);
 
     useEffect(() => {
         fetchAnalyticsData();
-    }, []);
+    }, [fetchAnalyticsData]);
 
-    const handleRefresh = () => {
+    const handleRefresh = useCallback(() => {
         setRefreshing(true);
-        fetchAnalyticsData();
-    };
+        fetchAnalyticsData(true); // Force refresh
+    }, [fetchAnalyticsData]);
+
+    const handleRetry = useCallback(() => {
+        fetchAnalyticsData(true);
+    }, [fetchAnalyticsData]);
 
     if (loading) {
         return (
@@ -433,7 +433,7 @@ export default function AnalyticsScreen() {
                 <View style={styles.errorContainer}>
                     <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
                     <Text style={styles.errorText}>Failed to load analytics</Text>
-                    <TouchableOpacity style={styles.retryButton} onPress={fetchAnalyticsData}>
+                    <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
                         <Text style={styles.retryButtonText}>Retry</Text>
                     </TouchableOpacity>
                 </View>

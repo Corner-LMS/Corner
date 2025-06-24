@@ -131,15 +131,6 @@ class NotificationHelpers {
 
                 // Update badge count
                 await this.updateUserBadgeCount(student.id, 1);
-
-                // Send push notification if they have tokens
-                if (student.expoPushTokens && student.expoPushTokens.length > 0) {
-                    return Promise.all(
-                        student.expoPushTokens.map((token: string) =>
-                            notificationService.sendPushNotification(token, notificationData)
-                        )
-                    );
-                }
             });
 
             await Promise.all(notificationPromises);
@@ -213,15 +204,6 @@ class NotificationHelpers {
 
                 // Update badge count
                 await this.updateUserBadgeCount(student.id, 1);
-
-                // Send push notification if they have tokens
-                if (student.expoPushTokens && student.expoPushTokens.length > 0) {
-                    return Promise.all(
-                        student.expoPushTokens.map((token: string) =>
-                            notificationService.sendPushNotification(token, notificationData)
-                        )
-                    );
-                }
             });
 
             await Promise.all(notificationPromises);
@@ -291,15 +273,6 @@ class NotificationHelpers {
 
             // Update badge count
             await this.updateUserBadgeCount(teacherId, 1);
-
-            // Send push notification if they have tokens
-            if (teacherData.expoPushTokens && teacherData.expoPushTokens.length > 0) {
-                const notificationPromises = teacherData.expoPushTokens.map((token: string) =>
-                    notificationService.sendPushNotification(token, notificationData)
-                );
-
-                await Promise.all(notificationPromises);
-            }
 
             // Track notification
             await this.logNotification({
@@ -387,15 +360,6 @@ class NotificationHelpers {
 
                     // Update badge count
                     await this.updateUserBadgeCount(originalAuthorId, 1);
-
-                    // Send push notification if they have tokens
-                    if (authorData.expoPushTokens && authorData.expoPushTokens.length > 0) {
-                        const notificationPromises = authorData.expoPushTokens.map((token: string) =>
-                            notificationService.sendPushNotification(token, notificationData)
-                        );
-
-                        await Promise.all(notificationPromises);
-                    }
 
                     // Track notification
                     await this.logNotification({

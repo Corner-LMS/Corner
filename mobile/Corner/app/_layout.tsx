@@ -26,10 +26,20 @@ import CustomSplashScreen from '../components/SplashScreen';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { notificationService } from '../services/notificationService';
 
+export {
+  // Catch any errors thrown by the Layout component.
+  ErrorBoundary,
+} from 'expo-router';
+
+export const unstable_settings = {
+  // Ensure that reloading on `/modal` keeps a back button present.
+  initialRouteName: '(tabs)',
+};
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
-  const [loaded] = useFonts({
+  const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -40,19 +50,8 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        // Initialize notification service
-        const initNotifications = async () => {
-          try {
-            await notificationService.init();
-          } catch (error) {
-            console.error('Error initializing notification service:', error);
-          }
-        };
-
         // Initialize offline cache when app starts
         offlineCacheService.initializeCache();
-
-        await initNotifications();
 
         // Pre-load any other resources here if needed
         // await Promise.all([...]);
@@ -82,9 +81,6 @@ export default function RootLayout() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // Update notification token
-          await notificationService.updateUserNotificationToken(user.uid);
-
           // Get user role and initialize presence service
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
@@ -115,6 +111,16 @@ export default function RootLayout() {
       presenceService.cleanup();
     };
   }, []);
+
+  useEffect(() => {
+    if (error) throw error;
+  }, [error]);
+
+  useEffect(() => {
+    if (loaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded]);
 
   if (!loaded || !appIsReady) {
     return <CustomSplashScreen />;

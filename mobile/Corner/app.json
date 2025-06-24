@@ -21,11 +21,11 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#8B5CF6",
-        "googleServicesFile": "./google-services.json"
+        "backgroundColor": "#8B5CF6"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.cornerbusinessgroup.corner"
+      "package": "com.cornerbusinessgroup.corner",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -51,7 +51,10 @@
           "iosClientId": "899702669451-uvgne6e07q59ifeuur306f8sscs9i0ir.apps.googleusercontent.com",
           "iosUrlScheme": "com.googleusercontent.apps.899702669451-uvgne6e07q59ifeuur306f8sscs9i0ir"
         }
-      ]
+      ],
+      "expo-notifications",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging"
     ],
     "scheme": "corner",
     "extra": {
