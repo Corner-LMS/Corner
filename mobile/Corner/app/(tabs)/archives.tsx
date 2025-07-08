@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth, db } from '../../config/ firebase-config';
-import { collection, query, where, getDocs, getDoc, doc, updateDoc, deleteField } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ConnectivityIndicator from '../../components/ConnectivityIndicator';
@@ -20,8 +19,7 @@ export default function ArchivesScreen() {
                 const coursesList = [];
 
                 for (const courseId of userData.archivedCourseIds) {
-                    const courseRef = doc(db, 'courses', courseId);
-                    const courseSnap = await getDoc(courseRef);
+                    const courseSnap = await firestore().collection('courses').doc(courseId).get();
                     if (courseSnap.exists()) {
                         const courseData = courseSnap.data();
                         coursesList.push({
@@ -36,15 +34,14 @@ export default function ArchivesScreen() {
 
             if (userData.role === 'teacher') {
                 // Get all courses by this teacher
-                const allCoursesQuery = query(
-                    collection(db, 'courses'),
-                    where('teacherId', '==', user.uid)
-                );
-                const snapshot = await getDocs(allCoursesQuery);
+                const snapshot = await firestore()
+                    .collection('courses')
+                    .where('teacherId', '==', user.uid)
+                    .get();
 
                 // Filter for archived courses
                 const coursesList = snapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .map(doc => ({ id: doc.id, ...doc.data() as any }))
                     .filter((course: any) => course.archived === true);
 
                 setArchivedCourses(coursesList);
@@ -55,7 +52,7 @@ export default function ArchivesScreen() {
     };
 
     const loadUserAndCourses = async () => {
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (!user) {
             setLoading(false);
             router.replace('/welcome');
@@ -63,19 +60,20 @@ export default function ArchivesScreen() {
         }
 
         // Get user role from Firestore
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
+        const userDocSnap = await firestore().collection('users').doc(user.uid).get();
         if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
-            setRole(userData.role);
-            await fetchArchivedCourses(user, userData);
+            if (userData) {
+                setRole(userData.role);
+                await fetchArchivedCourses(user, userData);
+            }
         }
 
         setLoading(false);
     };
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        const unsubscribe = auth().onAuthStateChanged(async (user) => {
             if (!user) {
                 setLoading(false);
                 router.replace('/welcome');
@@ -90,7 +88,7 @@ export default function ArchivesScreen() {
     // Refresh data when screen is focused
     useFocusEffect(
         React.useCallback(() => {
-            if (auth.currentUser) {
+            if (auth().currentUser) {
                 loadUserAndCourses();
             }
         }, [])
@@ -108,36 +106,37 @@ export default function ArchivesScreen() {
                         text: 'Rejoin',
                         onPress: async () => {
                             try {
-                                const user = auth.currentUser;
+                                const user = auth().currentUser;
                                 if (!user) return;
 
-                                const userRef = doc(db, 'users', user.uid);
-                                const userSnap = await getDoc(userRef);
+                                const userSnap = await firestore().collection('users').doc(user.uid).get();
 
                                 if (userSnap.exists()) {
                                     const userData = userSnap.data();
-                                    const courseIds = userData.courseIds || [];
-                                    const archivedCourseIds = userData.archivedCourseIds || [];
-                                    const courseJoinDates = userData.courseJoinDates || {};
-                                    const courseArchiveDates = userData.courseArchiveDates || {};
+                                    if (userData) {
+                                        const courseIds = userData.courseIds || [];
+                                        const archivedCourseIds = userData.archivedCourseIds || [];
+                                        const courseJoinDates = userData.courseJoinDates || {};
+                                        const courseArchiveDates = userData.courseArchiveDates || {};
 
-                                    // Remove from archived and add back to active
-                                    const updatedArchivedIds = archivedCourseIds.filter((id: string) => id !== courseId);
-                                    courseIds.push(courseId);
-                                    courseJoinDates[courseId] = new Date().toISOString();
-                                    delete courseArchiveDates[courseId];
+                                        // Remove from archived and add back to active
+                                        const updatedArchivedIds = archivedCourseIds.filter((id: string) => id !== courseId);
+                                        courseIds.push(courseId);
+                                        courseJoinDates[courseId] = new Date().toISOString();
+                                        delete courseArchiveDates[courseId];
 
-                                    await updateDoc(userRef, {
-                                        courseIds: courseIds,
-                                        archivedCourseIds: updatedArchivedIds,
-                                        courseJoinDates: courseJoinDates,
-                                        courseArchiveDates: courseArchiveDates
-                                    });
+                                        await firestore().collection('users').doc(user.uid).update({
+                                            courseIds: courseIds,
+                                            archivedCourseIds: updatedArchivedIds,
+                                            courseJoinDates: courseJoinDates,
+                                            courseArchiveDates: courseArchiveDates
+                                        });
 
-                                    // Update local state
-                                    setArchivedCourses(prev => prev.filter(course => course.id !== courseId));
+                                        // Update local state
+                                        setArchivedCourses(prev => prev.filter(course => course.id !== courseId));
 
-                                    Alert.alert('Success', `You have rejoined "${courseName}".`);
+                                        Alert.alert('Success', `You have rejoined "${courseName}".`);
+                                    }
                                 }
                             } catch (error) {
                                 console.error('Error rejoining course:', error);
@@ -159,9 +158,9 @@ export default function ArchivesScreen() {
                         onPress: async () => {
                             try {
                                 // Remove archived status from course
-                                await updateDoc(doc(db, 'courses', courseId), {
-                                    archived: deleteField(),
-                                    archivedAt: deleteField()
+                                await firestore().collection('courses').doc(courseId).update({
+                                    archived: firestore.FieldValue.delete(),
+                                    archivedAt: firestore.FieldValue.delete()
                                 });
 
                                 // Update local state

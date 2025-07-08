@@ -77,7 +77,7 @@ function App() {
                     element={role === 'teacher' ? <TeacherDashboard /> : <Login />}
                 />
                 <Route path="/courses/:courseId" element={<CourseDetails />} /> {/* Course Details */}
-                
+
 
             </Routes>
         </Router>

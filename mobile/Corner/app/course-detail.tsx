@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { db, auth } from '../config/ firebase-config';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
+import firestore, { deleteField } from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { notificationHelpers } from '../services/notificationHelpers';
 import { offlineCacheService, CachedAnnouncement, CachedDiscussion } from '../services/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
@@ -133,12 +133,9 @@ export default function CourseDetailScreen() {
         if (!courseId) return;
 
         // Listen to announcements
-        const announcementsQuery = query(
-            collection(db, 'courses', courseId as string, 'announcements'),
-            orderBy('createdAt', 'desc')
-        );
+        const announcementsQuery = firestore().collection('courses').doc(courseId as string).collection('announcements').orderBy('createdAt', 'desc');
 
-        const unsubscribeAnnouncements = onSnapshot(announcementsQuery, async (snapshot) => {
+        const unsubscribeAnnouncements = announcementsQuery.onSnapshot(async (snapshot) => {
             const announcementsList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -159,12 +156,9 @@ export default function CourseDetailScreen() {
         });
 
         // Listen to discussions and cache them
-        const discussionsQuery = query(
-            collection(db, 'courses', courseId as string, 'discussions'),
-            orderBy('createdAt', 'desc')
-        );
+        const discussionsQuery = firestore().collection('courses').doc(courseId as string).collection('discussions').orderBy('createdAt', 'desc');
 
-        const unsubscribeDiscussions = onSnapshot(discussionsQuery, async (snapshot) => {
+        const unsubscribeDiscussions = discussionsQuery.onSnapshot(async (snapshot) => {
             const discussionsList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -252,7 +246,7 @@ export default function CourseDetailScreen() {
 
         setLoading(true);
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) {
                 Alert.alert('Error', 'You must be logged in.');
                 return;
@@ -265,7 +259,7 @@ export default function CourseDetailScreen() {
                 authorName = instructorName as string;
             } else {
                 // For students, fetch name from Firestore
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                const userDoc = await firestore().collection('users').doc(user.uid).get();
                 const userData = userDoc.data();
                 authorName = userData?.name || 'Anonymous';
             }
@@ -274,7 +268,7 @@ export default function CourseDetailScreen() {
             const postData: any = {
                 title: newTitle.trim(),
                 content: newContent.trim(),
-                createdAt: serverTimestamp(),
+                createdAt: firestore.FieldValue.serverTimestamp(),
                 authorRole: role,
                 authorId: user.uid,
                 replies: 0
@@ -291,7 +285,7 @@ export default function CourseDetailScreen() {
                 postData.isAnonymous = false;
             }
 
-            const docRef = await addDoc(collection(db, 'courses', courseId as string, collectionName), postData);
+            const docRef = await firestore().collection('courses').doc(courseId as string).collection(collectionName).add(postData);
 
             // Trigger notifications based on content type
             try {
@@ -374,7 +368,7 @@ export default function CourseDetailScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await deleteDoc(doc(db, 'courses', courseId as string, `${type}s`, itemId));
+                            await firestore().collection('courses').doc(courseId as string).collection(`${type}s`).doc(itemId).delete();
                             Alert.alert('Success', `${type} deleted successfully`);
                         } catch (error) {
                             console.error('Error deleting:', error);
@@ -407,10 +401,10 @@ export default function CourseDetailScreen() {
         setLoading(true);
         try {
             const collectionName = `${editingItem.type}s`;
-            await updateDoc(doc(db, 'courses', courseId as string, collectionName, editingItem.id), {
+            await firestore().collection('courses').doc(courseId as string).collection(collectionName).doc(editingItem.id).update({
                 title: newTitle.trim(),
                 content: newContent.trim(),
-                updatedAt: serverTimestamp()
+                updatedAt: firestore.FieldValue.serverTimestamp()
             });
 
             setNewTitle('');
@@ -462,18 +456,18 @@ export default function CourseDetailScreen() {
     };
 
     const recordAnnouncementView = async (announcementId: string) => {
-        if (!auth.currentUser || !courseId) return;
+        if (!auth().currentUser || !courseId) return;
 
         try {
-            const announcementRef = doc(db, 'courses', courseId as string, 'announcements', announcementId);
-            const announcementDoc = await getDoc(announcementRef);
+            const announcementRef = firestore().collection('courses').doc(courseId as string).collection('announcements').doc(announcementId);
+            const announcementDoc = await announcementRef.get();
 
             if (announcementDoc.exists()) {
-                const views = announcementDoc.data().views || {};
+                const views = announcementDoc.data()?.views || {};
                 // Only record view if user hasn't viewed it before
-                if (!views[auth.currentUser.uid]) {
-                    await updateDoc(announcementRef, {
-                        [`views.${auth.currentUser.uid}`]: serverTimestamp()
+                if (!views[auth().currentUser?.uid || '']) {
+                    await announcementRef.update({
+                        [`views.${auth().currentUser?.uid}`]: firestore.FieldValue.serverTimestamp()
                     });
                 }
             }
@@ -483,25 +477,25 @@ export default function CourseDetailScreen() {
     };
 
     const handleLikeDiscussion = async (discussionId: string) => {
-        if (!auth.currentUser || !courseId) return;
+        if (!auth().currentUser || !courseId) return;
 
         try {
-            const discussionRef = doc(db, 'courses', courseId as string, 'discussions', discussionId);
-            const discussionDoc = await getDoc(discussionRef);
+            const discussionRef = firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId);
+            const discussionDoc = await discussionRef.get();
 
             if (discussionDoc.exists()) {
-                const likes = discussionDoc.data().likes || {};
-                const hasLiked = likes[auth.currentUser.uid];
+                const likes = discussionDoc.data()?.likes || {};
+                const hasLiked = likes[auth().currentUser?.uid || ''];
 
                 if (hasLiked) {
                     // Unlike
-                    await updateDoc(discussionRef, {
-                        [`likes.${auth.currentUser.uid}`]: deleteField()
+                    await discussionRef.update({
+                        [`likes.${auth().currentUser?.uid}`]: deleteField()
                     });
                 } else {
                     // Like
-                    await updateDoc(discussionRef, {
-                        [`likes.${auth.currentUser.uid}`]: serverTimestamp()
+                    await discussionRef.update({
+                        [`likes.${auth().currentUser?.uid}`]: firestore.FieldValue.serverTimestamp()
                     });
                 }
             }
@@ -796,7 +790,7 @@ export default function CourseDetailScreen() {
                                     <Text style={styles.roleTagText}>{announcement.authorRole}</Text>
                                 </View>
                                 {/* Show edit/delete only for author and if not archived and online */}
-                                {auth.currentUser?.uid === announcement.authorId && !courseIsArchived && isOnline && (
+                                {auth().currentUser?.uid === announcement.authorId && !courseIsArchived && isOnline && (
                                     <View style={styles.actionButtons}>
                                         <TouchableOpacity
                                             style={styles.editButton}
@@ -838,7 +832,7 @@ export default function CourseDetailScreen() {
                         )}
 
                         {/* Unread indicator */}
-                        {!announcement.views?.[auth.currentUser?.uid || ''] && (
+                        {!announcement.views?.[auth().currentUser?.uid || ''] && (
                             <View style={styles.unreadIndicator}>
                                 <View style={styles.unreadDot} />
                                 <Text style={styles.unreadText}>New</Text>
@@ -971,7 +965,7 @@ export default function CourseDetailScreen() {
                                     </Text>
                                 </View>
                                 {/* Show edit/delete only for author and if not archived and online */}
-                                {auth.currentUser?.uid === discussion.authorId && !courseIsArchived && isOnline && (
+                                {auth().currentUser?.uid === discussion.authorId && !courseIsArchived && isOnline && (
                                     <View style={styles.actionButtons}>
                                         <TouchableOpacity
                                             style={styles.editButton}
@@ -1010,9 +1004,9 @@ export default function CourseDetailScreen() {
                                     }}
                                 >
                                     <Ionicons
-                                        name={discussion.likes?.[auth.currentUser?.uid || ''] ? "thumbs-up" : "thumbs-up-outline"}
+                                        name={discussion.likes?.[auth().currentUser?.uid || ''] ? "thumbs-up" : "thumbs-up-outline"}
                                         size={16}
-                                        color={discussion.likes?.[auth.currentUser?.uid || ''] ? "#4f46e5" : "#64748b"}
+                                        color={discussion.likes?.[auth().currentUser?.uid || ''] ? "#4f46e5" : "#64748b"}
                                     />
                                     <Text style={styles.likeCount}>
                                         {discussion.likes ? Object.keys(discussion.likes).length : 0}

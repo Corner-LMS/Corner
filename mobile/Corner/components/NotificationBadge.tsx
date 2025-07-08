@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../config/ firebase-config';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { router } from 'expo-router';
 
 interface NotificationBadgeProps {
@@ -26,12 +26,11 @@ export default function NotificationBadge({
     };
 
     useEffect(() => {
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (!user) return;
 
         // Listen to user's notification data
-        const unsubscribe = onSnapshot(
-            doc(db, 'users', user.uid),
+        const unsubscribe = firestore().collection('users').doc(user.uid).onSnapshot(
             (doc) => {
                 const userData = doc.data();
                 if (userData) {
@@ -69,10 +68,10 @@ export default function NotificationBadge({
         }
 
         // Mark notifications as seen and clear unread count
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (user) {
             try {
-                await updateDoc(doc(db, 'users', user.uid), {
+                await firestore().collection('users').doc(user.uid).update({
                     'notificationData.lastSeenTime': new Date(),
                     'notificationData.unreadCount': 0  // Clear the badge count when viewing notifications
                 });

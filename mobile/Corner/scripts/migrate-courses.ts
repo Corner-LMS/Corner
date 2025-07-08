@@ -1,8 +1,7 @@
 // Migration script to add schoolId to existing courses
 // Run this once to update all courses created before school-based system was implemented
 
-import { db } from '../config/ firebase-config';
-import { collection, getDocs, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import firestore, { doc } from '@react-native-firebase/firestore';
 
 interface Course {
     id: string;
@@ -24,7 +23,7 @@ async function migrateCourseSchools() {
 
     try {
         // Get all courses
-        const coursesSnapshot = await getDocs(collection(db, 'courses'));
+        const coursesSnapshot = await firestore().collection('courses').get();
         const courses: Course[] = coursesSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -42,7 +41,7 @@ async function migrateCourseSchools() {
         }
 
         // Get all users (we need to check teachers)
-        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const usersSnapshot = await firestore().collection('users').get();
         const users: User[] = usersSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -61,7 +60,7 @@ async function migrateCourseSchools() {
         console.log(`🏫 Found ${Object.keys(teacherSchoolMap).length} teachers with school associations`);
 
         // Use batch updates for better performance
-        const batch = writeBatch(db);
+        const batch = firestore().batch();
         let updateCount = 0;
         let skipCount = 0;
 
@@ -69,7 +68,7 @@ async function migrateCourseSchools() {
             const teacherSchoolId = teacherSchoolMap[course.teacherId];
 
             if (teacherSchoolId) {
-                const courseRef = doc(db, 'courses', course.id);
+                const courseRef = firestore().collection('courses').doc(course.id);
                 batch.update(courseRef, {
                     schoolId: teacherSchoolId
                 });

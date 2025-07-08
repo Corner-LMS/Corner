@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db, auth } from '../config/ firebase-config';
-import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore, { collection, addDoc, serverTimestamp, doc, getDoc } from '@react-native-firebase/firestore';
 import { offlineCacheService } from './offlineCache';
 
 export interface DraftPost {
@@ -140,7 +140,7 @@ class DraftManager {
     // Sync single draft to Firebase
     async syncDraft(draft: DraftPost): Promise<boolean> {
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) {
                 throw new Error('User not authenticated');
             }
@@ -161,7 +161,7 @@ class DraftManager {
             }, 2000);
 
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error(`Error syncing draft ${draft.id}:`, error);
             await this.updateDraftStatus(draft.id, 'failed', error.message);
             return false;
@@ -179,7 +179,7 @@ class DraftManager {
         if (draft.authorRole === 'teacher') {
             authorName = draft.instructorName || 'Teacher';
         } else {
-            const userDoc = await getDoc(doc(db, 'users', userId));
+            const userDoc = await firestore().collection('users').doc(userId).get();
             const userData = userDoc.data();
             authorName = userData?.name || 'Anonymous';
         }
@@ -202,7 +202,7 @@ class DraftManager {
             postData.isAnonymous = false;
         }
 
-        await addDoc(collection(db, 'courses', draft.courseId, 'discussions'), postData);
+        await firestore().collection('courses').doc(draft.courseId).collection('discussions').add(postData);
     }
 
     // Sync comment draft
@@ -216,7 +216,7 @@ class DraftManager {
         if (draft.authorRole === 'teacher') {
             authorName = draft.instructorName || 'Teacher';
         } else {
-            const userDoc = await getDoc(doc(db, 'users', userId));
+            const userDoc = await firestore().collection('users').doc(userId).get();
             const userData = userDoc.data();
             authorName = userData?.name || 'Anonymous';
         }
@@ -239,10 +239,7 @@ class DraftManager {
             commentData.isAnonymous = false;
         }
 
-        await addDoc(
-            collection(db, 'courses', draft.courseId, 'discussions', draft.discussionId, 'comments'),
-            commentData
-        );
+        await firestore().collection('courses').doc(draft.courseId).collection('discussions').doc(draft.discussionId).collection('comments').add(commentData);
     }
 
     // Sync all pending drafts
@@ -263,7 +260,7 @@ class DraftManager {
                     failedCount++;
                     errors.push(`Failed to sync ${draft.type}: ${draft.title || draft.content.substring(0, 50)}`);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 failedCount++;
                 errors.push(`Error syncing ${draft.type}: ${error.message}`);
             }

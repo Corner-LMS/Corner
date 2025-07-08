@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar } from 'react-native';
-import { db, auth } from '../config/ firebase-config';
-import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,15 +13,15 @@ export default function JoinCourseScreen() {
     const handleJoin = async () => {
         setLoading(true);
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) {
                 Alert.alert('Error', 'You must be logged in to join a course.');
                 return;
             }
 
             // Get current user data to check their school
-            const userRef = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userRef);
+            const userRef = firestore().collection('users').doc(user.uid);
+            const userSnap = await userRef.get();
 
             if (!userSnap.exists()) {
                 Alert.alert('Error', 'User profile not found.');
@@ -30,7 +30,7 @@ export default function JoinCourseScreen() {
             }
 
             const userData = userSnap.data();
-            const userSchoolId = userData.schoolId;
+            const userSchoolId = userData?.schoolId;
 
             if (!userSchoolId) {
                 Alert.alert('Error', 'Your account is not associated with any school. Please contact support.');
@@ -39,8 +39,8 @@ export default function JoinCourseScreen() {
             }
 
             // Find course by code
-            const q = query(collection(db, 'courses'), where('code', '==', code.trim().toUpperCase()));
-            const snapshot = await getDocs(q);
+            const q = firestore().collection('courses').where('code', '==', code.trim().toUpperCase());
+            const snapshot = await q.get();
 
             if (snapshot.empty) {
                 Alert.alert('Invalid Code', 'No course found with this code. Please verify the code and try again.');
@@ -72,7 +72,7 @@ export default function JoinCourseScreen() {
             }
 
             // Update student's user document with course details
-            await updateDoc(userRef, {
+                await userRef.update({
                 courseIds: [...currentCourseIds, courseId],
                 courseJoinDates: {
                     ...(userData?.courseJoinDates || {}),

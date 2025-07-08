@@ -33,11 +33,17 @@ yarn-error.*
 # local env files
 .env*.local
 .env
-config/
+
 
 # typescript
 *.tsbuildinfo
 
 app-example
-app.json
+
+
+ios/
+android/
+GoogleService-Info.plist
 google-services.json
+config/
+corner-70a1e-firebase-adminsdk-fbsvc-10c9a337c5.json

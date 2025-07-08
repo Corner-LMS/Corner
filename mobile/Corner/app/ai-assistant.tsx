@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { db, auth } from '../config/ firebase-config.js';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { openaiService } from '../services/openaiService';
 
 interface Message {
@@ -86,21 +86,15 @@ export default function AIAssistantScreen() {
     const loadCourseContext = async () => {
         try {
             // Load discussions
-            const discussionsSnapshot = await getDocs(
-                query(collection(db, 'courses', courseId as string, 'discussions'), orderBy('createdAt', 'desc'))
-            );
+            const discussionsSnapshot = await firestore().collection('courses').doc(courseId as string).collection('discussions').orderBy('createdAt', 'desc').get();
             const discussions = discussionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             // Load announcements
-            const announcementsSnapshot = await getDocs(
-                query(collection(db, 'courses', courseId as string, 'announcements'), orderBy('createdAt', 'desc'))
-            );
+            const announcementsSnapshot = await firestore().collection('courses').doc(courseId as string).collection('announcements').orderBy('createdAt', 'desc').get();
             const announcements = announcementsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             // Load course resources
-            const resourcesSnapshot = await getDocs(
-                query(collection(db, 'courses', courseId as string, 'resources'), orderBy('createdAt', 'desc'))
-            );
+            const resourcesSnapshot = await firestore().collection('courses').doc(courseId as string).collection('resources').orderBy('createdAt', 'desc').get();
             const resources = resourcesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             setCourseContext({
@@ -118,19 +112,15 @@ export default function AIAssistantScreen() {
 
     const loadChatHistory = async () => {
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) return;
 
-            const chatQuery = query(
-                collection(db, 'courses', courseId as string, 'aiChats', user.uid, 'messages'),
-                orderBy('timestamp', 'asc'),
-                limit(50)
-            );
+            const chatQuery = firestore().collection('courses').doc(courseId as string).collection('aiChats').doc(user.uid).collection('messages').orderBy('timestamp', 'asc').limit(50);
 
-            const unsubscribe = onSnapshot(chatQuery, (snapshot) => {
+            const unsubscribe = chatQuery.onSnapshot((snapshot) => {
                 const chatMessages = snapshot.docs.map(doc => ({
                     id: doc.id,
-                    ...doc.data()
+                    ...doc.data() as any
                 })) as Message[];
 
                 if (chatMessages.length > 0) {
@@ -283,7 +273,7 @@ export default function AIAssistantScreen() {
     const handleSendMessage = async () => {
         if (!inputText.trim() || isLoading) return;
 
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (!user) {
             Alert.alert('Error', 'You must be logged in to use the AI assistant.');
             return;
@@ -303,10 +293,10 @@ export default function AIAssistantScreen() {
 
         try {
             // Save user message to Firestore
-            await addDoc(collection(db, 'courses', courseId as string, 'aiChats', user.uid, 'messages'), {
+            await firestore().collection('courses').doc(courseId as string).collection('aiChats').doc(user.uid).collection('messages').add({
                 content: userMessage.content,
                 isUser: true,
-                timestamp: serverTimestamp()
+                timestamp: firestore.FieldValue.serverTimestamp()
             });
 
             // Generate AI response using OpenAI
@@ -316,10 +306,10 @@ export default function AIAssistantScreen() {
             setMessages(prev => [...prev, aiResponse]);
 
             // Save AI response to Firestore
-            await addDoc(collection(db, 'courses', courseId as string, 'aiChats', user.uid, 'messages'), {
+            await firestore().collection('courses').doc(courseId as string).collection('aiChats').doc(user.uid).collection('messages').add({
                 content: aiResponse.content,
                 isUser: false,
-                timestamp: serverTimestamp(),
+                timestamp: firestore.FieldValue.serverTimestamp(),
                 resources: aiResponse.resources || [],
                 followUpQuestions: aiResponse.followUpQuestions || []
             });

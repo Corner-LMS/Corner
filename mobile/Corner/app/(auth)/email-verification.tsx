@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Image, ScrollView } from 'react-native';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    Alert,
+    Image,
+    ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../../config/ firebase-config';
+import auth from '@react-native-firebase/auth';
+
 import { sendVerificationEmail } from './useAuth';
-import { onAuthStateChanged } from 'firebase/auth';
 
 export default function EmailVerificationScreen() {
     const [loading, setLoading] = useState(false);
@@ -13,16 +21,14 @@ export default function EmailVerificationScreen() {
     const [userEmail, setUserEmail] = useState('');
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = auth().onAuthStateChanged((user) => {
             if (user) {
                 setUserEmail(user.email || '');
 
-                // If user is already verified, redirect to main app
                 if (user.emailVerified) {
                     router.replace('/(tabs)');
                 }
             } else {
-                // No user signed in, redirect to login
                 router.replace('/(auth)/login');
             }
         });
@@ -50,21 +56,17 @@ export default function EmailVerificationScreen() {
         try {
             setLoading(true);
 
-            // Reload the user to get the latest verification status
-            await auth.currentUser?.reload();
+            await auth().currentUser?.reload();
 
-            if (auth.currentUser?.emailVerified) {
+            if (auth().currentUser?.emailVerified) {
                 Alert.alert(
                     'Email Verified!',
-                    'Your email has been successfully verified. You can now sign in to your account.',
+                    'Your email has been successfully verified. Let\'s set up your profile.',
                     [
                         {
-                            text: 'Continue to Login',
+                            text: 'Continue',
                             onPress: () => {
-                                // Sign out the user and redirect to login
-                                auth.signOut().then(() => {
-                                    router.replace('/(auth)/login');
-                                });
+                                router.replace('/role');
                             }
                         }
                     ]
@@ -85,7 +87,7 @@ export default function EmailVerificationScreen() {
 
     const handleSignOut = async () => {
         try {
-            await auth.signOut();
+            await auth().signOut();
             router.replace('/(auth)/login');
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to sign out. Please try again.');
@@ -120,9 +122,7 @@ export default function EmailVerificationScreen() {
                     </View>
 
                     <Text style={styles.title}>Verify Your Email</Text>
-                    <Text style={styles.subtitle}>
-                        We've sent a verification link to:
-                    </Text>
+                    <Text style={styles.subtitle}>We've sent a verification link to:</Text>
                     <Text style={styles.email}>{userEmail}</Text>
 
                     <View style={styles.infoCard}>

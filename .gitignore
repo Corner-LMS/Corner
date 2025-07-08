@@ -1,9 +1,61 @@
 web_backup/
 backend_backup/
-mobile/Corner/config/
 mobile/Corner/.env
 mobile/Corner/ios/
 mobile/Corner/android/
-mobile/Corner/app.json
-mobile/Corner/corner-70a1e-firebase-adminsdk-fbsvc-10c9a337c5.json
+mobile/Corner/GoogleService-Info.plist
 mobile/Corner/google-services.json
+mobile/Corner/config/
+mobile/Corner/corner-70a1e-firebase-adminsdk-fbsvc-10c9a337c5.json
+
+# node_modules
+node_modules/
+
+# build
+build/
+
+# dist
+dist/
+
+# coverage
+coverage/
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+.env
+
+
+# typescript
+*.tsbuildinfo
+
+app-example
+package-lock.json

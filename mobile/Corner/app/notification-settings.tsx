@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert, Li
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../config/ firebase-config';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { notificationService } from '../services/notificationService';
 import { notificationHelpers } from '../services/notificationHelpers';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -56,10 +56,10 @@ export default function NotificationSettingsScreen() {
 
     const loadNotificationSettings = async () => {
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) return;
 
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userDoc = await firestore().collection('users').doc(user.uid).get();
             const userData = userDoc.data();
 
             if (userData) {
@@ -95,14 +95,14 @@ export default function NotificationSettingsScreen() {
     const saveNotificationSettings = async () => {
         setSaving(true);
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) {
                 Alert.alert('Error', 'You must be logged in.');
                 return;
             }
 
             // Save settings to Firestore
-            await updateDoc(doc(db, 'users', user.uid), {
+            await firestore().collection('users').doc(user.uid).update({
                 notificationSettings: settings,
                 settingsUpdatedAt: new Date()
             });
@@ -145,7 +145,7 @@ export default function NotificationSettingsScreen() {
 
     const clearAllNotifications = async () => {
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) {
                 Alert.alert('Error', 'You must be logged in.');
                 return;
@@ -351,6 +351,19 @@ export default function NotificationSettingsScreen() {
                             <Text style={styles.buttonText}>Help & Support</Text>
                         </LinearGradient>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.button, styles.sitemapButton]}
+                        onPress={() => router.push('/_sitemap')}
+                    >
+                        <LinearGradient
+                            colors={['#10b981', '#059669']}
+                            style={styles.buttonGradient}
+                        >
+                            <Ionicons name="map-outline" size={20} color="#fff" />
+                            <Text style={styles.buttonText}>View Sitemap</Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity
@@ -496,6 +509,9 @@ const styles = StyleSheet.create({
         // Gradient handled by buttonGradient
     },
     supportButton: {
+        // Gradient handled by buttonGradient
+    },
+    sitemapButton: {
         // Gradient handled by buttonGradient
     },
     buttonText: {

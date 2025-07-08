@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StatusBar, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { db, auth } from '../../config/ firebase-config';
-import { collection, getDocs, query, where, orderBy, limit, doc, getDoc, Timestamp, onSnapshot } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { router } from 'expo-router';
 import { getSchoolById } from '@/constants/Schools';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -173,7 +173,7 @@ export default function AnalyticsScreen() {
     // Optimized analytics fetching with caching
     const fetchAnalyticsData = useCallback(async (forceRefresh = false) => {
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) return;
 
             // Check cache first
@@ -186,15 +186,15 @@ export default function AnalyticsScreen() {
             }
 
             // Check if user is admin and get their school
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (!userDoc.exists() || userDoc.data().role !== 'admin') {
+            const userDoc = await firestore().collection('users').doc(user.uid).get();
+            if (!userDoc.exists() || userDoc.data()?.role !== 'admin') {
                 Alert.alert('Access Denied', 'You do not have permission to view analytics.');
                 router.back();
                 return;
             }
 
             const adminData = userDoc.data();
-            const adminSchoolId = adminData.schoolId;
+            const adminSchoolId = adminData?.schoolId;
 
             if (!adminSchoolId) {
                 Alert.alert('Error', 'Your account is not associated with any school. Please contact support.');
@@ -211,20 +211,18 @@ export default function AnalyticsScreen() {
             }
 
             // Optimized: Use where clause to filter by schoolId instead of fetching all
-            const coursesQuery = query(
-                collection(db, 'courses'),
-                where('schoolId', '==', adminSchoolId)
-            );
-            const coursesSnapshot = await getDocs(coursesQuery);
-            const courses = coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const coursesSnapshot = await firestore()
+                .collection('courses')
+                .where('schoolId', '==', adminSchoolId)
+                .get();
+            const courses = coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
 
             // Optimized: Use where clause to filter users by schoolId
-            const usersQuery = query(
-                collection(db, 'users'),
-                where('schoolId', '==', adminSchoolId)
-            );
-            const usersSnapshot = await getDocs(usersQuery);
-            const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const usersSnapshot = await firestore()
+                .collection('users')
+                .where('schoolId', '==', adminSchoolId)
+                .get();
+            const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
 
             // Count users by role
             const roleCount = users.reduce((acc, user) => {
@@ -241,8 +239,8 @@ export default function AnalyticsScreen() {
             // Optimized: Batch fetch announcements and discussions counts
             const courseActivityPromises = courses.map(async (course) => {
                 const [announcementsSnapshot, discussionsSnapshot] = await Promise.all([
-                    getDocs(collection(db, 'courses', course.id, 'announcements')),
-                    getDocs(collection(db, 'courses', course.id, 'discussions'))
+                    firestore().collection('courses').doc(course.id).collection('announcements').get(),
+                    firestore().collection('courses').doc(course.id).collection('discussions').get()
                 ]);
 
                 return {
@@ -277,16 +275,20 @@ export default function AnalyticsScreen() {
             // Optimized: Only fetch recent posts instead of all posts
             const recentActivityPromises = courses.map(async (course) => {
                 const [recentAnnouncements, recentDiscussions] = await Promise.all([
-                    getDocs(query(
-                        collection(db, 'courses', course.id, 'announcements'),
-                        where('createdAt', '>=', sevenDaysAgo),
-                        orderBy('createdAt', 'desc')
-                    )),
-                    getDocs(query(
-                        collection(db, 'courses', course.id, 'discussions'),
-                        where('createdAt', '>=', sevenDaysAgo),
-                        orderBy('createdAt', 'desc')
-                    ))
+                    firestore()
+                        .collection('courses')
+                        .doc(course.id)
+                        .collection('announcements')
+                        .where('createdAt', '>=', sevenDaysAgo)
+                        .orderBy('createdAt', 'desc')
+                        .get(),
+                    firestore()
+                        .collection('courses')
+                        .doc(course.id)
+                        .collection('discussions')
+                        .where('createdAt', '>=', sevenDaysAgo)
+                        .orderBy('createdAt', 'desc')
+                        .get()
                 ]);
 
                 return { course, recentAnnouncements, recentDiscussions };

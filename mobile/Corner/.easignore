@@ -1,0 +1,23 @@
+web_backup/
+backend_backup/
+
+mobile/Corner/.env
+mobile/Corner/ios/
+mobile/Corner/android/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+.env
+
+
+# typescript
+*.tsbuildinfo
+
+app-example

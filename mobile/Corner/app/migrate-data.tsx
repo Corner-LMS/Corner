@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { db, auth } from '../config/ firebase-config';
-import { collection, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
 interface Course {
     id: string;
@@ -38,15 +38,15 @@ export default function MigrateDataScreen() {
 
         try {
             // Check if user is admin
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) {
                 Alert.alert('Error', 'You must be logged in as an admin to run migration.');
                 setLoading(false);
                 return;
             }
 
-            const userDoc = await doc(db, 'users', user.uid);
-            const userSnap = await getDocs(collection(db, 'users'));
+            const userDoc = await firestore().collection('users').doc(user.uid);
+            const userSnap = await firestore().collection('users').get();
             const currentUser = userSnap.docs.find(doc => doc.id === user.uid);
 
             if (!currentUser || currentUser.data().role !== 'admin') {
@@ -58,7 +58,7 @@ export default function MigrateDataScreen() {
             addLog('🔄 Starting course school migration...');
 
             // Get all courses
-            const coursesSnapshot = await getDocs(collection(db, 'courses'));
+            const coursesSnapshot = await firestore().collection('courses').get();
             const courses: Course[] = coursesSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -78,7 +78,7 @@ export default function MigrateDataScreen() {
             }
 
             // Get all users (we need to check teachers)
-            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const usersSnapshot = await firestore().collection('users').get();
             const users: User[] = usersSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -97,7 +97,7 @@ export default function MigrateDataScreen() {
             addLog(`🏫 Found ${Object.keys(teacherSchoolMap).length} teachers with school associations`);
 
             // Use batch updates for better performance
-            const batch = writeBatch(db);
+            const batch = firestore().batch();
             let updateCount = 0;
             let skipCount = 0;
 
@@ -105,7 +105,7 @@ export default function MigrateDataScreen() {
                 const teacherSchoolId = teacherSchoolMap[course.teacherId];
 
                 if (teacherSchoolId) {
-                    const courseRef = doc(db, 'courses', course.id);
+                    const courseRef = firestore().collection('courses').doc(course.id);
                     batch.update(courseRef, {
                         schoolId: teacherSchoolId
                     });

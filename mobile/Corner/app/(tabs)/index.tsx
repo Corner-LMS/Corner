@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, Dimensions, StatusBar, Image } from 'react-native';
-import { auth, db } from '../../config/ firebase-config';
-import { collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, arrayRemove } from 'firebase/firestore';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,12 +36,12 @@ export default function DashboardScreen() {
     const [role, setRole] = useState('');
     const [studentCourses, setStudentCourses] = useState<any[]>([]);
     const [teacherNames, setTeacherNames] = useState<Record<string, string>>({});
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
     const [schoolInfo, setSchoolInfo] = useState<any>(null);
     const [userData, setUserData] = useState<any>(null);
 
     // Memoized helper functions
-    const getUserInitials = useCallback((user: User, userData: any) => {
+    const getUserInitials = useCallback((user: FirebaseAuthTypes.User, userData: any) => {
         if (userData?.name) {
             const nameParts = userData.name.trim().split(' ');
             if (nameParts.length >= 2) {
@@ -55,7 +54,7 @@ export default function DashboardScreen() {
         }
     }, []);
 
-    const getDisplayName = useCallback((user: User, userData: any) => {
+    const getDisplayName = useCallback((user: FirebaseAuthTypes.User, userData: any) => {
         if (userData?.name) {
             const nameParts = userData.name.trim().split(' ');
             return nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase();
@@ -72,7 +71,7 @@ export default function DashboardScreen() {
         return 'evening';
     }, []);
 
-    const loadUserAndCourses = useCallback(async (user: User, forceRefresh = false) => {
+    const loadUserAndCourses = useCallback(async (user: FirebaseAuthTypes.User, forceRefresh = false) => {
         if (!user) {
             setLoading(false);
             return;
@@ -93,8 +92,7 @@ export default function DashboardScreen() {
                 return;
             }
 
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDocSnap = await getDoc(userDocRef);
+            const userDocSnap = await firestore().collection('users').doc(user.uid).get();
 
             if (!userDocSnap.exists()) {
                 setLoading(false);
@@ -103,8 +101,13 @@ export default function DashboardScreen() {
 
             const userData = userDocSnap.data();
 
+            if (!userData) {
+                setLoading(false);
+                return;
+            }
+
             if (!userData.role) {
-                await updateDoc(userDocRef, { role: 'student' });
+                await firestore().collection('users').doc(user.uid).update({ role: 'student' });
                 setRole('student');
             } else {
                 setRole(userData.role);
@@ -128,8 +131,7 @@ export default function DashboardScreen() {
 
                 // Batch fetch course data
                 const coursePromises = userData.courseIds.map(async (courseId: string) => {
-                    const courseRef = doc(db, 'courses', courseId);
-                    return getDoc(courseRef);
+                    return firestore().collection('courses').doc(courseId).get();
                 });
 
                 const courseSnaps = await Promise.all(coursePromises);
@@ -140,18 +142,22 @@ export default function DashboardScreen() {
 
                     if (courseSnap.exists()) {
                         const courseData = courseSnap.data();
-                        studentCoursesList.push({
-                            ...courseData,
-                            id: courseId,
-                            joinedAt: userData.courseJoinDates?.[courseId] || new Date().toISOString()
-                        });
+                        if (courseData) {
+                            studentCoursesList.push({
+                                ...courseData,
+                                id: courseId,
+                                joinedAt: userData.courseJoinDates?.[courseId] || new Date().toISOString()
+                            });
 
-                        // Fetch teacher name if not already cached
-                        if (courseData.teacherId && !studentTeacherNamesMap[courseId]) {
-                            const teacherRef = doc(db, 'users', courseData.teacherId);
-                            const teacherSnap = await getDoc(teacherRef);
-                            if (teacherSnap.exists()) {
-                                studentTeacherNamesMap[courseId] = teacherSnap.data().name || 'Unknown Teacher';
+                            // Fetch teacher name if not already cached
+                            if (courseData.teacherId && !studentTeacherNamesMap[courseId]) {
+                                const teacherSnap = await firestore().collection('users').doc(courseData.teacherId).get();
+                                if (teacherSnap.exists()) {
+                                    const teacherData = teacherSnap.data();
+                                    if (teacherData) {
+                                        studentTeacherNamesMap[courseId] = teacherData.name || 'Unknown Teacher';
+                                    }
+                                }
                             }
                         }
                     }
@@ -165,13 +171,12 @@ export default function DashboardScreen() {
 
             if (userData.role === 'teacher') {
                 // For teachers, fetch only their courses
-                const q = query(
-                    collection(db, 'courses'),
-                    where('teacherId', '==', user.uid)
-                );
-                const snapshot = await getDocs(q);
+                const snapshot = await firestore()
+                    .collection('courses')
+                    .where('teacherId', '==', user.uid)
+                    .get();
                 const teacherCoursesList = snapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .map(doc => ({ id: doc.id, ...doc.data() as any }))
                     .filter((course: any) => course.archived !== true);
                 setCourses(teacherCoursesList);
                 coursesList = teacherCoursesList;
@@ -185,12 +190,11 @@ export default function DashboardScreen() {
                     setTeacherNames({});
                 } else {
                     // For admins, fetch courses from their school only
-                    const q = query(
-                        collection(db, 'courses'),
-                        where('schoolId', '==', adminSchoolId)
-                    );
-                    const snapshot = await getDocs(q);
-                    const adminCoursesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const snapshot = await firestore()
+                        .collection('courses')
+                        .where('schoolId', '==', adminSchoolId)
+                        .get();
+                    const adminCoursesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
                     setCourses(adminCoursesList);
 
                     // Batch fetch teacher names
@@ -198,15 +202,17 @@ export default function DashboardScreen() {
                     const adminTeacherNamesMap: Record<string, string> = {};
 
                     const teacherPromises = teacherIds.map(async (teacherId: string) => {
-                        const teacherRef = doc(db, 'users', teacherId);
-                        return getDoc(teacherRef);
+                        return firestore().collection('users').doc(teacherId).get();
                     });
 
                     const teacherSnaps = await Promise.all(teacherPromises);
 
                     teacherSnaps.forEach((teacherSnap, index) => {
                         if (teacherSnap.exists()) {
-                            adminTeacherNamesMap[teacherIds[index]] = teacherSnap.data().name || 'Unknown Teacher';
+                            const teacherData = teacherSnap.data();
+                            if (teacherData) {
+                                adminTeacherNamesMap[teacherIds[index]] = teacherData.name || 'Unknown Teacher';
+                            }
                         }
                     });
 
@@ -235,7 +241,7 @@ export default function DashboardScreen() {
     }, []);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = auth().onAuthStateChanged((user) => {
             setUser(user);
             if (user) {
                 loadUserAndCourses(user);
@@ -250,8 +256,9 @@ export default function DashboardScreen() {
 
     useFocusEffect(
         React.useCallback(() => {
-            if (auth.currentUser) {
-                loadUserAndCourses(auth.currentUser, true); // Force refresh on focus
+            const currentUser = auth().currentUser;
+            if (currentUser) {
+                loadUserAndCourses(currentUser, true); // Force refresh on focus
             }
         }, [loadUserAndCourses])
     );
@@ -267,12 +274,11 @@ export default function DashboardScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const user = auth.currentUser;
+                            const user = auth().currentUser;
                             if (!user) return;
 
-                            const userRef = doc(db, 'users', user.uid);
-                            await updateDoc(userRef, {
-                                courseIds: arrayRemove(courseId)
+                            await firestore().collection('users').doc(user.uid).update({
+                                courseIds: firestore.FieldValue.arrayRemove(courseId)
                             });
 
                             setStudentCourses(prev => prev.filter(course => course.id !== courseId));
@@ -298,7 +304,7 @@ export default function DashboardScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await deleteDoc(doc(db, 'courses', courseId));
+                            await firestore().collection('courses').doc(courseId).delete();
                             setCourses(prev => prev.filter(course => course.id !== courseId));
                             Alert.alert('Success', `"${courseName}" has been deleted.`);
                         } catch (error) {
@@ -321,7 +327,7 @@ export default function DashboardScreen() {
                     text: 'Archive',
                     onPress: async () => {
                         try {
-                            await updateDoc(doc(db, 'courses', courseId), {
+                            await firestore().collection('courses').doc(courseId).update({
                                 archived: true,
                                 archivedAt: new Date().toISOString()
                             });

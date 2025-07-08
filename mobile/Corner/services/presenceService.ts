@@ -1,5 +1,5 @@
-import { auth, db } from '../config/ firebase-config';
-import { doc, updateDoc, onSnapshot, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore, { serverTimestamp } from '@react-native-firebase/firestore';
 import { AppState, AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 
@@ -46,12 +46,12 @@ class PresenceService {
         this.setupNetworkListener();
         this.isInitialized = true;
 
-        console.log(`Presence service initialized for ${userRole}`);
+        
     }
 
     // Initialize teacher presence tracking
     private async initializeTeacherPresence(): Promise<void> {
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (!user) return;
 
         try {
@@ -67,17 +67,14 @@ class PresenceService {
 
     // Initialize student listeners for teacher presence
     private async initializeStudentListeners(): Promise<void> {
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (!user) return;
 
         try {
             // Get student's enrolled courses
-            const coursesQuery = query(
-                collection(db, 'courses'),
-                where('students', 'array-contains', user.uid)
-            );
+            const coursesQuery = firestore().collection('courses').where('students', 'array-contains', user.uid);
 
-            const coursesSnapshot = await getDocs(coursesQuery);
+            const coursesSnapshot = await coursesQuery.get();
 
             // Listen for each teacher's online status
             for (const courseDoc of coursesSnapshot.docs) {
@@ -99,17 +96,17 @@ class PresenceService {
 
     // Set teacher online status
     async setTeacherOnlineStatus(isOnline: boolean): Promise<void> {
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (!user || this.currentRole !== 'teacher') return;
 
         try {
-            const userDocRef = doc(db, 'users', user.uid);
-            await updateDoc(userDocRef, {
+            const userDocRef = firestore().collection('users').doc(user.uid);
+            await userDocRef.update({
                 isOnline: isOnline,
                 lastSeen: serverTimestamp()
             });
 
-            console.log(`Teacher status updated: ${isOnline ? 'online' : 'offline'}`);
+            
         } catch (error) {
             console.error('Error updating teacher presence:', error);
         }
@@ -117,13 +114,13 @@ class PresenceService {
 
     // Listen to a specific teacher's presence
     private listenToTeacherPresence(teacherId: string, courseId: string, courseName: string): void {
-        const teacherDocRef = doc(db, 'users', teacherId);
+            const teacherDocRef = firestore().collection('users').doc(teacherId);
         let previousOnlineStatus = false; // Track previous online status
 
-        const unsubscribe = onSnapshot(teacherDocRef, (doc) => {
+        const unsubscribe = teacherDocRef.onSnapshot((doc) => {
             if (doc.exists()) {
                 const userData = doc.data();
-                const currentOnlineStatus = userData.isOnline === true;
+                const currentOnlineStatus = userData?.isOnline === true;
 
                 // Only notify if teacher just came online (was offline before)
                 if (!previousOnlineStatus && currentOnlineStatus && !this.notifiedTeachers.has(teacherId)) {
@@ -239,7 +236,7 @@ class PresenceService {
     // Reset notification tracking for new session
     private resetNotificationTracking(): void {
         this.notifiedTeachers.clear();
-        console.log('Reset notification tracking for new session');
+       
     }
 
     // Cleanup all listeners
@@ -272,7 +269,7 @@ class PresenceService {
         this.isInitialized = false;
         this.currentRole = null;
 
-        console.log('Presence service cleaned up');
+        
     }
 
     // Get current presence state

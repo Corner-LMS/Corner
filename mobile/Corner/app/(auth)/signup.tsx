@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, Alert, Image, ScrollView } from 'react-native';
-import { signUp } from './useAuth';
+import React, { useState } from 'react';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView, Alert } from 'react-native';
+import { signUp, googleSignIn } from './useAuth';
 import { router } from 'expo-router';
-import { auth } from '../../config/ firebase-config';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/ firebase-config';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import { getErrorGuidance, getPasswordStrengthMessage, getPasswordStrengthColor } from '../../utils/errorHelpers';
-// import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { getErrorGuidance } from '../../utils/errorHelpers';
 
 export default function Signup() {
     const [email, setEmail] = useState('');
@@ -20,39 +18,28 @@ export default function Signup() {
     const [passwordFocused, setPasswordFocused] = useState(false);
     const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
-    // useEffect(() => {
-    //     const checkGoogleSignIn = async () => {
-    //         try {
-    //             await GoogleSignin.hasPlayServices();
-    //         } catch (error) {
-    //             setError('Google Play Services not available');
-    //         }
-    //     };
-    //     checkGoogleSignIn();
-    // }, []);
-
-    const validatePassword = (password: string) => {
-        const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
-        return passwordRegex.test(password);
-    };
-
     const handleSignup = async () => {
-        if (!validatePassword(password)) {
-            setError('Password must be at least 8 characters long and contain at least one number and one special character');
-            return;
-        }
-
-        if (password !== confirmPassword) {
-            setError('Passwords do not match. Please make sure both passwords are identical.');
-            return;
-        }
-
         try {
             setLoading(true);
-            setError(null); // Clear previous errors
+            setError(null);
             setErrorGuidance(null);
-            const result = await signUp(email, password);
-            await handleSuccessfulLogin(result.user);
+
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                setError('Passwords do not match');
+                return;
+            }
+
+            // Validate password length
+            if (password.length < 6) {
+                setError('Password must be at least 6 characters long');
+                return;
+            }
+
+            await signUp(email, password);
+
+            // After successful signup, redirect to email verification
+            router.replace('/(auth)/email-verification');
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : 'An error occurred';
             setError(errorMessage);
@@ -65,67 +52,58 @@ export default function Signup() {
         }
     };
 
+    const handleGoogleSignIn = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            setErrorGuidance(null);
+            await googleSignIn();
+
+            // Wait a bit for auth state to settle, then check and navigate
+            setTimeout(async () => {
+                const user = auth().currentUser;
+                if (user) {
+                    const userDoc = await firestore().collection('users').doc(user.uid).get();
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        if (userData?.role && userData?.schoolId) {
+                            // User has role and school, redirect to main app
+                            router.replace('/(tabs)');
+                        } else {
+                            // User needs to set role and school
+                            router.replace('/role');
+                        }
+                    } else {
+                        // User document doesn't exist (shouldn't happen with Google Sign-In)
+                        router.replace('/role');
+                    }
+                } else {
+                    // No user (shouldn't happen after successful Google Sign-In)
+                    router.replace('/role');
+                }
+            }, 1000); // 1 second delay to let auth state settle
+        } catch (err: any) {
+            const errorMessage = err instanceof Error ? err.message : 'Google Sign-In failed';
+            setError(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleErrorAction = (action: string) => {
         switch (action) {
             case 'login':
                 router.replace('/(auth)/login');
+                break;
+            case 'reset':
+                router.push('/(auth)/reset-password');
                 break;
             default:
                 break;
         }
     };
 
-    // const handleGoogleSignIn = async () => {
-    //     try {
-    //         const result = await signInWithGoogle();
-
-    //         if (!result) {
-    //             router.replace('/role');
-    //             return;
-    //         }
-
-    //         await handleSuccessfulLogin(result.user);
-    //     } catch (error: any) {
-    //         Alert.alert('Error', error.message);
-    //     }
-    // };
-
-    const handleSuccessfulLogin = async (user: any) => {
-        try {
-            // Check if email is verified
-            if (!user.emailVerified) {
-                // Redirect to email verification screen
-                router.replace('/(auth)/email-verification');
-                return;
-            }
-
-            const userDoc = await getDoc(doc(db, "users", user.uid));
-
-            if (!userDoc.exists()) {
-                router.replace('/role');
-                return;
-            }
-
-            const userData = userDoc.data();
-
-            if (!userData.role || !userData.schoolId) {
-                router.replace('/role');
-                return;
-            }
-
-            if (userData.role === 'admin') {
-                router.replace('/(tabs)');
-            } else if (userData.role === 'teacher') {
-                router.replace('/(tabs)');
-            } else if (userData.role === 'student') {
-                router.replace('/(tabs)');
-            } else {
-                router.replace('/role');
-            }
-        } catch (error) {
-            router.replace('/role');
-        }
-    };
+    const isFormValid = email && password && confirmPassword && password === confirmPassword && password.length >= 6;
 
     return (
         <KeyboardAvoidingView
@@ -141,7 +119,7 @@ export default function Signup() {
                 <View style={styles.header}>
                     <TouchableOpacity
                         style={styles.backButton}
-                        onPress={() => router.replace('/welcome')}
+                        onPress={() => router.replace('/(auth)/login')}
                     >
                         <Ionicons name="arrow-back" size={24} color="#4f46e5" />
                     </TouchableOpacity>
@@ -157,7 +135,7 @@ export default function Signup() {
                             />
                         </View>
                         <Text style={styles.title}>Create Account</Text>
-                        <Text style={styles.subtitle}>Join our learning community and start your journey</Text>
+                        <Text style={styles.subtitle}>Join Corner to start your learning journey</Text>
                     </View>
 
                     <View style={styles.formSection}>
@@ -179,7 +157,7 @@ export default function Signup() {
                                     placeholderTextColor="#94a3b8"
                                     onChangeText={(text) => {
                                         setEmail(text);
-                                        setError(null); // Clear error when user types
+                                        setError(null);
                                         setErrorGuidance(null);
                                     }}
                                     value={email}
@@ -206,11 +184,11 @@ export default function Signup() {
                                 />
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Create a strong password"
+                                    placeholder="Create a password"
                                     placeholderTextColor="#94a3b8"
                                     onChangeText={(text) => {
                                         setPassword(text);
-                                        setError(null); // Clear error when user types
+                                        setError(null);
                                         setErrorGuidance(null);
                                     }}
                                     value={password}
@@ -220,12 +198,6 @@ export default function Signup() {
                                     onBlur={() => setPasswordFocused(false)}
                                 />
                             </View>
-                            <Text style={[
-                                styles.passwordHint,
-                                { color: getPasswordStrengthColor(password) }
-                            ]}>
-                                {getPasswordStrengthMessage(password)}
-                            </Text>
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -246,7 +218,7 @@ export default function Signup() {
                                     placeholderTextColor="#94a3b8"
                                     onChangeText={(text) => {
                                         setConfirmPassword(text);
-                                        setError(null); // Clear error when user types
+                                        setError(null);
                                         setErrorGuidance(null);
                                     }}
                                     value={confirmPassword}
@@ -278,14 +250,14 @@ export default function Signup() {
                         <TouchableOpacity
                             style={[
                                 styles.primaryButton,
-                                (!email || !password || !confirmPassword) && styles.primaryButtonDisabled
+                                !isFormValid && styles.primaryButtonDisabled
                             ]}
                             onPress={handleSignup}
-                            disabled={!email || !password || !confirmPassword || loading}
+                            disabled={!isFormValid || loading}
                         >
                             {loading ? (
                                 <View style={styles.loadingContainer}>
-                                    <Text style={styles.primaryButtonText}>Creating Account...</Text>
+                                    <Text style={styles.primaryButtonText}>Creating account...</Text>
                                 </View>
                             ) : (
                                 <>
@@ -293,6 +265,24 @@ export default function Signup() {
                                     <Ionicons name="arrow-forward" size={20} color="#fff" />
                                 </>
                             )}
+                        </TouchableOpacity>
+
+                        <View style={styles.dividerContainer}>
+                            <View style={styles.divider} />
+                            <Text style={styles.dividerText}>or</Text>
+                            <View style={styles.divider} />
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.googleButton}
+                            onPress={handleGoogleSignIn}
+                            disabled={loading}
+                        >
+                            <Image
+                                source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+                                style={styles.googleIcon}
+                            />
+                            <Text style={styles.googleButtonText}>Continue with Google</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -338,10 +328,11 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: 24,
+        flexDirection: 'column',
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: 20,
         marginTop: 20,
     },
     logoContainer: {
@@ -377,17 +368,16 @@ const styles = StyleSheet.create({
         maxWidth: 280,
     },
     formSection: {
-        flex: 1,
-        minHeight: 500,
+        width: '100%',
     },
     inputGroup: {
-        marginBottom: 20,
+        marginBottom: 12,
     },
     inputLabel: {
         fontSize: 14,
         fontWeight: '600',
         color: '#374151',
-        marginBottom: 8,
+        marginBottom: 4,
         letterSpacing: 0.3,
     },
     inputContainer: {
@@ -396,7 +386,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         borderRadius: 16,
         paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingVertical: 14,
         borderWidth: 2,
         borderColor: '#e5e7eb',
         shadowColor: '#000',
@@ -423,13 +413,6 @@ const styles = StyleSheet.create({
         color: '#1f2937',
         padding: 0,
         fontWeight: '500',
-    },
-    passwordHint: {
-        fontSize: 12,
-        color: '#6b7280',
-        marginTop: 6,
-        marginLeft: 4,
-        fontWeight: '400',
     },
     errorContainer: {
         flexDirection: 'row',
@@ -473,7 +456,7 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         paddingHorizontal: 24,
         borderRadius: 12,
-        marginBottom: 24,
+        marginBottom: 16,
         shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
@@ -495,12 +478,49 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    divider: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#e5e7eb',
+    },
+    dividerText: {
+        color: '#6b7280',
+        fontSize: 14,
+        fontWeight: '600',
+        marginHorizontal: 12,
+    },
+    googleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ffffff',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        marginBottom: 12,
+    },
+    googleIcon: {
+        width: 20,
+        height: 20,
+        marginRight: 12,
+    },
+    googleButtonText: {
+        color: '#1f2937',
+        fontSize: 16,
+        fontWeight: '600',
+    },
     footer: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 24,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+        paddingVertical: 16,
+        paddingBottom: Platform.OS === 'ios' ? 20 : 16,
     },
     footerText: {
         color: '#6b7280',
@@ -512,6 +532,4 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '600',
     },
-});
-
-
+}); 

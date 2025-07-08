@@ -16,7 +16,8 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cornerbusinessgroup.corner"
+      "bundleIdentifier": "com.cornerbusinessgroup.corner",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -43,18 +44,22 @@
           "backgroundColor": "#8B5CF6"
         }
       ],
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          "androidClientId": "899702669451-l2146kmtd6qvmq9j8h9f6ajvticfvavo.apps.googleusercontent.com",
-          "webClientId": "899702669451-2nk8tic847gjvv3m57rb5okdic1bs0vc.apps.googleusercontent.com",
-          "iosClientId": "899702669451-uvgne6e07q59ifeuur306f8sscs9i0ir.apps.googleusercontent.com",
-          "iosUrlScheme": "com.googleusercontent.apps.899702669451-uvgne6e07q59ifeuur306f8sscs9i0ir"
-        }
-      ],
+      ["@react-native-google-signin/google-signin"],
       "expo-notifications",
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/crashlytics",
+      "@react-native-firebase/perf",
+      
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "scheme": "corner",
     "extra": {

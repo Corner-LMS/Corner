@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, StatusBar, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth, db } from '../config/ firebase-config';
-import { doc, getDoc } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { createCourse } from './(auth)/useCourses';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,12 +20,12 @@ export default function CreateCourseScreen() {
         // Fetch teacher's name from their profile
         const fetchTeacherName = async () => {
             try {
-                const user = auth.currentUser;
+                const user = auth().currentUser;
                 if (user) {
-                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    const userDoc = await firestore().collection('users').doc(user.uid).get();
                     if (userDoc.exists()) {
                         const userData = userDoc.data();
-                        setTeacherName(userData.name || 'Unknown Teacher');
+                        setTeacherName(userData?.name || 'Unknown Teacher');
                     }
                 }
             } catch (error) {
@@ -48,7 +48,7 @@ export default function CreateCourseScreen() {
 
         setLoading(true);
         try {
-            const teacherId = auth.currentUser?.uid;
+            const teacherId = auth().currentUser?.uid;
             if (!teacherId) {
                 setError('No teacher ID found');
                 return;

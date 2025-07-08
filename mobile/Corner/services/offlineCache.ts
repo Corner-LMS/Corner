@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from '../config/ firebase-config';
-import { collection, query, orderBy, getDocs, onSnapshot, Timestamp } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 
 export interface CachedAnnouncement {
     id: string;
@@ -278,12 +277,9 @@ class OfflineCacheService {
     // Sync Methods
     async syncAnnouncementsFromFirebase(courseId: string, courseName: string): Promise<any[]> {
         try {
-            const announcementsQuery = query(
-                collection(db, 'courses', courseId, 'announcements'),
-                orderBy('createdAt', 'desc')
-            );
+            const announcementsQuery = firestore().collection('courses').doc(courseId).collection('announcements').orderBy('createdAt', 'desc');
 
-            const snapshot = await getDocs(announcementsQuery);
+            const snapshot = await announcementsQuery.get();
             const announcements = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -301,12 +297,9 @@ class OfflineCacheService {
 
     async syncResourcesFromFirebase(courseId: string, courseName: string): Promise<any[]> {
         try {
-            const resourcesQuery = query(
-                collection(db, 'courses', courseId, 'resources'),
-                orderBy('createdAt', 'desc')
-            );
+            const resourcesQuery = firestore().collection('courses').doc(courseId).collection('resources').orderBy('createdAt', 'desc');
 
-            const snapshot = await getDocs(resourcesQuery);
+            const snapshot = await resourcesQuery.get();
             const resources = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -324,12 +317,9 @@ class OfflineCacheService {
 
     async syncDiscussionsFromFirebase(courseId: string, courseName: string): Promise<any[]> {
         try {
-            const discussionsQuery = query(
-                collection(db, 'courses', courseId, 'discussions'),
-                orderBy('createdAt', 'desc')
-            );
+            const discussionsQuery = firestore().collection('courses').doc(courseId).collection('discussions').orderBy('createdAt', 'desc');
 
-            const snapshot = await getDocs(discussionsQuery);
+            const snapshot = await discussionsQuery.get();
             const discussions = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -347,12 +337,9 @@ class OfflineCacheService {
 
     async syncCommentsFromFirebase(discussionId: string, courseId: string): Promise<any[]> {
         try {
-            const commentsQuery = query(
-                collection(db, 'courses', courseId, 'discussions', discussionId, 'comments'),
-                orderBy('createdAt', 'asc')
-            );
+            const commentsQuery = firestore().collection('courses').doc(courseId).collection('discussions').doc(discussionId).collection('comments').orderBy('createdAt', 'asc');
 
-            const snapshot = await getDocs(commentsQuery);
+            const snapshot = await commentsQuery.get();
             const comments = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()

@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import MarkdownRenderer from 'react-native-markdown-renderer';
-import { db, auth } from '../config/ firebase-config';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
+
+import auth from '@react-native-firebase/auth';
+import firestore, { serverTimestamp, increment } from '@react-native-firebase/firestore';
 import { notificationHelpers } from '../services/notificationHelpers';
 import { offlineCacheService, CachedComment } from '../services/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
@@ -157,7 +157,7 @@ export default function DiscussionDetailScreen() {
         // Get discussion details
         const getDiscussion = async () => {
             try {
-                const discussionDoc = await getDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string));
+                const discussionDoc = await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).get();
                 if (discussionDoc.exists()) {
                     setDiscussion({
                         id: discussionDoc.id,
@@ -176,12 +176,9 @@ export default function DiscussionDetailScreen() {
         getDiscussion();
 
         // Listen to comments and cache them
-        const commentsQuery = query(
-            collection(db, 'courses', courseId as string, 'discussions', discussionId as string, 'comments'),
-            orderBy('createdAt', 'desc')
-        );
+        const commentsQuery = firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).collection('comments').orderBy('createdAt', 'desc');
 
-        const unsubscribeComments = onSnapshot(commentsQuery, async (snapshot) => {
+        const unsubscribeComments = commentsQuery.onSnapshot(async (snapshot) => {
             const allComments = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -255,10 +252,10 @@ export default function DiscussionDetailScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await deleteDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string, 'comments', commentId));
+                            await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).collection('comments').doc(commentId).delete();
 
                             // Update replies count
-                            await updateDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string), {
+                            await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).update({
                                 replies: increment(-1)
                             });
 
@@ -289,9 +286,9 @@ export default function DiscussionDetailScreen() {
 
         setLoading(true);
         try {
-            await updateDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string, 'comments', editingComment.id), {
+            await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).collection('comments').doc(editingComment.id).update({
                 content: newComment.trim(),
-                updatedAt: serverTimestamp()
+                updatedAt: firestore.FieldValue.serverTimestamp()
             });
 
             setNewComment('');
@@ -331,20 +328,20 @@ export default function DiscussionDetailScreen() {
 
         setLoading(true);
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) {
                 Alert.alert('Error', 'You must be logged in.');
                 return;
             }
 
             // Get user's name
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userDoc = await firestore().collection('users').doc(user.uid).get();
             const userName = userDoc.data()?.name || 'Anonymous';
 
             // Add comment
             const commentData: any = {
                 content: newComment.trim(),
-                createdAt: serverTimestamp(),
+                createdAt: firestore.FieldValue.serverTimestamp(),
                 authorName: userName,
                 authorRole: role,
                 authorId: user.uid
@@ -364,10 +361,10 @@ export default function DiscussionDetailScreen() {
                 commentData.isAnonymous = false;
             }
 
-            await addDoc(collection(db, 'courses', courseId as string, 'discussions', discussionId as string, 'comments'), commentData);
+            await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).collection('comments').add(commentData);
 
             // Update replies count
-            await updateDoc(doc(db, 'courses', courseId as string, 'discussions', discussionId as string), {
+            await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).update({
                 replies: increment(1)
             });
 
@@ -704,7 +701,7 @@ export default function DiscussionDetailScreen() {
                                     </TouchableOpacity>
                                 )}
                                 {/* Show edit/delete only for comment author and if not archived */}
-                                {auth.currentUser?.uid === comment.authorId && !courseIsArchived && (
+                                {auth().currentUser?.uid === comment.authorId && !courseIsArchived && (
                                     <>
                                         <TouchableOpacity
                                             style={styles.editButton}

@@ -3,8 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { db } from '../config/ firebase-config.js';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import firestore, { serverTimestamp } from '@react-native-firebase/firestore';
 import { offlineCacheService, CachedResource } from '../services/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
@@ -61,12 +60,9 @@ export default function CourseResourcesScreen() {
     const setupFirebaseListener = () => {
         if (!courseId) return;
 
-        const resourcesQuery = query(
-            collection(db, 'courses', courseId as string, 'resources'),
-            orderBy('createdAt', 'desc')
-        );
+        const resourcesQuery = firestore().collection('courses').doc(courseId as string).collection('resources').orderBy('createdAt', 'desc');
 
-        const unsubscribe = onSnapshot(resourcesQuery, async (snapshot) => {
+        const unsubscribe = resourcesQuery.onSnapshot(async (snapshot) => {
             const resourcesList = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -153,7 +149,7 @@ export default function CourseResourcesScreen() {
                 content = linkUrl.trim();
             }
 
-            await addDoc(collection(db, 'courses', courseId as string, 'resources'), {
+            await firestore().collection('courses').doc(courseId as string).collection('resources').add({
                 title: title.trim(),
                 type: selectedResourceType,
                 content,
@@ -190,7 +186,7 @@ export default function CourseResourcesScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await deleteDoc(doc(db, 'courses', courseId as string, 'resources', resourceId));
+                            await firestore().collection('courses').doc(courseId as string).collection('resources').doc(resourceId).delete();
                             Alert.alert('Success', 'Resource deleted successfully!');
                         } catch (error) {
                             console.error('Error deleting resource:', error);

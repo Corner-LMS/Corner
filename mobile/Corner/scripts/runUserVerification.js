@@ -2,29 +2,15 @@
 
 // Script to mark all existing users as email verified
 // Run this script once to avoid email verification errors for existing users
-
-const { initializeApp } = require("firebase/app");
-const { getFirestore, collection, getDocs, updateDoc, doc } = require('firebase/firestore');
-
-const firebaseConfig = {
-    apiKey: "AIzaSyDKporoD94nICcjOF6ZH3QD7tEmjS4mOCE",
-    authDomain: "corner-70a1e.firebaseapp.com",
-    projectId: "corner-70a1e",
-    storageBucket: "corner-70a1e.firebasestorage.app",
-    messagingSenderId: "899702669451",
-    appId: "1:899702669451:web:e602527afb3003ff0fd48e"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import firestore from '@react-native-firebase/firestore';
 
 async function markAllUsersVerified() {
     try {
         console.log('🚀 Starting to mark all users as verified...');
 
         // Get all users from Firestore
-        const usersCollection = collection(db, 'users');
-        const usersSnapshot = await getDocs(usersCollection);
+        const usersCollection = firestore().collection('users');
+        const usersSnapshot = await usersCollection.get();
 
         console.log(`📊 Found ${usersSnapshot.size} users to process`);
 
@@ -40,7 +26,7 @@ async function markAllUsersVerified() {
                 // Check if user already has emailVerified field
                 if (userData.emailVerified === undefined) {
                     // Update user to mark as verified
-                    await updateDoc(doc(db, 'users', userDoc.id), {
+                    await firestore().collection('users').doc(userDoc.id).update({
                         emailVerified: true,
                         emailVerifiedAt: new Date().toISOString()
                     });
@@ -51,7 +37,7 @@ async function markAllUsersVerified() {
                     console.log(`ℹ️  User ${userData.email || userDoc.id} already verified`);
                 } else {
                     // User exists but emailVerified is false, update to true
-                    await updateDoc(doc(db, 'users', userDoc.id), {
+                    await firestore().collection('users').doc(userDoc.id).update({
                         emailVerified: true,
                         emailVerifiedAt: new Date().toISOString()
                     });

@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../config/ firebase-config';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface Notification {
@@ -24,21 +24,16 @@ export default function NotificationsScreen() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const user = auth.currentUser;
+        const user = auth().currentUser;
         if (!user) {
             router.replace('/(auth)/login');
             return;
         }
 
         // Listen to user's notifications
-        const notificationsQuery = query(
-            collection(db, 'notifications'),
-            where('userId', '==', user.uid),
-            orderBy('timestamp', 'desc')
-        );
+        const notificationsQuery = firestore().collection('notifications').where('userId', '==', user.uid).orderBy('timestamp', 'desc');
 
-        const unsubscribe = onSnapshot(
-            notificationsQuery,
+        const unsubscribe = notificationsQuery.onSnapshot(
             (snapshot) => {
                 const notifs = snapshot.docs.map(doc => ({
                     id: doc.id,
@@ -58,20 +53,20 @@ export default function NotificationsScreen() {
 
     const markAsRead = async (notificationId: string) => {
         try {
-            await updateDoc(doc(db, 'notifications', notificationId), {
+            await firestore().collection('notifications').doc(notificationId).update({
                 read: true
             });
 
             // Also decrease the user's badge count
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (user) {
-                const userRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userRef);
+                const userRef = firestore().collection('users').doc(user.uid);
+                const userDoc = await userRef.get();
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
-                    const currentCount = userData.notificationData?.unreadCount || 0;
+                    const currentCount = userData?.notificationData?.unreadCount || 0;
                     if (currentCount > 0) {
-                        await updateDoc(userRef, {
+                        await userRef.update({
                             'notificationData.unreadCount': currentCount - 1
                         });
                     }
@@ -84,7 +79,7 @@ export default function NotificationsScreen() {
 
     const deleteNotification = async (notificationId: string) => {
         try {
-            await deleteDoc(doc(db, 'notifications', notificationId));
+            await firestore().collection('notifications').doc(notificationId).delete();
         } catch (error) {
             console.error('Error deleting notification:', error);
         }
@@ -100,14 +95,14 @@ export default function NotificationsScreen() {
         if (notification.type === 'announcement' || notification.type === 'discussion_milestone' || notification.type === 'teacher_discussion_milestone') {
             // Get course details for proper navigation
             try {
-                const courseDoc = await getDoc(doc(db, 'courses', notification.courseId));
+                const courseDoc = await firestore().collection('courses').doc(notification.courseId).get();
                 if (courseDoc.exists()) {
                     const courseData = courseDoc.data();
 
                     // Get user role for navigation
-                    const user = auth.currentUser;
+                    const user = auth().currentUser;
                     if (user) {
-                        const userDoc = await getDoc(doc(db, 'users', user.uid));
+                        const userDoc = await firestore().collection('users').doc(user.uid).get();
                         const userData = userDoc.data();
                         const userRole = userData?.role || 'student';
 
@@ -116,8 +111,8 @@ export default function NotificationsScreen() {
                             params: {
                                 courseId: notification.courseId,
                                 courseName: notification.courseName,
-                                courseCode: courseData.code || 'Unknown',
-                                instructorName: courseData.instructorName || 'Unknown',
+                                courseCode: courseData?.code || 'Unknown',
+                                instructorName: courseData?.instructorName || 'Unknown',
                                 role: userRole
                             }
                         });
@@ -131,14 +126,14 @@ export default function NotificationsScreen() {
         } else if (notification.type === 'discussion_replies') {
             // Get course details for discussion navigation
             try {
-                const courseDoc = await getDoc(doc(db, 'courses', notification.courseId));
+                const courseDoc = await firestore().collection('courses').doc(notification.courseId).get();
                 if (courseDoc.exists()) {
                     const courseData = courseDoc.data();
 
                     // Get user role
-                    const user = auth.currentUser;
+                    const user = auth().currentUser;
                     if (user) {
-                        const userDoc = await getDoc(doc(db, 'users', user.uid));
+                        const userDoc = await firestore().collection('users').doc(user.uid).get();
                         const userData = userDoc.data();
                         const userRole = userData?.role || 'student';
 
@@ -174,14 +169,14 @@ export default function NotificationsScreen() {
                     onPress: async () => {
                         try {
                             const deletePromises = notifications.map(notif =>
-                                deleteDoc(doc(db, 'notifications', notif.id))
+                                firestore().collection('notifications').doc(notif.id).delete()
                             );
                             await Promise.all(deletePromises);
 
                             // Also reset the user's badge count
-                            const user = auth.currentUser;
+                            const user = auth().currentUser;
                             if (user) {
-                                await updateDoc(doc(db, 'users', user.uid), {
+                                await firestore().collection('users').doc(user.uid).update({
                                     'notificationData.unreadCount': 0
                                 });
                             }
@@ -280,15 +275,15 @@ export default function NotificationsScreen() {
 
                 // Also decrease badge count if notification was unread
                 if (!notification.read) {
-                    const user = auth.currentUser;
+                    const user = auth().currentUser;
                     if (user) {
-                        const userRef = doc(db, 'users', user.uid);
-                        const userDoc = await getDoc(userRef);
+                        const userRef = firestore().collection('users').doc(user.uid);
+                        const userDoc = await userRef.get();
                         if (userDoc.exists()) {
                             const userData = userDoc.data();
-                            const currentCount = userData.notificationData?.unreadCount || 0;
+                            const currentCount = userData?.notificationData?.unreadCount || 0;
                             if (currentCount > 0) {
-                                await updateDoc(userRef, {
+                                await userRef.update({
                                     'notificationData.unreadCount': currentCount - 1
                                 });
                             }

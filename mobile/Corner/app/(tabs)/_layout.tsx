@@ -1,9 +1,8 @@
 import { Tabs } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
-import { auth, db } from '../../config/ firebase-config';
-import { doc, getDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -12,18 +11,23 @@ import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
+
+
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const [userRole, setUserRole] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = auth().onAuthStateChanged(async (user) => {
       if (user) {
         try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const userDoc = await firestore().collection('users').doc(user.uid).get();
           if (userDoc.exists()) {
-            setUserRole(userDoc.data().role || '');
+            setUserRole(userDoc.data()?.role || '');
+          } else {
+            setUserRole('');
           }
         } catch (error) {
           console.error('Error fetching user role:', error);

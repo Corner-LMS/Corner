@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { auth, db } from '../../config/ firebase-config';
-import { doc, getDoc } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileInitials } from '@/components/ui/ProfileInitials';
 import { getSchoolById } from '@/constants/Schools';
@@ -20,23 +21,23 @@ interface UserData {
 export default function Profile() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState(auth.currentUser);
+    const [user, setUser] = useState(auth().currentUser);
     const [userData, setUserData] = useState<UserData | null>(null);
 
     useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+        const unsubscribe = auth().onAuthStateChanged(async (user) => {
             setUser(user);
             if (user) {
                 // Fetch user data from Firestore
                 try {
-                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    const userDoc = await firestore().collection('users').doc(user.uid).get();
                     if (userDoc.exists()) {
                         const data = userDoc.data();
                         setUserData({
-                            name: data.name || 'No name set',
-                            email: data.email || user.email || 'No email',
-                            role: data.role || 'No role set',
-                            schoolId: data.schoolId
+                            name: data?.name || 'No name set',
+                            email: data?.email || user.email || 'No email',
+                            role: data?.role || 'No role set',
+                            schoolId: data?.schoolId
                         });
                     }
                 } catch (error) {
@@ -62,7 +63,7 @@ export default function Profile() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await auth.signOut();
+                            await auth().signOut();
                             router.replace('/(auth)/login');
                         } catch (error) {
                             console.error('Error signing out:', error);

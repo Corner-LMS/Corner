@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, Image, ScrollView, Alert } from 'react-native';
-import { login } from './useAuth';
+import { login, googleSignIn } from './useAuth';
 import { router } from 'expo-router';
-import { auth } from '../../config/ firebase-config';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/ firebase-config';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { getErrorGuidance } from '../../utils/errorHelpers';
-// import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -18,16 +16,6 @@ export default function Login() {
     const [emailFocused, setEmailFocused] = useState(false);
     const [passwordFocused, setPasswordFocused] = useState(false);
 
-    // useEffect(() => {
-    //     const checkGoogleSignIn = async () => {
-    //         try {
-    //             await GoogleSignin.hasPlayServices();
-    //         } catch (error) {
-    //             setError('Google Play Services not available');
-    //         }
-    //     };
-    //     checkGoogleSignIn();
-    // }, []);
 
     const handleLogin = async () => {
         try {
@@ -43,6 +31,44 @@ export default function Login() {
             // Get error guidance for better user experience
             const guidance = getErrorGuidance(errorMessage);
             setErrorGuidance(guidance);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            setErrorGuidance(null);
+            await googleSignIn();
+
+            // Wait a bit for auth state to settle, then check and navigate
+            setTimeout(async () => {
+                const user = auth().currentUser;
+                if (user) {
+                    const userDoc = await firestore().collection('users').doc(user.uid).get();
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        if (userData?.role && userData?.schoolId) {
+                            // User has role and school, redirect to main app
+                            router.replace('/(tabs)');
+                        } else {
+                            // User needs to set role and school
+                            router.replace('/role');
+                        }
+                    } else {
+                        // User document doesn't exist (shouldn't happen with Google Sign-In)
+                        router.replace('/role');
+                    }
+                } else {
+                    // No user (shouldn't happen after successful Google Sign-In)
+                    router.replace('/role');
+                }
+            }, 1000); // 1 second delay to let auth state settle
+        } catch (err: any) {
+            const errorMessage = err instanceof Error ? err.message : 'Google Sign-In failed';
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -64,22 +90,10 @@ export default function Login() {
         }
     };
 
-    // const startSignInFlow = async () => {
-    //     try {
-    //         setLoading(true);
-    //         await signInWithGoogle();
-    //         // const userInfo = await GoogleSignin.signIn();
-    //         await handleSuccessfulLogin();
-    //     } catch (err: any) {
-    //         setError(err instanceof Error ? err.message : 'An error occurred');
-    //     } finally {
-    //         setLoading(false);
-    //     }
-    // };
 
     const handleSuccessfulLogin = async () => {
         try {
-            const user = auth.currentUser;
+            const user = auth().currentUser;
             if (!user) return;
 
             // Check if email is verified
@@ -89,29 +103,22 @@ export default function Login() {
                 return;
             }
 
-            const userDoc = await getDoc(doc(db, "users", user.uid));
+            const userDoc = await firestore().collection('users').doc(user.uid).get();
 
-            if (!userDoc.exists()) {
+            if (!userDoc.exists) {
                 router.replace('/role');
                 return;
             }
 
             const userData = userDoc.data();
 
-            if (!userData.role || !userData.schoolId) {
+            if (!userData?.role || !userData?.schoolId) {
                 router.replace('/role');
                 return;
             }
 
-            if (userData.role === 'admin') {
-                router.replace('/(tabs)');
-            } else if (userData.role === 'teacher') {
-                router.replace('/(tabs)');
-            } else if (userData.role === 'student') {
-                router.replace('/(tabs)');
-            } else {
-                router.replace('/role');
-            }
+            // Route based on role
+            router.replace('/(tabs)');
         } catch (error) {
             router.replace('/role');
         }
@@ -255,6 +262,24 @@ export default function Login() {
                                 </>
                             )}
                         </TouchableOpacity>
+
+                        <View style={styles.dividerContainer}>
+                            <View style={styles.divider} />
+                            <Text style={styles.dividerText}>or</Text>
+                            <View style={styles.divider} />
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.googleButton}
+                            onPress={handleGoogleSignIn}
+                            disabled={loading}
+                        >
+                            <Image
+                                source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+                                style={styles.googleIcon}
+                            />
+                            <Text style={styles.googleButtonText}>Continue with Google</Text>
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.footer}>
@@ -299,10 +324,11 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: 24,
+        flexDirection: 'column',
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 48,
+        marginBottom: 20,
         marginTop: 20,
     },
     logoContainer: {
@@ -338,17 +364,16 @@ const styles = StyleSheet.create({
         maxWidth: 280,
     },
     formSection: {
-        flex: 1,
-        minHeight: 400,
+        // Removed flex: 1 and minHeight to prevent pushing footer down
     },
     inputGroup: {
-        marginBottom: 20,
+        marginBottom: 12,
     },
     inputLabel: {
         fontSize: 14,
         fontWeight: '600',
         color: '#374151',
-        marginBottom: 8,
+        marginBottom: 4,
         letterSpacing: 0.3,
     },
     inputContainer: {
@@ -357,7 +382,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         borderRadius: 16,
         paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingVertical: 14,
         borderWidth: 2,
         borderColor: '#e5e7eb',
         shadowColor: '#000',
@@ -421,7 +446,7 @@ const styles = StyleSheet.create({
     },
     forgotPasswordButton: {
         alignSelf: 'flex-end',
-        marginBottom: 32,
+        marginBottom: 16,
     },
     forgotPasswordText: {
         color: '#4f46e5',
@@ -436,7 +461,7 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         paddingHorizontal: 24,
         borderRadius: 12,
-        marginBottom: 24,
+        marginBottom: 16,
         shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
@@ -462,8 +487,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 24,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+        paddingVertical: 16,
+        paddingBottom: Platform.OS === 'ios' ? 20 : 16,
     },
     footerText: {
         color: '#6b7280',
@@ -473,6 +498,43 @@ const styles = StyleSheet.create({
     footerLink: {
         color: '#4f46e5',
         fontSize: 15,
+        fontWeight: '600',
+    },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    divider: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#e5e7eb',
+    },
+    dividerText: {
+        color: '#6b7280',
+        fontSize: 14,
+        fontWeight: '600',
+        marginHorizontal: 12,
+    },
+    googleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ffffff',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        marginBottom: 12,
+    },
+    googleIcon: {
+        width: 20,
+        height: 20,
+        marginRight: 12,
+    },
+    googleButtonText: {
+        color: '#1f2937',
+        fontSize: 16,
         fontWeight: '600',
     },
 });

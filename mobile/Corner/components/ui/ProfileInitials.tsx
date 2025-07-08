@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { auth, db } from '../../config/ firebase-config';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 interface ProfileInitialsProps {
     size?: number;
@@ -13,14 +13,13 @@ export function ProfileInitials({ size = 24, color, variant = 'tab' }: ProfileIn
     const [initials, setInitials] = useState('?');
 
     useEffect(() => {
-        if (!auth.currentUser) return;
+        if (!auth().currentUser) return;
 
-        const unsubscribe = onSnapshot(
-            doc(db, 'users', auth.currentUser.uid),
+        const unsubscribe = firestore().collection('users').doc(auth().currentUser?.uid).onSnapshot(
             (doc) => {
                 if (doc.exists()) {
                     const userData = doc.data();
-                    const name = userData.name || userData.email || 'User';
+                    const name = userData?.name || userData?.email || 'User';
 
                     // Extract initials from name
                     const nameInitials = name
