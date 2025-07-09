@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, Image, ScrollView, Alert } from 'react-native';
-import { login, googleSignIn } from './useAuth';
+import { login, googleSignIn } from '../../services/authService';
 import { router } from 'expo-router';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { getErrorGuidance } from '../../utils/errorHelpers';
+import CustomAlert from '../../components/CustomAlert';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -15,6 +16,7 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [emailFocused, setEmailFocused] = useState(false);
     const [passwordFocused, setPasswordFocused] = useState(false);
+    const [alertConfig, setAlertConfig] = useState<any>(null);
 
 
     const handleLogin = async () => {
@@ -26,11 +28,28 @@ export default function Login() {
             await handleSuccessfulLogin();
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-            setError(errorMessage);
 
-            // Get error guidance for better user experience
-            const guidance = getErrorGuidance(errorMessage);
-            setErrorGuidance(guidance);
+            // Use CustomAlert for critical errors, inline for form errors
+            if (errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('server')) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Connection Error',
+                    message: 'Unable to connect to our servers. Please check your internet connection and try again.',
+                    type: 'error',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
+            } else {
+                setError(errorMessage);
+                // Get error guidance for better user experience
+                const guidance = getErrorGuidance(errorMessage);
+                setErrorGuidance(guidance);
+            }
         } finally {
             setLoading(false);
         }
@@ -68,7 +87,29 @@ export default function Login() {
             }, 1000); // 1 second delay to let auth state settle
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : 'Google Sign-In failed';
-            setError(errorMessage);
+
+            // Use CustomAlert for Google Sign-In errors
+            setAlertConfig({
+                visible: true,
+                title: 'Google Sign-In Failed',
+                message: 'Unable to sign in with Google. Please try again or use email and password.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'Try Again',
+                        onPress: () => {
+                            setAlertConfig(null);
+                            handleGoogleSignIn();
+                        },
+                        style: 'primary',
+                    },
+                    {
+                        text: 'Cancel',
+                        onPress: () => setAlertConfig(null),
+                        style: 'cancel',
+                    },
+                ],
+            });
         } finally {
             setLoading(false);
         }
@@ -290,6 +331,15 @@ export default function Login() {
                     </View>
                 </View>
             </ScrollView>
+
+            <CustomAlert
+                visible={alertConfig?.visible || false}
+                title={alertConfig?.title || ''}
+                message={alertConfig?.message || ''}
+                type={alertConfig?.type || 'info'}
+                actions={alertConfig?.actions || []}
+                onDismiss={() => setAlertConfig(null)}
+            />
         </KeyboardAvoidingView>
     );
 }

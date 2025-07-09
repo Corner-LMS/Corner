@@ -1,12 +1,11 @@
 // Keep the splash screen visible while we fetch resources
-// console.log('🔵 [SPLASH] Preventing auto hide...');
 
-// // Suppress React Native Firebase deprecation warnings
+// Suppress React Native Firebase deprecation warnings
 import '../utils/suppress-warnings';
 
 import * as SplashScreen from 'expo-splash-screen';
 SplashScreen.preventAutoHideAsync().then(() => {
-  console.log('✅ [SPLASH] Auto hide prevented successfully');
+  // Auto hide prevented successfully
 }).catch((error) => {
   console.error('❌ [SPLASH] Failed to prevent auto hide:', error);
 });
@@ -17,17 +16,19 @@ import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, ActivityIndicator, Text, AppState, AppStateStatus } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { offlineCacheService } from '../services/offlineCache';
 import { presenceService } from '../services/presenceService';
+import { draftManager } from '../services/draftManager';
 import TeacherOnlineNotification from '../components/TeacherOnlineNotification';
 import CustomSplashScreen from '../components/SplashScreen';
+import ToastNotification from '../components/ToastNotification';
 //  import { initializeCrashlytics } from '../utils/crashlytics-utils';
 import { useCrashlyticsTracking } from '../hooks/useCrashlytics';
-import { initializeGoogleAuth } from './(auth)/useAuth';
-
+import { initializeGoogleAuth } from '../services/authService';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { notificationService } from '../services/notificationService';
@@ -40,6 +41,7 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const { isOnline, hasReconnected } = useNetworkStatus();
 
   // Initialize Crashlytics tracking
   useCrashlyticsTracking();
@@ -52,6 +54,100 @@ export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
   const [loading, setLoading] = useState(false);
   const [authStateResolved, setAuthStateResolved] = useState(false);
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    message: '',
+    type: 'info'
+  });
+
+  // Global draft sync when device comes back online
+  useEffect(() => {
+    if (hasReconnected && isOnline) {
+      const syncGlobalDrafts = async () => {
+        try {
+          const result = await draftManager.syncAllDrafts();
+          if (result.syncedCount > 0) {
+            setToastConfig({
+              visible: true,
+              message: `Successfully synced ${result.syncedCount} draft${result.syncedCount > 1 ? 's' : ''}`,
+              type: 'success'
+            });
+          }
+          if (result.failedCount > 0) {
+            setToastConfig({
+              visible: true,
+              message: `${result.failedCount} draft${result.failedCount > 1 ? 's' : ''} failed to sync`,
+              type: 'warning'
+            });
+          }
+        } catch (error) {
+          console.error('Error in global draft sync:', error);
+          setToastConfig({
+            visible: true,
+            message: 'Error syncing drafts',
+            type: 'error'
+          });
+        }
+      };
+
+      syncGlobalDrafts();
+    }
+  }, [hasReconnected, isOnline]);
+
+  // Periodic background sync when online
+  useEffect(() => {
+    if (!isOnline) return;
+
+    const syncInterval = setInterval(async () => {
+      try {
+        const pendingDrafts = await draftManager.getPendingDrafts();
+        if (pendingDrafts.length > 0) {
+          const result = await draftManager.syncAllDrafts();
+          if (result.syncedCount > 0) {
+            setToastConfig({
+              visible: true,
+              message: `Synced ${result.syncedCount} draft${result.syncedCount > 1 ? 's' : ''}`,
+              type: 'success'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error in background draft sync:', error);
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [isOnline]);
+
+  // Sync drafts when app comes back to foreground
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && isOnline) {
+        try {
+          const pendingDrafts = await draftManager.getPendingDrafts();
+          if (pendingDrafts.length > 0) {
+            const result = await draftManager.syncAllDrafts();
+            if (result.syncedCount > 0) {
+              setToastConfig({
+                visible: true,
+                message: `Synced ${result.syncedCount} draft${result.syncedCount > 1 ? 's' : ''}`,
+                type: 'success'
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error in app foreground draft sync:', error);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [isOnline]);
 
   useEffect(() => {
     async function prepare() {
@@ -222,6 +318,14 @@ export default function RootLayout() {
               </View>
             )}
           </View>
+        )}
+        {toastConfig.visible && (
+          <ToastNotification
+            visible={toastConfig.visible}
+            message={toastConfig.message}
+            type={toastConfig.type}
+            onHide={() => setToastConfig({ ...toastConfig, visible: false })}
+          />
         )}
       </View>
     </ThemeProvider>

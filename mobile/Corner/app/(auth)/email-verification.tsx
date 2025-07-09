@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 
-import { sendVerificationEmail } from './useAuth';
+import { sendVerificationEmail } from '../../services/authService';
 
 export default function EmailVerificationScreen() {
     const [loading, setLoading] = useState(false);

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView, Alert } from 'react-native';
-import { signUp, googleSignIn } from './useAuth';
+import { signUp, googleSignIn } from '../../services/authService';
 import { router } from 'expo-router';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { getErrorGuidance } from '../../utils/errorHelpers';
+import CustomAlert from '../../components/CustomAlert';
 
 export default function Signup() {
     const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ export default function Signup() {
     const [emailFocused, setEmailFocused] = useState(false);
     const [passwordFocused, setPasswordFocused] = useState(false);
     const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
+    const [alertConfig, setAlertConfig] = useState<any>(null);
 
     const handleSignup = async () => {
         try {
@@ -38,15 +40,69 @@ export default function Signup() {
 
             await signUp(email, password);
 
-            // After successful signup, redirect to email verification
-            router.replace('/(auth)/email-verification');
+            // Show success message before redirecting
+            setAlertConfig({
+                visible: true,
+                title: 'Account Created!',
+                message: 'Your account has been created successfully. Please check your email to verify your account.',
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(null);
+                            router.replace('/(auth)/email-verification');
+                        },
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-            setError(errorMessage);
 
-            // Get error guidance for better user experience
-            const guidance = getErrorGuidance(errorMessage);
-            setErrorGuidance(guidance);
+            // Use CustomAlert for critical errors, inline for form errors
+            if (errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('server')) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Connection Error',
+                    message: 'Unable to connect to our servers. Please check your internet connection and try again.',
+                    type: 'error',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
+            } else if (errorMessage.includes('email-already-in-use')) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Account Already Exists',
+                    message: 'An account with this email already exists. Please try signing in instead.',
+                    type: 'warning',
+                    actions: [
+                        {
+                            text: 'Sign In',
+                            onPress: () => {
+                                setAlertConfig(null);
+                                router.replace('/(auth)/login');
+                            },
+                            style: 'primary',
+                        },
+                        {
+                            text: 'Cancel',
+                            onPress: () => setAlertConfig(null),
+                            style: 'cancel',
+                        },
+                    ],
+                });
+            } else {
+                setError(errorMessage);
+                // Get error guidance for better user experience
+                const guidance = getErrorGuidance(errorMessage);
+                setErrorGuidance(guidance);
+            }
         } finally {
             setLoading(false);
         }
@@ -84,7 +140,29 @@ export default function Signup() {
             }, 1000); // 1 second delay to let auth state settle
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : 'Google Sign-In failed';
-            setError(errorMessage);
+
+            // Use CustomAlert for Google Sign-In errors
+            setAlertConfig({
+                visible: true,
+                title: 'Google Sign-In Failed',
+                message: 'Unable to sign in with Google. Please try again or create an account with email and password.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'Try Again',
+                        onPress: () => {
+                            setAlertConfig(null);
+                            handleGoogleSignIn();
+                        },
+                        style: 'primary',
+                    },
+                    {
+                        text: 'Cancel',
+                        onPress: () => setAlertConfig(null),
+                        style: 'cancel',
+                    },
+                ],
+            });
         } finally {
             setLoading(false);
         }
@@ -294,6 +372,15 @@ export default function Signup() {
                     </View>
                 </View>
             </ScrollView>
+
+            <CustomAlert
+                visible={alertConfig?.visible || false}
+                title={alertConfig?.title || ''}
+                message={alertConfig?.message || ''}
+                type={alertConfig?.type || 'info'}
+                actions={alertConfig?.actions || []}
+                onDismiss={() => setAlertConfig(null)}
+            />
         </KeyboardAvoidingView>
     );
 }

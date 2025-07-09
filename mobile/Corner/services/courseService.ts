@@ -30,4 +30,4 @@ export async function createCourse(name: string, description: string, teacherId:
     });
 
     return { id: courseRef.id, code };
-}
+} 

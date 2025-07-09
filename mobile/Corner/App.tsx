@@ -1,18 +1,11 @@
-// App.tsx (temporary for debugging)
-import { registerRootComponent } from 'expo';
-import { useEffect } from 'react';
-import { Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, Text, View } from 'react-native';
 
-function App() {
-    useEffect(() => {
-        console.log('🧪 [Preview Test] This is a preview build test log');
-    }, []);
-
+export default function App() {
     return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text>Hello World - App booted!</Text>
+        <View >
+            <Text>Open up App.tsx to start working on your app!</Text>
+            <StatusBar style="auto" />
         </View>
     );
 }
-
-registerRootComponent(App);

@@ -383,18 +383,18 @@ class OfflineCacheService {
         }
     }
 
+    // Clear all cache
     async clearAllCache(): Promise<void> {
         try {
             await AsyncStorage.multiRemove([
                 this.ANNOUNCEMENTS_KEY,
-                this.RESOURCES_KEY,
                 this.DISCUSSIONS_KEY,
                 this.COMMENTS_KEY,
+                this.RESOURCES_KEY,
                 this.METADATA_KEY
             ]);
-            console.log('All cache cleared');
         } catch (error) {
-            console.error('Error clearing cache:', error);
+            console.error('Error clearing all cache:', error);
         }
     }
 
@@ -424,29 +424,32 @@ class OfflineCacheService {
         }
     }
 
-    // Remove cached data for a specific course
+    // Remove cache for specific course
     async removeCourseCache(courseId: string): Promise<void> {
         try {
-            const [announcements, resources, discussions, comments] = await Promise.all([
-                this.getCachedAnnouncements(),
-                this.getCachedResources(),
-                this.getCachedDiscussions(),
-                this.getCachedComments()
-            ]);
+            const announcements = await this.getCachedAnnouncements(courseId);
+            const discussions = await this.getCachedDiscussions(courseId);
+            const resources = await this.getCachedResources(courseId);
 
-            const filteredAnnouncements = announcements.filter(item => item.courseId !== courseId);
-            const filteredResources = resources.filter(item => item.courseId !== courseId);
-            const filteredDiscussions = discussions.filter(item => item.courseId !== courseId);
-            const filteredComments = comments.filter(item => item.courseId !== courseId);
+            // Remove announcements for this course
+            const allAnnouncements = await this.getCachedAnnouncements();
+            const filteredAnnouncements = allAnnouncements.filter(a => a.courseId !== courseId);
+            await AsyncStorage.setItem(this.ANNOUNCEMENTS_KEY, JSON.stringify(filteredAnnouncements));
 
-            await Promise.all([
-                AsyncStorage.setItem(this.ANNOUNCEMENTS_KEY, JSON.stringify(filteredAnnouncements)),
-                AsyncStorage.setItem(this.RESOURCES_KEY, JSON.stringify(filteredResources)),
-                AsyncStorage.setItem(this.DISCUSSIONS_KEY, JSON.stringify(filteredDiscussions)),
-                AsyncStorage.setItem(this.COMMENTS_KEY, JSON.stringify(filteredComments))
-            ]);
+            // Remove discussions for this course
+            const allDiscussions = await this.getCachedDiscussions();
+            const filteredDiscussions = allDiscussions.filter(d => d.courseId !== courseId);
+            await AsyncStorage.setItem(this.DISCUSSIONS_KEY, JSON.stringify(filteredDiscussions));
 
-            console.log(`Removed cache for course ${courseId}`);
+            // Remove resources for this course
+            const allResources = await this.getCachedResources();
+            const filteredResources = allResources.filter(r => r.courseId !== courseId);
+            await AsyncStorage.setItem(this.RESOURCES_KEY, JSON.stringify(filteredResources));
+
+            // Remove comments for discussions in this course
+            const allComments = await this.getCachedComments();
+            const filteredComments = allComments.filter(c => !discussions.some(d => d.id === c.discussionId));
+            await AsyncStorage.setItem(this.COMMENTS_KEY, JSON.stringify(filteredComments));
         } catch (error) {
             console.error('Error removing course cache:', error);
         }

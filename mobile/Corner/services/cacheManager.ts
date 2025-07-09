@@ -7,7 +7,6 @@ export class CacheManager {
     static async clearAllCache(): Promise<void> {
         try {
             await offlineCacheService.clearAllCache();
-            console.log('All cache cleared successfully');
         } catch (error) {
             console.error('Error clearing cache:', error);
             throw error;
@@ -18,7 +17,6 @@ export class CacheManager {
     static async clearCourseCache(courseId: string): Promise<void> {
         try {
             await offlineCacheService.removeCourseCache(courseId);
-            console.log(`Cache cleared for course ${courseId}`);
         } catch (error) {
             console.error('Error clearing course cache:', error);
             throw error;
@@ -50,10 +48,15 @@ export class CacheManager {
         }
     }
 
-    // Check if cache needs to be refreshed
+    // Check if cache is stale
     static async isCacheStale(): Promise<boolean> {
         try {
-            return await offlineCacheService.isCacheStale();
+            const lastSync = await this.getLastSyncTime();
+            if (!lastSync) return true;
+
+            const now = Date.now();
+            const staleThreshold = 24 * 60 * 60 * 1000; // 24 hours
+            return (now - lastSync) > staleThreshold;
         } catch (error) {
             console.error('Error checking cache staleness:', error);
             return true;
@@ -93,7 +96,6 @@ export class CacheManager {
             await Promise.all(syncPromises);
             await offlineCacheService.updateLastSyncTime();
 
-            console.log('All cached data synced successfully');
         } catch (error) {
             console.error('Error syncing cached data:', error);
             throw error;

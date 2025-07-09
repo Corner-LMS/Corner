@@ -46,7 +46,6 @@ class DraftManager {
             const updatedDrafts = [...existingDrafts, draftWithMeta];
 
             await AsyncStorage.setItem(this.DRAFTS_KEY, JSON.stringify(updatedDrafts));
-            console.log(`Draft saved with ID: ${draftWithMeta.id}`);
 
             return draftWithMeta.id;
         } catch (error) {
@@ -63,6 +62,46 @@ class DraftManager {
         } catch (error) {
             console.error('Error getting drafts:', error);
             return [];
+        }
+    }
+
+    // Get all drafts with status info for debugging
+    async getAllDraftsWithStatus(): Promise<{
+        drafts: DraftPost[];
+        stats: {
+            total: number;
+            draft: number;
+            pending: number;
+            synced: number;
+            failed: number;
+            exceededRetry: number;
+        };
+    }> {
+        try {
+            const allDrafts = await this.getAllDrafts();
+            const stats = {
+                total: allDrafts.length,
+                draft: allDrafts.filter(d => d.status === 'draft').length,
+                pending: allDrafts.filter(d => d.status === 'pending').length,
+                synced: allDrafts.filter(d => d.status === 'synced').length,
+                failed: allDrafts.filter(d => d.status === 'failed').length,
+                exceededRetry: allDrafts.filter(d => d.status === 'failed' && d.retryCount >= this.MAX_RETRY_COUNT).length,
+            };
+
+            return { drafts: allDrafts, stats };
+        } catch (error) {
+            console.error('Error getting drafts with status:', error);
+            return {
+                drafts: [],
+                stats: {
+                    total: 0,
+                    draft: 0,
+                    pending: 0,
+                    synced: 0,
+                    failed: 0,
+                    exceededRetry: 0,
+                }
+            };
         }
     }
 
@@ -102,6 +141,41 @@ class DraftManager {
         }
     }
 
+    // Get drafts that have exceeded retry limit
+    async getExceededRetryDrafts(): Promise<DraftPost[]> {
+        try {
+            const allDrafts = await this.getAllDrafts();
+            return allDrafts.filter(draft =>
+                draft.status === 'failed' && draft.retryCount >= this.MAX_RETRY_COUNT
+            );
+        } catch (error) {
+            console.error('Error getting exceeded retry drafts:', error);
+            return [];
+        }
+    }
+
+    // Retry a failed draft (reset retry count)
+    async retryDraft(draftId: string): Promise<void> {
+        try {
+            const allDrafts = await this.getAllDrafts();
+            const updatedDrafts = allDrafts.map(draft => {
+                if (draft.id === draftId) {
+                    return {
+                        ...draft,
+                        status: 'draft' as const,
+                        retryCount: 0,
+                        errorMessage: undefined
+                    };
+                }
+                return draft;
+            });
+
+            await AsyncStorage.setItem(this.DRAFTS_KEY, JSON.stringify(updatedDrafts));
+        } catch (error) {
+            console.error('Error retrying draft:', error);
+        }
+    }
+
     // Update draft status
     async updateDraftStatus(draftId: string, status: DraftPost['status'], errorMessage?: string): Promise<void> {
         try {
@@ -131,7 +205,6 @@ class DraftManager {
             const filteredDrafts = allDrafts.filter(draft => draft.id !== draftId);
 
             await AsyncStorage.setItem(this.DRAFTS_KEY, JSON.stringify(filteredDrafts));
-            console.log(`Draft deleted: ${draftId}`);
         } catch (error) {
             console.error('Error deleting draft:', error);
         }
@@ -249,7 +322,14 @@ class DraftManager {
         let syncedCount = 0;
         let failedCount = 0;
 
-        console.log(`Syncing ${pendingDrafts.length} pending drafts...`);
+        if (pendingDrafts.length === 0) {
+            return {
+                success: true,
+                syncedCount: 0,
+                failedCount: 0,
+                errors: []
+            };
+        }
 
         for (const draft of pendingDrafts) {
             try {
@@ -258,15 +338,15 @@ class DraftManager {
                     syncedCount++;
                 } else {
                     failedCount++;
-                    errors.push(`Failed to sync ${draft.type}: ${draft.title || draft.content.substring(0, 50)}`);
+                    const errorMsg = `Failed to sync ${draft.type}: ${draft.title || draft.content.substring(0, 50)}`;
+                    errors.push(errorMsg);
                 }
             } catch (error: any) {
                 failedCount++;
-                errors.push(`Error syncing ${draft.type}: ${error.message}`);
+                const errorMsg = `Error syncing ${draft.type}: ${error.message}`;
+                errors.push(errorMsg);
             }
         }
-
-        console.log(`Sync completed: ${syncedCount} synced, ${failedCount} failed`);
 
         return {
             success: failedCount === 0,
@@ -276,11 +356,36 @@ class DraftManager {
         };
     }
 
+    // Force sync all drafts (including those that exceeded retry limit)
+    async forceSyncAllDrafts(): Promise<SyncResult> {
+        try {
+            const allDrafts = await this.getAllDrafts();
+            const failedDrafts = allDrafts.filter(draft =>
+                draft.status === 'failed' && draft.retryCount >= this.MAX_RETRY_COUNT
+            );
+
+            // Reset retry count for drafts that exceeded limit
+            for (const draft of failedDrafts) {
+                await this.retryDraft(draft.id);
+            }
+
+            // Now sync all drafts
+            return await this.syncAllDrafts();
+        } catch (error) {
+            console.error('Error in force sync:', error);
+            return {
+                success: false,
+                syncedCount: 0,
+                failedCount: 1,
+                errors: [`Force sync error: ${error}`]
+            };
+        }
+    }
+
     // Clear all drafts
     async clearAllDrafts(): Promise<void> {
         try {
             await AsyncStorage.removeItem(this.DRAFTS_KEY);
-            console.log('All drafts cleared');
         } catch (error) {
             console.error('Error clearing drafts:', error);
         }
@@ -293,7 +398,6 @@ class DraftManager {
             const filteredDrafts = allDrafts.filter(draft => draft.courseId !== courseId);
 
             await AsyncStorage.setItem(this.DRAFTS_KEY, JSON.stringify(filteredDrafts));
-            console.log(`Drafts cleared for course: ${courseId}`);
         } catch (error) {
             console.error('Error clearing course drafts:', error);
         }

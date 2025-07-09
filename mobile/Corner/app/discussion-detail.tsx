@@ -12,6 +12,7 @@ import { offlineCacheService, CachedComment } from '../services/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { draftManager, DraftPost } from '../services/draftManager';
 import ConnectivityIndicator from '../components/ConnectivityIndicator';
+import CustomAlert from '../components/CustomAlert';
 
 interface Comment {
     id: string;
@@ -57,6 +58,7 @@ export default function DiscussionDetailScreen() {
     const textInputRef = useRef<TextInput>(null);
     const [showFormattingToolbar, setShowFormattingToolbar] = useState(false);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
+    const [alertConfig, setAlertConfig] = useState<any>(null);
 
     // Build nested comment tree from flat array
     const buildCommentTree = (allComments: Comment[]): Comment[] => {
@@ -215,10 +217,6 @@ export default function DiscussionDetailScreen() {
             // Build nested comment tree from cached data
             const commentTree = buildCommentTree(cachedComments as Comment[]);
             setComments(commentTree);
-
-            if (cachedComments.length > 0) {
-                console.log(`Loaded ${cachedComments.length} cached comments`);
-            }
         } catch (error) {
             console.error('Error loading cached comments:', error);
         } finally {
@@ -230,7 +228,6 @@ export default function DiscussionDetailScreen() {
         if (!courseId || !discussionId) return;
 
         try {
-            console.log('Syncing comments after reconnection...');
             await offlineCacheService.syncCommentsFromFirebase(
                 discussionId as string,
                 courseId as string
@@ -242,15 +239,21 @@ export default function DiscussionDetailScreen() {
     };
 
     const handleDeleteComment = async (commentId: string) => {
-        Alert.alert(
-            'Delete Comment',
-            'Are you sure you want to delete this comment?',
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Delete Comment',
+            message: 'Are you sure you want to delete this comment?',
+            type: 'warning',
+            actions: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig(null),
+                    style: 'cancel',
+                },
                 {
                     text: 'Delete',
-                    style: 'destructive',
                     onPress: async () => {
+                        setAlertConfig(null);
                         try {
                             await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).collection('comments').doc(commentId).delete();
 
@@ -259,15 +262,40 @@ export default function DiscussionDetailScreen() {
                                 replies: increment(-1)
                             });
 
-                            Alert.alert('Success', 'Comment deleted successfully');
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Success',
+                                message: 'Comment deleted successfully',
+                                type: 'success',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
                         } catch (error) {
                             console.error('Error deleting comment:', error);
-                            Alert.alert('Error', 'Failed to delete comment. Please try again.');
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: 'Failed to delete comment. Please try again.',
+                                type: 'error',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
                         }
-                    }
-                }
-            ]
-        );
+                    },
+                    style: 'destructive',
+                },
+            ],
+        });
     };
 
     const handleEditComment = (comment: Comment) => {
@@ -280,7 +308,19 @@ export default function DiscussionDetailScreen() {
 
     const handleUpdateComment = async () => {
         if (!editingComment || !newComment.trim()) {
-            Alert.alert('Error', 'Please enter a comment.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Please enter a comment.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
             return;
         }
 
@@ -294,10 +334,34 @@ export default function DiscussionDetailScreen() {
             setNewComment('');
             setEditingComment(null);
             setIsAnonymousComment(false);
-            Alert.alert('Success', 'Comment updated successfully!');
+            setAlertConfig({
+                visible: true,
+                title: 'Success',
+                message: 'Comment updated successfully!',
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (error) {
             console.error('Error updating comment:', error);
-            Alert.alert('Error', 'Failed to update comment. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to update comment. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } finally {
             setLoading(false);
         }
@@ -312,7 +376,19 @@ export default function DiscussionDetailScreen() {
 
     const handleAddComment = async () => {
         if (!newComment.trim()) {
-            Alert.alert('Error', 'Please enter a comment.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Please enter a comment.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
             return;
         }
 
@@ -330,7 +406,19 @@ export default function DiscussionDetailScreen() {
         try {
             const user = auth().currentUser;
             if (!user) {
-                Alert.alert('Error', 'You must be logged in.');
+                setAlertConfig({
+                    visible: true,
+                    title: 'Error',
+                    message: 'You must be logged in.',
+                    type: 'error',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
                 return;
             }
 
@@ -371,7 +459,6 @@ export default function DiscussionDetailScreen() {
             // Check for reply notification trigger (when discussion reaches 3 replies)
             try {
                 await notificationHelpers.checkDiscussionReplies(courseId as string, discussionId as string, user.uid);
-                console.log('Reply notification check triggered');
             } catch (notificationError) {
                 console.error('Error checking reply notifications:', notificationError);
                 // Don't fail the main operation if notifications fail
@@ -380,10 +467,34 @@ export default function DiscussionDetailScreen() {
             setNewComment('');
             setIsAnonymousComment(false);
             setReplyingTo(null);
-            Alert.alert('Success', replyingTo ? 'Reply added!' : 'Comment added!');
+            setAlertConfig({
+                visible: true,
+                title: 'Success',
+                message: replyingTo ? 'Reply added!' : 'Comment added!',
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (error) {
             console.error('Error adding comment:', error);
-            Alert.alert('Error', 'Failed to add comment. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to add comment. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } finally {
             setLoading(false);
         }
@@ -409,14 +520,34 @@ export default function DiscussionDetailScreen() {
 
             await loadDrafts(); // Refresh drafts list
 
-            Alert.alert(
-                'Draft Saved',
-                `Your ${replyingTo ? 'reply' : 'comment'} has been saved as a draft and will be posted when you go back online.`,
-                [{ text: 'OK' }]
-            );
+            setAlertConfig({
+                visible: true,
+                title: 'Draft Saved',
+                message: `Your ${replyingTo ? 'reply' : 'comment'} has been saved as a draft and will be posted when you go back online.`,
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (error) {
             console.error('Error saving draft:', error);
-            Alert.alert('Error', 'Failed to save draft. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to save draft. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         }
     };
 
@@ -526,19 +657,40 @@ export default function DiscussionDetailScreen() {
     const applyFormatting = (prefix: string, suffix: string = '') => {
         try {
             if (!textInputRef.current) {
-                console.log('TextInput ref not available');
-                Alert.alert('Formatting Error', 'Unable to apply formatting. Please try again.');
+                setAlertConfig({
+                    visible: true,
+                    title: 'Formatting Error',
+                    message: 'Unable to apply formatting. Please try again.',
+                    type: 'error',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
                 return;
             }
 
             const currentText = newComment;
             const { start, end } = selection;
 
-            console.log('Applying formatting:', { prefix, suffix, start, end, currentTextLength: currentText.length });
-
             // Validate selection values
             if (start === undefined || end === undefined || start < 0 || end < 0 || start > currentText.length || end > currentText.length) {
-                Alert.alert('Formatting Error', 'Invalid text selection. Please try selecting the text again.');
+                setAlertConfig({
+                    visible: true,
+                    title: 'Formatting Error',
+                    message: 'Invalid text selection. Please try selecting the text again.',
+                    type: 'error',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
                 return;
             }
 
@@ -586,7 +738,19 @@ export default function DiscussionDetailScreen() {
             }
         } catch (error) {
             console.error('Error applying formatting:', error);
-            Alert.alert('Formatting Error', 'An error occurred while applying formatting. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Formatting Error',
+                message: 'An error occurred while applying formatting. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         }
     };
 
@@ -831,6 +995,24 @@ export default function DiscussionDetailScreen() {
                         </View>
                     )}
 
+                    {/* Manual Sync Button */}
+                    {isOnline && drafts.filter(d => d.type === 'comment' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
+                        <TouchableOpacity
+                            style={styles.manualSyncButton}
+                            onPress={syncDrafts}
+                            disabled={syncingDrafts}
+                        >
+                            <Ionicons
+                                name={syncingDrafts ? "sync" : "cloud-upload"}
+                                size={16}
+                                color="#4f46e5"
+                            />
+                            <Text style={styles.manualSyncText}>
+                                {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+
                     <View style={styles.commentsSeparator}>
                         <View style={styles.separatorLine} />
                         <Text style={styles.commentsTitle}>
@@ -1008,6 +1190,15 @@ export default function DiscussionDetailScreen() {
                     <Text style={styles.archivedBannerText}>This course is archived - Comments are disabled</Text>
                 </View>
             )}
+
+            <CustomAlert
+                visible={alertConfig?.visible || false}
+                title={alertConfig?.title || ''}
+                message={alertConfig?.message || ''}
+                type={alertConfig?.type || 'info'}
+                actions={alertConfig?.actions || []}
+                onDismiss={() => setAlertConfig(null)}
+            />
         </SafeAreaView>
     );
 }
@@ -1613,5 +1804,23 @@ const styles = StyleSheet.create({
         bottom: 0,
         width: 1,
         backgroundColor: '#cbd5e1', // Default color for non-last lines
+    },
+    manualSyncButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        marginBottom: 16,
+    },
+    manualSyncText: {
+        marginLeft: 8,
+        color: '#4f46e5',
+        fontSize: 15,
+        fontWeight: '600',
     },
 }); 

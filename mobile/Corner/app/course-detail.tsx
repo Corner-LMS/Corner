@@ -11,6 +11,7 @@ import { offlineCacheService, CachedAnnouncement, CachedDiscussion } from '../se
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { draftManager, DraftPost } from '../services/draftManager';
 import ConnectivityIndicator from '../components/ConnectivityIndicator';
+import CustomAlert from '../components/CustomAlert';
 
 interface Announcement {
     id: string;
@@ -60,6 +61,7 @@ export default function CourseDetailScreen() {
     const textInputRef = useRef<TextInput>(null);
     const [showFormattingToolbar, setShowFormattingToolbar] = useState(false);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
+    const [alertConfig, setAlertConfig] = useState<any>(null);
 
     // Initialize cache on component mount
     useEffect(() => {
@@ -106,19 +108,35 @@ export default function CourseDetailScreen() {
         try {
             const result = await draftManager.syncAllDrafts();
             if (result.syncedCount > 0) {
-                Alert.alert(
-                    'Drafts Synced',
-                    `Successfully synced ${result.syncedCount} draft${result.syncedCount > 1 ? 's' : ''}.`,
-                    [{ text: 'OK' }]
-                );
+                setAlertConfig({
+                    visible: true,
+                    title: 'Drafts Synced',
+                    message: `Successfully synced ${result.syncedCount} draft${result.syncedCount > 1 ? 's' : ''}.`,
+                    type: 'success',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
             }
 
             if (result.failedCount > 0) {
-                Alert.alert(
-                    'Sync Issues',
-                    `${result.failedCount} draft${result.failedCount > 1 ? 's' : ''} failed to sync. They will be retried later.`,
-                    [{ text: 'OK' }]
-                );
+                setAlertConfig({
+                    visible: true,
+                    title: 'Sync Issues',
+                    message: `${result.failedCount} draft${result.failedCount > 1 ? 's' : ''} failed to sync. They will be retried later.`,
+                    type: 'warning',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
             }
 
             await loadDrafts(); // Refresh drafts list
@@ -196,10 +214,6 @@ export default function CourseDetailScreen() {
 
             setAnnouncements(cachedAnnouncements as Announcement[]);
             setDiscussions(cachedDiscussions as Discussion[]);
-
-            if (cachedAnnouncements.length > 0 || cachedDiscussions.length > 0) {
-                console.log(`Loaded ${cachedAnnouncements.length} announcements and ${cachedDiscussions.length} discussions from cache`);
-            }
         } catch (error) {
             console.error('Error loading cached data:', error);
         } finally {
@@ -211,7 +225,6 @@ export default function CourseDetailScreen() {
         if (!courseId || !courseName) return;
 
         try {
-            console.log('Syncing data after reconnection...');
             await Promise.all([
                 offlineCacheService.syncAnnouncementsFromFirebase(
                     courseId as string,
@@ -230,7 +243,19 @@ export default function CourseDetailScreen() {
 
     const handleCreate = async () => {
         if (!newTitle.trim() || !newContent.trim()) {
-            Alert.alert('Error', 'Please fill in both title and content.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Please fill in both title and content.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
             return;
         }
 
@@ -248,7 +273,19 @@ export default function CourseDetailScreen() {
         try {
             const user = auth().currentUser;
             if (!user) {
-                Alert.alert('Error', 'You must be logged in.');
+                setAlertConfig({
+                    visible: true,
+                    title: 'Error',
+                    message: 'You must be logged in.',
+                    type: 'error',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
                 return;
             }
 
@@ -311,10 +348,34 @@ export default function CourseDetailScreen() {
             setNewContent('');
             setIsAnonymous(false);
             setShowCreateForm(false);
-            Alert.alert('Success', `${activeTab === 'announcements' ? 'Announcement' : 'Discussion'} created!`);
+            setAlertConfig({
+                visible: true,
+                title: 'Success',
+                message: `${activeTab === 'announcements' ? 'Announcement' : 'Discussion'} created!`,
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (error) {
             console.error('Error creating post:', error);
-            Alert.alert('Error', 'Failed to create post. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to create post. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } finally {
             setLoading(false);
         }
@@ -323,7 +384,19 @@ export default function CourseDetailScreen() {
     const handleSaveDraft = async () => {
         try {
             if (activeTab === 'announcements') {
-                Alert.alert('Offline', 'Announcements cannot be drafted offline. Please try when online.');
+                setAlertConfig({
+                    visible: true,
+                    title: 'Offline',
+                    message: 'Announcements cannot be drafted offline. Please try when online.',
+                    type: 'warning',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
                 return;
             }
 
@@ -346,38 +419,89 @@ export default function CourseDetailScreen() {
 
             await loadDrafts(); // Refresh drafts list
 
-            Alert.alert(
-                'Draft Saved',
-                'Your discussion has been saved as a draft and will be posted when you go back online.',
-                [{ text: 'OK' }]
-            );
+            setAlertConfig({
+                visible: true,
+                title: 'Draft Saved',
+                message: 'Your discussion has been saved as a draft and will be posted when you go back online.',
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (error) {
             console.error('Error saving draft:', error);
-            Alert.alert('Error', 'Failed to save draft. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to save draft. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         }
     };
 
     const handleDelete = async (itemId: string, type: 'announcement' | 'discussion') => {
-        Alert.alert(
-            'Delete',
-            `Are you sure you want to delete this ${type}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Delete',
+            message: `Are you sure you want to delete this ${type}?`,
+            type: 'warning',
+            actions: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig(null),
+                    style: 'cancel',
+                },
                 {
                     text: 'Delete',
-                    style: 'destructive',
                     onPress: async () => {
+                        setAlertConfig(null);
                         try {
                             await firestore().collection('courses').doc(courseId as string).collection(`${type}s`).doc(itemId).delete();
-                            Alert.alert('Success', `${type} deleted successfully`);
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Success',
+                                message: `${type} deleted successfully`,
+                                type: 'success',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
                         } catch (error) {
                             console.error('Error deleting:', error);
-                            Alert.alert('Error', 'Failed to delete. Please try again.');
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: 'Failed to delete. Please try again.',
+                                type: 'error',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
                         }
-                    }
-                }
-            ]
-        );
+                    },
+                    style: 'destructive',
+                },
+            ],
+        });
     };
 
     const handleEdit = (item: any, type: 'announcement' | 'discussion') => {
@@ -394,7 +518,19 @@ export default function CourseDetailScreen() {
 
     const handleUpdate = async () => {
         if (!editingItem || !newTitle.trim() || !newContent.trim()) {
-            Alert.alert('Error', 'Please fill in both title and content.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Please fill in both title and content.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
             return;
         }
 
@@ -411,10 +547,34 @@ export default function CourseDetailScreen() {
             setNewContent('');
             setEditingItem(null);
             setShowCreateForm(false);
-            Alert.alert('Success', `${editingItem.type} updated successfully!`);
+            setAlertConfig({
+                visible: true,
+                title: 'Success',
+                message: `${editingItem.type} updated successfully!`,
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (error) {
             console.error('Error updating:', error);
-            Alert.alert('Error', 'Failed to update. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to update. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } finally {
             setLoading(false);
         }
@@ -831,13 +991,14 @@ export default function CourseDetailScreen() {
                             </View>
                         )}
 
-                        {/* Unread indicator */}
-                        {!announcement.views?.[auth().currentUser?.uid || ''] && (
-                            <View style={styles.unreadIndicator}>
-                                <View style={styles.unreadDot} />
-                                <Text style={styles.unreadText}>New</Text>
-                            </View>
-                        )}
+                        {/* Unread indicator - only show for students, not for the author */}
+                        {!announcement.views?.[auth().currentUser?.uid || ''] &&
+                            auth().currentUser?.uid !== announcement.authorId && (
+                                <View style={styles.unreadIndicator}>
+                                    <View style={styles.unreadDot} />
+                                    <Text style={styles.unreadText}>New</Text>
+                                </View>
+                            )}
 
                         <View style={styles.postMeta}>
                             <Text style={styles.postAuthor}>By {announcement.authorName}</Text>
@@ -889,6 +1050,24 @@ export default function CourseDetailScreen() {
                     <Ionicons name="sync" size={16} color="#4f46e5" />
                     <Text style={styles.syncText}>Syncing drafts...</Text>
                 </View>
+            )}
+
+            {/* Manual Sync Button */}
+            {isOnline && drafts.filter(d => d.type === 'discussion' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
+                <TouchableOpacity
+                    style={styles.manualSyncButton}
+                    onPress={syncDrafts}
+                    disabled={syncingDrafts}
+                >
+                    <Ionicons
+                        name={syncingDrafts ? "sync" : "cloud-upload"}
+                        size={16}
+                        color="#4f46e5"
+                    />
+                    <Text style={styles.manualSyncText}>
+                        {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
+                    </Text>
+                </TouchableOpacity>
             )}
 
             {/* Draft Posts (Pending/Failed) */}
@@ -1213,6 +1392,15 @@ export default function CourseDetailScreen() {
                     )}
                 </>
             )}
+
+            <CustomAlert
+                visible={alertConfig?.visible || false}
+                title={alertConfig?.title || ''}
+                message={alertConfig?.message || ''}
+                type={alertConfig?.type || 'info'}
+                actions={alertConfig?.actions || []}
+                onDismiss={() => setAlertConfig(null)}
+            />
         </SafeAreaView>
     );
 }
@@ -1689,16 +1877,18 @@ const styles = StyleSheet.create({
     unreadIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
-        padding: 8,
+        marginTop: 12,
+        padding: 6,
         backgroundColor: '#fef3c7',
         borderRadius: 8,
         gap: 6,
+        alignSelf: 'flex-start',
+        marginBottom: 8,
     },
     unreadDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
         backgroundColor: '#f59e0b',
     },
     unreadText: {
@@ -1742,5 +1932,22 @@ const styles = StyleSheet.create({
         marginLeft: 8,
         color: '#4f46e5',
         fontWeight: '500',
+    },
+    manualSyncButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        marginTop: 20,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    manualSyncText: {
+        marginLeft: 8,
+        color: '#4f46e5',
+        fontSize: 14,
+        fontWeight: '600',
     },
 }); 

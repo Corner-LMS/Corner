@@ -107,7 +107,6 @@ export default function CourseResourcesScreen() {
         if (!courseId || !courseName) return;
 
         try {
-            console.log('Syncing resources after reconnection...');
             await offlineCacheService.syncResourcesFromFirebase(
                 courseId as string,
                 courseName as string

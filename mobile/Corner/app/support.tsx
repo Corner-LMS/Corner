@@ -42,7 +42,7 @@ const faqs = [
 
 export default function SupportPage() {
     const handleContactSupport = () => {
-        Linking.openURL('mailto:support@corner.com');
+        Linking.openURL('mailto:corner.e.learning@gmail.com');
     };
 
     return (

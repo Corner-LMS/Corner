@@ -8,6 +8,7 @@ import firestore from '@react-native-firebase/firestore';
 import { notificationService } from '../services/notificationService';
 import { notificationHelpers } from '../services/notificationHelpers';
 import { LinearGradient } from 'expo-linear-gradient';
+import CustomAlert from '../components/CustomAlert';
 
 interface NotificationSettings {
     announcementNotifications: boolean;
@@ -49,6 +50,7 @@ export default function NotificationSettingsScreen() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [userRole, setUserRole] = useState<string>('student');
+    const [alertConfig, setAlertConfig] = useState<any>(null);
 
     useEffect(() => {
         loadNotificationSettings();
@@ -97,7 +99,19 @@ export default function NotificationSettingsScreen() {
         try {
             const user = auth().currentUser;
             if (!user) {
-                Alert.alert('Error', 'You must be logged in.');
+                setAlertConfig({
+                    visible: true,
+                    title: 'Error',
+                    message: 'You must be logged in.',
+                    type: 'error',
+                    actions: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig(null),
+                            style: 'primary',
+                        },
+                    ],
+                });
                 return;
             }
 
@@ -110,10 +124,34 @@ export default function NotificationSettingsScreen() {
             // Update local state to ensure consistency
             setSettings(prevSettings => ({ ...prevSettings }));
 
-            Alert.alert('Success', 'Notification settings saved!');
+            setAlertConfig({
+                visible: true,
+                title: 'Success',
+                message: 'Notification settings saved!',
+                type: 'success',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } catch (error) {
             console.error('Error saving notification settings:', error);
-            Alert.alert('Error', 'Failed to save settings. Please try again.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to save settings. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } finally {
             setSaving(false);
         }
@@ -126,41 +164,80 @@ export default function NotificationSettingsScreen() {
         }));
     };
 
-    const testNotification = async () => {
-        try {
-            await notificationService.scheduleLocalNotification({
-                type: 'announcement',
-                courseId: 'test',
-                courseName: 'Test Course',
-                title: 'Test Notification',
-                body: 'This is a test notification to verify your settings work correctly.',
-                data: { test: true }
-            });
-            Alert.alert('Success', 'Test notification sent! Check your notification tray.');
-        } catch (error) {
-            console.error('Error sending test notification:', error);
-            Alert.alert('Error', 'Failed to send test notification.');
-        }
-    };
-
     const clearAllNotifications = async () => {
-        try {
-            const user = auth().currentUser;
-            if (!user) {
-                Alert.alert('Error', 'You must be logged in.');
-                return;
-            }
+        setAlertConfig({
+            visible: true,
+            title: 'Clear All Notifications',
+            message: 'Are you sure you want to clear all your notifications? This action cannot be undone.',
+            type: 'warning',
+            actions: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig(null),
+                    style: 'cancel',
+                },
+                {
+                    text: 'Clear All',
+                    onPress: async () => {
+                        setAlertConfig(null);
+                        try {
+                            const user = auth().currentUser;
+                            if (!user) {
+                                setAlertConfig({
+                                    visible: true,
+                                    title: 'Error',
+                                    message: 'You must be logged in.',
+                                    type: 'error',
+                                    actions: [
+                                        {
+                                            text: 'OK',
+                                            onPress: () => setAlertConfig(null),
+                                            style: 'primary',
+                                        },
+                                    ],
+                                });
+                                return;
+                            }
 
-            await notificationHelpers.clearUserNotifications(user.uid);
-            Alert.alert('Success', 'All notifications have been cleared.');
-        } catch (error) {
-            console.error('Error clearing notifications:', error);
-            Alert.alert('Error', 'Failed to clear notifications.');
-        }
+                            await notificationHelpers.clearUserNotifications(user.uid);
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Success',
+                                message: 'All notifications have been cleared.',
+                                type: 'success',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
+                        } catch (error) {
+                            console.error('Error clearing notifications:', error);
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: 'Failed to clear notifications.',
+                                type: 'error',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
+                        }
+                    },
+                    style: 'destructive',
+                },
+            ],
+        });
     };
 
     const handleContactSupport = () => {
-        Linking.openURL('mailto:support@corner.com');
+        Linking.openURL('mailto:corner.e.learning@gmail.com');
     };
 
     if (loading) {
@@ -195,10 +272,20 @@ export default function NotificationSettingsScreen() {
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notification Settings</Text>
-                <View style={styles.headerSpacer} />
+                <TouchableOpacity onPress={clearAllNotifications} style={styles.headerClearButton}>
+                    <Ionicons name="trash-outline" size={20} color="#fff" />
+                </TouchableOpacity>
             </LinearGradient>
 
             <ScrollView style={styles.content}>
+                {/* Save Notice */}
+                <View style={styles.saveNotice}>
+                    <Ionicons name="information-circle" size={20} color="#4f46e5" />
+                    <Text style={styles.saveNoticeText}>
+                        Don't forget to save your settings at the bottom of this screen for changes to take effect.
+                    </Text>
+                </View>
+
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Content Notifications</Text>
                     <Text style={styles.sectionDescription}>
@@ -276,69 +363,7 @@ export default function NotificationSettingsScreen() {
                     )}
                 </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Notification Behavior</Text>
-
-                    <View style={styles.settingItem}>
-                        <View style={styles.settingInfo}>
-                            <Ionicons name="volume-high" size={20} color="#4f46e5" style={styles.settingIcon} />
-                            <View style={styles.settingText}>
-                                <Text style={styles.settingTitle}>Sound</Text>
-                                <Text style={styles.settingSubtitle}>Play notification sounds</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            value={settings.soundEnabled}
-                            onValueChange={(value) => updateSetting('soundEnabled', value)}
-                            trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
-                            thumbColor={settings.soundEnabled ? '#fff' : '#f4f3f4'}
-                        />
-                    </View>
-
-                    <View style={styles.settingItem}>
-                        <View style={styles.settingInfo}>
-                            <Ionicons name="phone-portrait" size={20} color="#4f46e5" style={styles.settingIcon} />
-                            <View style={styles.settingText}>
-                                <Text style={styles.settingTitle}>Vibration</Text>
-                                <Text style={styles.settingSubtitle}>Vibrate for notifications</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            value={settings.vibrationEnabled}
-                            onValueChange={(value) => updateSetting('vibrationEnabled', value)}
-                            trackColor={{ false: '#e2e8f0', true: '#4f46e5' }}
-                            thumbColor={settings.vibrationEnabled ? '#fff' : '#f4f3f4'}
-                        />
-                    </View>
-                </View>
-
                 <View style={styles.buttonContainer}>
-                    <TouchableOpacity
-                        style={[styles.button, styles.testButton]}
-                        onPress={testNotification}
-                    >
-                        <LinearGradient
-                            colors={['#4f46e5', '#3730a3']}
-                            style={styles.buttonGradient}
-                        >
-                            <Ionicons name="notifications-outline" size={20} color="#fff" />
-                            <Text style={styles.buttonText}>Test Notification</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.button, styles.clearButton]}
-                        onPress={clearAllNotifications}
-                    >
-                        <LinearGradient
-                            colors={['#ef4444', '#dc2626']}
-                            style={styles.buttonGradient}
-                        >
-                            <Ionicons name="trash-outline" size={20} color="#fff" />
-                            <Text style={styles.buttonText}>Clear All Notifications</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-
                     <TouchableOpacity
                         style={[styles.button, styles.supportButton]}
                         onPress={() => router.push('/support')}
@@ -349,19 +374,6 @@ export default function NotificationSettingsScreen() {
                         >
                             <Ionicons name="help-circle-outline" size={20} color="#fff" />
                             <Text style={styles.buttonText}>Help & Support</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.button, styles.sitemapButton]}
-                        onPress={() => router.push('/_sitemap')}
-                    >
-                        <LinearGradient
-                            colors={['#10b981', '#059669']}
-                            style={styles.buttonGradient}
-                        >
-                            <Ionicons name="map-outline" size={20} color="#fff" />
-                            <Text style={styles.buttonText}>View Sitemap</Text>
                         </LinearGradient>
                     </TouchableOpacity>
                 </View>
@@ -381,6 +393,15 @@ export default function NotificationSettingsScreen() {
                     </LinearGradient>
                 </TouchableOpacity>
             </ScrollView>
+
+            <CustomAlert
+                visible={alertConfig?.visible || false}
+                title={alertConfig?.title || ''}
+                message={alertConfig?.message || ''}
+                type={alertConfig?.type || 'info'}
+                actions={alertConfig?.actions || []}
+                onDismiss={() => setAlertConfig(null)}
+            />
         </SafeAreaView>
     );
 }
@@ -419,9 +440,32 @@ const styles = StyleSheet.create({
     headerSpacer: {
         width: 24,
     },
+    headerClearButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
     content: {
         flex: 1,
         padding: 20,
+    },
+    saveNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#eff6ff',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#dbeafe',
+    },
+    saveNoticeText: {
+        fontSize: 14,
+        color: '#1e40af',
+        marginLeft: 12,
+        fontWeight: '500',
+        lineHeight: 20,
+        flex: 1,
     },
     section: {
         backgroundColor: '#fff',
@@ -509,9 +553,6 @@ const styles = StyleSheet.create({
         // Gradient handled by buttonGradient
     },
     supportButton: {
-        // Gradient handled by buttonGradient
-    },
-    sitemapButton: {
         // Gradient handled by buttonGradient
     },
     buttonText: {

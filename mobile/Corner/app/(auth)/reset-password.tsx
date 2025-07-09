@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, Alert } from 'react-native';
-import { resetPassword } from './useAuth';
+import { resetPassword } from '../../services/authService';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
