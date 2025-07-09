@@ -3,6 +3,7 @@
     "version": ">= 14.2.0",
     "appVersionSource": "remote"
   },
+ 
   "build": {
     "development": {
       "developmentClient": true,
@@ -20,6 +21,7 @@
     "production": {
       "autoIncrement": true
     },
+    
     "development-simulator": {
       "developmentClient": true,
       "distribution": "internal",

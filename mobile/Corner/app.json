@@ -44,14 +44,15 @@
           "backgroundColor": "#8B5CF6"
         }
       ],
-      ["@react-native-google-signin/google-signin"],
+      [
+        "@react-native-google-signin/google-signin"
+      ],
       "expo-notifications",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       "@react-native-firebase/auth",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/perf",
-      
       [
         "expo-build-properties",
         {

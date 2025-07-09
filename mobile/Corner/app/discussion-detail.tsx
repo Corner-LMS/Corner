@@ -651,86 +651,98 @@ export default function DiscussionDetailScreen() {
     );
 
     const renderComment = (comment: Comment, depth: number = 0) => {
-        const maxDepth = 8; // Prevent excessive nesting for UI readability
+        const maxDepth = 6; // Limit nesting to prevent comments from becoming unreadable
         const isDeepNested = depth >= maxDepth;
+        const actualDepth = Math.min(depth, maxDepth);
 
         return (
-            <View key={comment.id}>
-                <View style={[
-                    styles.commentWrapper,
-                    { marginLeft: Math.min(depth * 20, maxDepth * 20) }
-                ]}>
-                    {depth > 0 && <View style={[styles.threadLine, { left: -10 }]} />}
-
-                    <View style={[
-                        styles.commentCard,
-                        depth > 0 && styles.replyCard,
-                        isDeepNested && styles.deepNestedCard
-                    ]}>
-                        <View style={styles.commentHeader}>
-                            <View style={styles.commentAuthorSection}>
-                                <Text style={styles.commentAuthor}>{comment.authorName}</Text>
-                                <View style={[
-                                    styles.commentRoleTag,
-                                    comment.isAnonymous ? styles.anonymousTag :
-                                        comment.authorRole === 'teacher' ? styles.teacherTag :
-                                            comment.authorRole === 'admin' ? styles.adminTag : styles.studentTag
-                                ]}>
-                                    <Text style={styles.commentRoleText}>
-                                        {comment.authorRole}
-                                    </Text>
-                                </View>
-                                {depth > 0 && (
-                                    <View style={styles.depthIndicator}>
-                                        <Text style={styles.depthText}>L{depth}</Text>
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-
-                        <View style={styles.commentActionsRow}>
-                            <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
-                            <View style={styles.commentActions}>
-                                {/* Reply button - show for all comments if not archived */}
-                                {!courseIsArchived && (
-                                    <TouchableOpacity
-                                        style={styles.replyButton}
-                                        onPress={() => handleReplyToComment(comment)}
-                                    >
-                                        <Ionicons name="chatbubble-outline" size={14} color="#4f46e5" />
-                                    </TouchableOpacity>
-                                )}
-                                {/* Show edit/delete only for comment author and if not archived */}
-                                {auth().currentUser?.uid === comment.authorId && !courseIsArchived && (
-                                    <>
-                                        <TouchableOpacity
-                                            style={styles.editButton}
-                                            onPress={() => handleEditComment(comment)}
-                                        >
-                                            <Ionicons name="pencil" size={14} color="#666" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.deleteButton}
-                                            onPress={() => handleDeleteComment(comment.id)}
-                                        >
-                                            <Ionicons name="trash" size={14} color="#d32f2f" />
-                                        </TouchableOpacity>
-                                    </>
-                                )}
-                            </View>
-                        </View>
-
-                        <View style={styles.commentContent}>
-                            <MarkdownText text={comment.content} style={styles.commentText} />
-                        </View>
-
-                        {courseIsArchived && (
-                            <View style={styles.archivedNotice}>
-                                <Ionicons name="archive" size={12} color="#666" />
-                                <Text style={styles.archivedNoticeText}>Read only - Course archived</Text>
-                            </View>
-                        )}
+            <View key={comment.id} style={[
+                styles.commentContainer,
+                { marginLeft: actualDepth > 0 ? actualDepth * 8 : 0 } // Subtle indentation
+            ]}>
+                {/* Threading lines for replies */}
+                {actualDepth > 0 && (
+                    <View style={styles.threadingLinesContainer}>
+                        <View style={styles.threadingLine} />
                     </View>
+                )}
+
+                <View style={[
+                    styles.commentCard,
+                    actualDepth > 0 && styles.replyCard,
+                    isDeepNested && styles.deepNestedCard,
+                    actualDepth === 1 && styles.firstLevelReply,
+                    actualDepth === 2 && styles.secondLevelReply,
+                    actualDepth >= 3 && styles.deepLevelReply
+                ]}>
+                    <View style={styles.commentHeader}>
+                        <View style={styles.commentAuthorSection}>
+                            <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+                            <View style={[
+                                styles.commentRoleTag,
+                                comment.isAnonymous ? styles.anonymousTag :
+                                    comment.authorRole === 'teacher' ? styles.teacherTag :
+                                        comment.authorRole === 'admin' ? styles.adminTag : styles.studentTag
+                            ]}>
+                                <Text style={styles.commentRoleText}>
+                                    {comment.authorRole}
+                                </Text>
+                            </View>
+                            {actualDepth > 0 && (
+                                <View style={styles.depthIndicator}>
+                                    <Text style={styles.depthText}>L{actualDepth}</Text>
+                                </View>
+                            )}
+                            {isDeepNested && depth > maxDepth && (
+                                <View style={styles.maxDepthIndicator}>
+                                    <Text style={styles.maxDepthText}>+{depth - maxDepth}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.commentActionsRow}>
+                        <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
+                        <View style={styles.commentActions}>
+                            {/* Reply button - show for all comments if not archived */}
+                            {!courseIsArchived && (
+                                <TouchableOpacity
+                                    style={styles.replyButton}
+                                    onPress={() => handleReplyToComment(comment)}
+                                >
+                                    <Ionicons name="chatbubble-outline" size={14} color="#4f46e5" />
+                                </TouchableOpacity>
+                            )}
+                            {/* Show edit/delete only for comment author and if not archived */}
+                            {auth().currentUser?.uid === comment.authorId && !courseIsArchived && (
+                                <>
+                                    <TouchableOpacity
+                                        style={styles.editButton}
+                                        onPress={() => handleEditComment(comment)}
+                                    >
+                                        <Ionicons name="pencil" size={14} color="#666" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.deleteButton}
+                                        onPress={() => handleDeleteComment(comment.id)}
+                                    >
+                                        <Ionicons name="trash" size={14} color="#d32f2f" />
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.commentContent}>
+                        <MarkdownText text={comment.content} style={styles.commentText} />
+                    </View>
+
+                    {courseIsArchived && (
+                        <View style={styles.archivedNotice}>
+                            <Ionicons name="archive" size={12} color="#666" />
+                            <Text style={styles.archivedNoticeText}>Read only - Course archived</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Recursively render nested replies */}
@@ -1163,41 +1175,65 @@ const styles = StyleSheet.create({
     commentsContainer: {
         flex: 1,
     },
-    commentWrapper: {
+    commentContainer: {
         marginBottom: 16,
         position: 'relative',
     },
-    threadLine: {
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        width: 2,
-        backgroundColor: 'rgba(79, 70, 229, 0.2)',
-        borderRadius: 1,
-    },
     commentCard: {
-        backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        elevation: 3,
-        borderLeftWidth: 3,
-        borderLeftColor: '#f1f5f9',
-        borderWidth: 1,
-        borderColor: 'rgba(241, 245, 249, 0.8)',
+        backgroundColor: 'transparent',
+        padding: 16,
+        borderRadius: 0,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
+        borderLeftWidth: 0,
+        borderWidth: 0,
+        borderColor: 'transparent',
+        marginLeft: 0,
+        minWidth: 280, // Ensure minimum width for readability
     },
     replyCard: {
-        backgroundColor: '#f8fafc',
-        borderLeftWidth: 3,
-        borderLeftColor: '#4f46e5',
-        marginLeft: 10,
+        backgroundColor: 'transparent',
+        borderLeftWidth: 0,
+        marginLeft: 12, // Small margin to separate from threading lines
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     deepNestedCard: {
-        backgroundColor: '#f1f5f9',
-        borderLeftColor: '#64748b',
+        backgroundColor: 'transparent',
+        borderLeftWidth: 0,
+    },
+    firstLevelReply: {
+        backgroundColor: 'transparent',
+        borderLeftWidth: 0,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
+    },
+    secondLevelReply: {
+        backgroundColor: 'transparent',
+        borderLeftWidth: 0,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
+    },
+    deepLevelReply: {
+        backgroundColor: 'transparent',
+        borderLeftWidth: 0,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     commentHeader: {
         flexDirection: 'row',
@@ -1381,6 +1417,7 @@ const styles = StyleSheet.create({
     },
     repliesContainer: {
         marginTop: 8,
+        position: 'relative',
     },
     replyContext: {
         flexDirection: 'row',
@@ -1549,5 +1586,32 @@ const styles = StyleSheet.create({
         color: '#475569',
         lineHeight: 22,
         marginBottom: 0,
+    },
+    maxDepthIndicator: {
+        backgroundColor: 'rgba(229, 231, 235, 0.5)', // Light gray background
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    maxDepthText: {
+        fontSize: 10,
+        color: '#64748b',
+        fontWeight: '600',
+    },
+    threadingLinesContainer: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 1, // Single vertical line
+        backgroundColor: '#cbd5e1', // Default color for non-last lines
+    },
+    threadingLine: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        width: 1,
+        backgroundColor: '#cbd5e1', // Default color for non-last lines
     },
 }); 
