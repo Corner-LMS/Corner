@@ -194,6 +194,27 @@ export default function Profile() {
 
                         {/* Actions Section */}
                         <View style={styles.actionsSection}>
+                            <Text style={styles.sectionTitle}>Help & Support</Text>
+
+                            <View style={styles.actionButtons}>
+                                <TouchableOpacity
+                                    style={styles.actionButton}
+                                    onPress={() => router.push('/support')}
+                                >
+                                    <View style={styles.actionButtonIcon}>
+                                        <Ionicons name="help-circle" size={20} color="#4f46e5" />
+                                    </View>
+                                    <View style={styles.actionButtonContent}>
+                                        <Text style={styles.actionButtonTitle}>Get Help</Text>
+                                        <Text style={styles.actionButtonSubtitle}>Support & resources</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={20} color="#cbd5e0" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {/* Logout Section */}
+                        <View style={styles.logoutSection}>
                             <TouchableOpacity
                                 style={styles.logoutButton}
                                 onPress={handleLogout}
@@ -410,6 +431,52 @@ const styles = StyleSheet.create({
         marginVertical: 16,
     },
     actionsSection: {
+        marginTop: 8,
+        marginBottom: 40,
+    },
+    actionButtons: {
+        width: '100%',
+        gap: 16,
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 2,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
+    },
+    actionButtonIcon: {
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderRadius: 12,
+        padding: 12,
+        marginRight: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.1)',
+    },
+    actionButtonContent: {
+        flex: 1,
+    },
+    actionButtonTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 4,
+        letterSpacing: -0.1,
+    },
+    actionButtonSubtitle: {
+        fontSize: 13,
+        color: '#64748b',
+        letterSpacing: 0.2,
+    },
+    logoutSection: {
         marginTop: 8,
         marginBottom: 40,
     },

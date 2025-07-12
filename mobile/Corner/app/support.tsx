@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Linking, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import auth from '@react-native-firebase/auth';
@@ -43,6 +43,9 @@ const faqs = [
 
 export default function SupportPage() {
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const scrollViewRef = useRef<ScrollView>(null);
+    const [feedbackSectionY, setFeedbackSectionY] = useState(0);
+    const { scrollToFeedback } = useLocalSearchParams();
 
     useEffect(() => {
         const user = auth().currentUser;
@@ -50,6 +53,23 @@ export default function SupportPage() {
             setIsSuperAdmin(true);
         }
     }, []);
+
+    useEffect(() => {
+        // Scroll to feedback section if requested and we have the position
+        if (scrollToFeedback === 'true' && scrollViewRef.current && feedbackSectionY > 0) {
+            setTimeout(() => {
+                scrollViewRef.current?.scrollTo({
+                    y: feedbackSectionY - 20, // Offset by 20px to show some context above
+                    animated: true
+                });
+            }, 100);
+        }
+    }, [scrollToFeedback, feedbackSectionY]);
+
+    const handleFeedbackSectionLayout = (event: any) => {
+        const { y } = event.nativeEvent.layout;
+        setFeedbackSectionY(y);
+    };
 
     const handleContactSupport = () => {
         Linking.openURL('mailto:corner.e.learning@gmail.com');
@@ -90,7 +110,7 @@ export default function SupportPage() {
                 <View style={styles.headerSpacer} />
             </LinearGradient>
 
-            <ScrollView style={styles.content}>
+            <ScrollView ref={scrollViewRef} style={styles.content}>
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
                     {faqs.map((faq, index) => (
@@ -101,10 +121,10 @@ export default function SupportPage() {
                     ))}
                 </View>
 
-                <View style={styles.section}>
+                <View style={styles.section} onLayout={handleFeedbackSectionLayout}>
                     <Text style={styles.sectionTitle}>Feedback & Surveys</Text>
                     <TouchableOpacity style={styles.linkItem} onPress={handleFeedback}>
-                        <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4f46e5" />
+                        <Ionicons name="star" size={20} color="#fbbf24" />
                         <Text style={styles.linkText}>Rate Corner</Text>
                         <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
                     </TouchableOpacity>

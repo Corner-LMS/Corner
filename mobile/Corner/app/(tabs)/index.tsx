@@ -8,7 +8,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationBadge from '../../components/NotificationBadge';
 import { getSchoolById } from '@/constants/Schools';
-import ConnectivityIndicator from '../../components/ConnectivityIndicator';
 
 const { width, height } = Dimensions.get('window');
 
@@ -431,7 +430,15 @@ export default function DashboardScreen() {
                     </View>
 
                     <View style={styles.headerActions}>
-                        <ConnectivityIndicator size="small" showText={false} />
+                        <TouchableOpacity
+                            style={styles.ratingBtn}
+                            onPress={() => router.push({
+                                pathname: '/support',
+                                params: { scrollToFeedback: 'true' }
+                            })}
+                        >
+                            <Ionicons name="star" size={18} color="#fbbf24" />
+                        </TouchableOpacity>
                         <NotificationBadge size="small" />
                         <TouchableOpacity
                             style={styles.settingsBtn}
@@ -513,79 +520,58 @@ export default function DashboardScreen() {
                         ))
                     ) : (
                         <View style={styles.emptyState}>
-                            <Image
-                                source={require('../../assets/images/corner-splash-logo.png')}
-                                style={styles.emptyStateLogo}
-                                resizeMode="contain"
-                            />
-                            <Text style={styles.emptyStateText}>
-                                {role === 'student' ? 'No courses enrolled yet' :
-                                    role === 'teacher' ? 'Create your first course' :
-                                        'No courses available'}
+                            <View style={styles.emptyStateIcon}>
+                                <Ionicons
+                                    name={role === 'student' ? 'school' : role === 'teacher' ? 'library' : 'business'}
+                                    size={48}
+                                    color="#cbd5e0"
+                                />
+                            </View>
+                            <Text style={styles.emptyStateTitle}>
+                                {role === 'student' ? 'No Courses Yet' :
+                                    role === 'teacher' ? 'Start Teaching' :
+                                        'No Courses Available'}
                             </Text>
-                            <TouchableOpacity
-                                style={styles.emptyStateBtn}
-                                onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
-                            >
-                                <Text style={styles.emptyStateBtnText}>
-                                    {role === 'student' ? 'Join Course' : 'Create Course'}
-                                </Text>
-                            </TouchableOpacity>
+                            <Text style={styles.emptyStateText}>
+                                {role === 'student' ? 'Join a course to start learning and collaborating with your classmates.' :
+                                    role === 'teacher' ? 'Create your first course to begin teaching and sharing knowledge.' :
+                                        'Courses from your school will appear here once they are created.'}
+                            </Text>
+                            {(role === 'student' || role === 'teacher') && (
+                                <TouchableOpacity
+                                    style={styles.emptyStateBtn}
+                                    onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
+                                >
+                                    <Ionicons
+                                        name={role === 'student' ? 'add-circle' : 'create'}
+                                        size={20}
+                                        color="#fff"
+                                        style={{ marginRight: 8 }}
+                                    />
+                                    <Text style={styles.emptyStateBtnText}>
+                                        {role === 'student' ? 'Join Course' : 'Create Course'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     )}
                 </View>
 
-                {/* Feedback Section */}
-                <View style={styles.feedbackSection}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Help Us Improve</Text>
-                    </View>
-                    <View style={styles.feedbackCards}>
-                        <TouchableOpacity
-                            style={styles.feedbackCard}
-                            onPress={() => router.push('/feedback')}
-                        >
-                            <LinearGradient
-                                colors={['#fbbf24', '#f59e0b']}
-                                style={styles.feedbackCardGradient}
-                            >
-                                <Ionicons name="star" size={24} color="#fff" />
-                                <Text style={styles.feedbackCardTitle}>Rate Corner</Text>
-                                <Text style={styles.feedbackCardSubtitle}>Share your experience</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.feedbackCard}
-                            onPress={() => router.push('/survey')}
-                        >
-                            <LinearGradient
-                                colors={['#10b981', '#059669']}
-                                style={styles.feedbackCardGradient}
-                            >
-                                <Ionicons name="clipboard" size={24} color="#fff" />
-                                <Text style={styles.feedbackCardTitle}>Take Survey</Text>
-                                <Text style={styles.feedbackCardSubtitle}>Help us improve</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </ScrollView>
-
-            {/* FAB */}
-            {(role === 'teacher' || role === 'student') && (
-                <TouchableOpacity
-                    style={styles.fab}
-                    onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
-                >
-                    <LinearGradient
-                        colors={['#4f46e5', '#3730a3']}
-                        style={styles.fabGradient}
+                {/* FAB */}
+                {(role === 'teacher' || role === 'student') && (
+                    <TouchableOpacity
+                        style={styles.fab}
+                        onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
                     >
-                        <Ionicons name="add" size={24} color="#fff" />
-                    </LinearGradient>
-                </TouchableOpacity>
-            )}
+                        <LinearGradient
+                            colors={['#4f46e5', '#3730a3']}
+                            style={styles.fabGradient}
+                        >
+                            <Ionicons name="add" size={24} color="#fff" />
+                        </LinearGradient>
+                    </TouchableOpacity>
+                )}
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -834,6 +820,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 15,
     },
+    ratingBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     settingsBtn: {
         width: 40,
         height: 40,
@@ -951,11 +945,21 @@ const styles = StyleSheet.create({
         paddingVertical: 60,
         paddingHorizontal: 24,
     },
-    emptyStateLogo: {
+    emptyStateIcon: {
         width: 80,
         height: 80,
+        borderRadius: 40,
+        backgroundColor: '#e2e8f0',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginBottom: 16,
-        opacity: 0.5,
+    },
+    emptyStateTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1a202c',
+        marginBottom: 8,
+        textAlign: 'center',
     },
     emptyStateText: {
         fontSize: 16,
@@ -963,8 +967,11 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 16,
         marginBottom: 24,
+        lineHeight: 24,
     },
     emptyStateBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#4f46e5',
         paddingHorizontal: 24,
         paddingVertical: 12,
@@ -997,45 +1004,6 @@ const styles = StyleSheet.create({
     },
     loadingIndicator: {
         marginVertical: 40,
-    },
-    feedbackSection: {
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 100,
-    },
-    feedbackCards: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 16,
-    },
-    feedbackCard: {
-        flex: 1,
-        borderRadius: 16,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    feedbackCardGradient: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    feedbackCardTitle: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
-        marginTop: 10,
-        textAlign: 'center',
-    },
-    feedbackCardSubtitle: {
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontSize: 14,
-        marginTop: 4,
-        textAlign: 'center',
     },
 });
 

@@ -83,7 +83,24 @@ export async function sendVerificationEmail() {
     try {
         await user.sendEmailVerification();
     } catch (error: any) {
-        throw new Error(getFriendlyErrorMessage(error));
+        const errorCode = error?.code || '';
+        switch (errorCode) {
+            case 'auth/too-many-requests':
+                throw new Error('Too many verification emails sent. Please wait a few minutes before trying again.');
+            case 'auth/network-request-failed':
+                throw new Error('Network error. Please check your internet connection and try again.');
+            case 'auth/user-not-found':
+                throw new Error('User not found. Please sign in again.');
+            case 'auth/invalid-user-token':
+                throw new Error('Session expired. Please sign in again.');
+            case 'auth/user-token-expired':
+                throw new Error('Session expired. Please sign in again.');
+            case 'auth/requires-recent-login':
+                throw new Error('Please sign in again to send verification email.');
+            default:
+                console.error('Email verification error:', error);
+                throw new Error('Failed to send verification email. Please try again.');
+        }
     }
 }
 
