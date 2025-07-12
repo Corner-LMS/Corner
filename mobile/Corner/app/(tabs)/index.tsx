@@ -534,6 +534,42 @@ export default function DashboardScreen() {
                         </View>
                     )}
                 </View>
+
+                {/* Feedback Section */}
+                <View style={styles.feedbackSection}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Help Us Improve</Text>
+                    </View>
+                    <View style={styles.feedbackCards}>
+                        <TouchableOpacity
+                            style={styles.feedbackCard}
+                            onPress={() => router.push('/feedback')}
+                        >
+                            <LinearGradient
+                                colors={['#fbbf24', '#f59e0b']}
+                                style={styles.feedbackCardGradient}
+                            >
+                                <Ionicons name="star" size={24} color="#fff" />
+                                <Text style={styles.feedbackCardTitle}>Rate Corner</Text>
+                                <Text style={styles.feedbackCardSubtitle}>Share your experience</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.feedbackCard}
+                            onPress={() => router.push('/survey')}
+                        >
+                            <LinearGradient
+                                colors={['#10b981', '#059669']}
+                                style={styles.feedbackCardGradient}
+                            >
+                                <Ionicons name="clipboard" size={24} color="#fff" />
+                                <Text style={styles.feedbackCardTitle}>Take Survey</Text>
+                                <Text style={styles.feedbackCardSubtitle}>Help us improve</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </ScrollView>
 
             {/* FAB */}
@@ -961,6 +997,45 @@ const styles = StyleSheet.create({
     },
     loadingIndicator: {
         marginVertical: 40,
+    },
+    feedbackSection: {
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 100,
+    },
+    feedbackCards: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 16,
+    },
+    feedbackCard: {
+        flex: 1,
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    feedbackCardGradient: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    feedbackCardTitle: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '700',
+        marginTop: 10,
+        textAlign: 'center',
+    },
+    feedbackCardSubtitle: {
+        color: 'rgba(255, 255, 255, 0.8)',
+        fontSize: 14,
+        marginTop: 4,
+        textAlign: 'center',
     },
 });
 

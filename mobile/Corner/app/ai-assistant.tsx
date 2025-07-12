@@ -44,6 +44,24 @@ export default function AIAssistantScreen() {
     const [courseContext, setCourseContext] = useState<CourseContext | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
 
+    // Auto-scroll to bottom when messages change
+    useEffect(() => {
+        if (messages.length > 0) {
+            setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+        }
+    }, [messages]);
+
+    // Auto-scroll when loading state changes (when AI response arrives)
+    useEffect(() => {
+        if (!isLoading && messages.length > 0) {
+            setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 200);
+        }
+    }, [isLoading, messages.length]);
+
     useEffect(() => {
         if (!courseId) return;
 
@@ -426,6 +444,7 @@ export default function AIAssistantScreen() {
                             key={`${message.id}-fu-${fuIndex}`}
                             style={styles.followUpButton}
                             onPress={() => handleFollowUpPress(question)}
+                            activeOpacity={0.7}
                         >
                             <Text style={styles.followUpText}>{question}</Text>
                         </TouchableOpacity>
@@ -459,7 +478,9 @@ export default function AIAssistantScreen() {
             <ScrollView
                 ref={scrollViewRef}
                 style={styles.messagesContainer}
-                onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
             >
                 {messages.map(renderMessage)}
                 {isLoading && (
@@ -658,23 +679,23 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
     followUpButton: {
-        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        backgroundColor: '#fff',
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 16,
-        marginBottom: 10,
+        paddingVertical: 14,
+        borderRadius: 12,
+        marginBottom: 8,
         borderWidth: 1,
-        borderColor: 'rgba(79, 70, 229, 0.2)',
+        borderColor: '#e2e8f0',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-        elevation: 1,
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
+        elevation: 2,
     },
     followUpText: {
         fontSize: 14,
-        color: '#4f46e5',
-        fontWeight: '600',
+        color: '#1e293b',
+        fontWeight: '500',
         lineHeight: 20,
     },
     loadingContainer: {

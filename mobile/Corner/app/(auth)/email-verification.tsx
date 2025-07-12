@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 import { sendVerificationEmail } from '../../services/authService';
 
@@ -21,12 +22,28 @@ export default function EmailVerificationScreen() {
     const [userEmail, setUserEmail] = useState('');
 
     useEffect(() => {
-        const unsubscribe = auth().onAuthStateChanged((user) => {
+        const unsubscribe = auth().onAuthStateChanged(async (user) => {
             if (user) {
                 setUserEmail(user.email || '');
 
                 if (user.emailVerified) {
-                    router.replace('/(tabs)');
+                    // Check if user is super admin
+                    if (user.email === 'corner.e.learning@gmail.com') {
+                        // Create super admin user document if it doesn't exist
+                        const userDoc = await firestore().collection('users').doc(user.uid).get();
+                        if (!userDoc.exists()) {
+                            await firestore().collection('users').doc(user.uid).set({
+                                email: 'corner.e.learning@gmail.com',
+                                role: 'superadmin',
+                                name: 'Super Admin',
+                                createdAt: new Date(),
+                                isSuperAdmin: true
+                            });
+                        }
+                        router.replace('/super-admin-dashboard');
+                    } else {
+                        router.replace('/(tabs)');
+                    }
                 }
             } else {
                 router.replace('/(auth)/login');
@@ -59,18 +76,48 @@ export default function EmailVerificationScreen() {
             await auth().currentUser?.reload();
 
             if (auth().currentUser?.emailVerified) {
-                Alert.alert(
-                    'Email Verified!',
-                    'Your email has been successfully verified. Let\'s set up your profile.',
-                    [
-                        {
-                            text: 'Continue',
-                            onPress: () => {
-                                router.replace('/role');
+                // Check if user is super admin
+                const user = auth().currentUser;
+                if (user && user.email === 'corner.e.learning@gmail.com') {
+                    // Create super admin user document if it doesn't exist
+                    const userDoc = await firestore().collection('users').doc(user.uid).get();
+                    if (!userDoc.exists()) {
+                        await firestore().collection('users').doc(user.uid).set({
+                            email: 'corner.e.learning@gmail.com',
+                            role: 'superadmin',
+                            name: 'Super Admin',
+                            createdAt: new Date(),
+                            isSuperAdmin: true
+                        });
+                    }
+
+                    Alert.alert(
+                        'Email Verified!',
+                        'Your email has been successfully verified. Welcome to the Super Admin Dashboard.',
+                        [
+                            {
+                                text: 'Continue',
+                                onPress: () => {
+                                    router.replace('/super-admin-dashboard');
+                                }
                             }
-                        }
-                    ]
-                );
+                        ]
+                    );
+                } else {
+                    // Normal user - go to role selection
+                    Alert.alert(
+                        'Email Verified!',
+                        'Your email has been successfully verified. Let\'s set up your profile.',
+                        [
+                            {
+                                text: 'Continue',
+                                onPress: () => {
+                                    router.replace('/role');
+                                }
+                            }
+                        ]
+                    );
+                }
             } else {
                 Alert.alert(
                     'Not Verified Yet',

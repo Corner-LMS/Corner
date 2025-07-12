@@ -7,6 +7,7 @@ import firestore from '@react-native-firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { getErrorGuidance } from '../../utils/errorHelpers';
 import CustomAlert from '../../components/CustomAlert';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -17,7 +18,75 @@ export default function Login() {
     const [emailFocused, setEmailFocused] = useState(false);
     const [passwordFocused, setPasswordFocused] = useState(false);
     const [alertConfig, setAlertConfig] = useState<any>(null);
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
+    // Check if email is super admin
+    useEffect(() => {
+        if (email === 'corner.e.learning@gmail.com') {
+            setIsSuperAdmin(true);
+            setError(null);
+            setErrorGuidance(null);
+        } else {
+            setIsSuperAdmin(false);
+        }
+    }, [email]);
+
+    const handleSuperAdminLogin = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            setErrorGuidance(null);
+
+            // For super admin, we'll use normal login but with special privileges
+            setAlertConfig({
+                visible: true,
+                title: 'Super Admin Access',
+                message: 'Welcome! You are logging in as Super Admin. This gives you access to analytics and feedback data.',
+                type: 'info',
+                actions: [
+                    {
+                        text: 'Continue',
+                        onPress: async () => {
+                            setAlertConfig(null);
+                            try {
+                                // Use normal login flow but with super admin privileges
+                                await login(email, password);
+
+                                // After successful login, ensure super admin user document exists
+                                const user = auth().currentUser;
+                                if (user) {
+                                    await firestore().collection('users').doc(user.uid).set({
+                                        email: 'corner.e.learning@gmail.com',
+                                        role: 'superadmin',
+                                        name: 'Super Admin',
+                                        createdAt: new Date(),
+                                        isSuperAdmin: true
+                                    }, { merge: true });
+                                }
+
+                                // Navigate to super admin dashboard instead of normal app
+                                router.replace('/super-admin-dashboard');
+                            } catch (error) {
+                                console.error('Error in super admin login:', error);
+                                setError('Failed to login as super admin. Please check your credentials.');
+                            }
+                        },
+                        style: 'primary',
+                    },
+                    {
+                        text: 'Cancel',
+                        onPress: () => setAlertConfig(null),
+                        style: 'cancel',
+                    },
+                ],
+            });
+        } catch (err: any) {
+            const errorMessage = err instanceof Error ? err.message : 'Super admin login failed';
+            setError(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleLogin = async () => {
         try {
@@ -131,13 +200,12 @@ export default function Login() {
         }
     };
 
-
     const handleSuccessfulLogin = async () => {
         try {
             const user = auth().currentUser;
             if (!user) return;
 
-            // Check if email is verified
+            // Check if email is verified for all users (including super admin)
             if (!user.emailVerified) {
                 // Redirect to email verification screen
                 router.replace('/(auth)/email-verification');
@@ -146,19 +214,40 @@ export default function Login() {
 
             const userDoc = await firestore().collection('users').doc(user.uid).get();
 
-            if (!userDoc.exists) {
+            if (!userDoc.exists()) {
+                // Check if this is super admin email - if so, create super admin user and go to dashboard
+                if (user.email === 'corner.e.learning@gmail.com') {
+                    await firestore().collection('users').doc(user.uid).set({
+                        email: 'corner.e.learning@gmail.com',
+                        role: 'superadmin',
+                        name: 'Super Admin',
+                        createdAt: new Date(),
+                        isSuperAdmin: true
+                    });
+                    router.replace('/super-admin-dashboard');
+                    return;
+                }
+                // Normal user - go to role selection
                 router.replace('/role');
                 return;
             }
 
             const userData = userDoc.data();
 
+            // Check if user is super admin
+            if (userData?.role === 'superadmin' || userData?.isSuperAdmin === true) {
+                // Navigate to super admin dashboard
+                router.replace('/super-admin-dashboard');
+                return;
+            }
+
+            // For normal users, check if they have role and school
             if (!userData?.role || !userData?.schoolId) {
                 router.replace('/role');
                 return;
             }
 
-            // Route based on role
+            // Route based on role for normal users
             router.replace('/(tabs)');
         } catch (error) {
             router.replace('/role');
@@ -194,8 +283,15 @@ export default function Login() {
                                 resizeMode="contain"
                             />
                         </View>
-                        <Text style={styles.title}>Welcome Back</Text>
-                        <Text style={styles.subtitle}>Sign in to continue your learning journey</Text>
+                        <Text style={styles.title}>
+                            {isSuperAdmin ? 'Super Admin Access' : 'Welcome Back'}
+                        </Text>
+                        <Text style={styles.subtitle}>
+                            {isSuperAdmin
+                                ? 'Access analytics and feedback data'
+                                : 'Sign in to continue your learning journey'
+                            }
+                        </Text>
                     </View>
 
                     <View style={styles.formSection}>
@@ -203,7 +299,8 @@ export default function Login() {
                             <Text style={styles.inputLabel}>Email Address</Text>
                             <View style={[
                                 styles.inputContainer,
-                                emailFocused && styles.inputContainerFocused
+                                emailFocused && styles.inputContainerFocused,
+                                isSuperAdmin && styles.superAdminInput
                             ]}>
                                 <Ionicons
                                     name="mail-outline"
@@ -230,35 +327,79 @@ export default function Login() {
                             </View>
                         </View>
 
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Password</Text>
-                            <View style={[
-                                styles.inputContainer,
-                                passwordFocused && styles.inputContainerFocused
-                            ]}>
-                                <Ionicons
-                                    name="lock-closed-outline"
-                                    size={20}
-                                    color={passwordFocused ? "#4f46e5" : "#64748b"}
-                                    style={styles.inputIcon}
-                                />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Enter your password"
-                                    placeholderTextColor="#94a3b8"
-                                    onChangeText={(text) => {
-                                        setPassword(text);
-                                        setError(null); // Clear error when user types
-                                        setErrorGuidance(null);
-                                    }}
-                                    value={password}
-                                    secureTextEntry
-                                    autoComplete="password"
-                                    onFocus={() => setPasswordFocused(true)}
-                                    onBlur={() => setPasswordFocused(false)}
-                                />
+                        {!isSuperAdmin && (
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Password</Text>
+                                <View style={[
+                                    styles.inputContainer,
+                                    passwordFocused && styles.inputContainerFocused
+                                ]}>
+                                    <Ionicons
+                                        name="lock-closed-outline"
+                                        size={20}
+                                        color={passwordFocused ? "#4f46e5" : "#64748b"}
+                                        style={styles.inputIcon}
+                                    />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Enter your password"
+                                        placeholderTextColor="#94a3b8"
+                                        onChangeText={(text) => {
+                                            setPassword(text);
+                                            setError(null); // Clear error when user types
+                                            setErrorGuidance(null);
+                                        }}
+                                        value={password}
+                                        secureTextEntry
+                                        autoComplete="password"
+                                        onFocus={() => setPasswordFocused(true)}
+                                        onBlur={() => setPasswordFocused(false)}
+                                    />
+                                </View>
                             </View>
-                        </View>
+                        )}
+
+                        {isSuperAdmin && (
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Password</Text>
+                                <View style={[
+                                    styles.inputContainer,
+                                    passwordFocused && styles.inputContainerFocused,
+                                    styles.superAdminInput
+                                ]}>
+                                    <Ionicons
+                                        name="lock-closed-outline"
+                                        size={20}
+                                        color={passwordFocused ? "#4f46e5" : "#64748b"}
+                                        style={styles.inputIcon}
+                                    />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Enter your password"
+                                        placeholderTextColor="#94a3b8"
+                                        onChangeText={(text) => {
+                                            setPassword(text);
+                                            setError(null); // Clear error when user types
+                                            setErrorGuidance(null);
+                                        }}
+                                        value={password}
+                                        secureTextEntry
+                                        autoComplete="password"
+                                        onFocus={() => setPasswordFocused(true)}
+                                        onBlur={() => setPasswordFocused(false)}
+                                    />
+                                </View>
+                            </View>
+                        )}
+
+                        {isSuperAdmin && (
+                            <View style={styles.superAdminNotice}>
+                                <Ionicons name="shield-checkmark" size={20} color="#dc2626" />
+                                <Text style={styles.superAdminNoticeText}>
+                                    Super Admin Access - Special privileges enabled
+                                </Text>
+                            </View>
+                        )}
 
                         {error && (
                             <View style={styles.errorContainer}>
@@ -277,58 +418,88 @@ export default function Login() {
                             </View>
                         )}
 
-                        <TouchableOpacity
-                            style={styles.forgotPasswordButton}
-                            onPress={() => router.push('/(auth)/reset-password')}
-                        >
-                            <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
-                        </TouchableOpacity>
+                        {!isSuperAdmin && (
+                            <TouchableOpacity
+                                style={styles.forgotPasswordButton}
+                                onPress={() => router.push('/(auth)/reset-password')}
+                            >
+                                <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
+                            </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                            style={[
-                                styles.primaryButton,
-                                (!email || !password) && styles.primaryButtonDisabled
-                            ]}
-                            onPress={handleLogin}
-                            disabled={!email || !password || loading}
-                        >
-                            {loading ? (
-                                <View style={styles.loadingContainer}>
-                                    <Text style={styles.primaryButtonText}>Signing in...</Text>
+                        {isSuperAdmin ? (
+                            <TouchableOpacity
+                                style={[
+                                    styles.superAdminButton,
+                                    (!email || !password) && styles.primaryButtonDisabled
+                                ]}
+                                onPress={handleSuperAdminLogin}
+                                disabled={!email || !password || loading}
+                            >
+                                {loading ? (
+                                    <View style={styles.loadingContainer}>
+                                        <Text style={styles.superAdminButtonText}>Signing in...</Text>
+                                    </View>
+                                ) : (
+                                    <>
+                                        <Ionicons name="shield-checkmark" size={20} color="#fff" />
+                                        <Text style={styles.superAdminButtonText}>Super Admin Sign In</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={[
+                                    styles.primaryButton,
+                                    (!email || !password) && styles.primaryButtonDisabled
+                                ]}
+                                onPress={handleLogin}
+                                disabled={!email || !password || loading}
+                            >
+                                {loading ? (
+                                    <View style={styles.loadingContainer}>
+                                        <Text style={styles.primaryButtonText}>Signing in...</Text>
+                                    </View>
+                                ) : (
+                                    <>
+                                        <Text style={styles.primaryButtonText}>Sign In</Text>
+                                        <Ionicons name="arrow-forward" size={20} color="#fff" />
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
+
+                        {!isSuperAdmin && (
+                            <>
+                                <View style={styles.dividerContainer}>
+                                    <View style={styles.divider} />
+                                    <Text style={styles.dividerText}>or</Text>
+                                    <View style={styles.divider} />
                                 </View>
-                            ) : (
-                                <>
-                                    <Text style={styles.primaryButtonText}>Sign In</Text>
-                                    <Ionicons name="arrow-forward" size={20} color="#fff" />
-                                </>
-                            )}
-                        </TouchableOpacity>
 
-                        <View style={styles.dividerContainer}>
-                            <View style={styles.divider} />
-                            <Text style={styles.dividerText}>or</Text>
-                            <View style={styles.divider} />
+                                <TouchableOpacity
+                                    style={styles.googleButton}
+                                    onPress={handleGoogleSignIn}
+                                    disabled={loading}
+                                >
+                                    <Image
+                                        source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+                                        style={styles.googleIcon}
+                                    />
+                                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
+
+                    {!isSuperAdmin && (
+                        <View style={styles.footer}>
+                            <Text style={styles.footerText}>Don't have an account? </Text>
+                            <TouchableOpacity onPress={() => router.replace('/(auth)/signup')}>
+                                <Text style={styles.footerLink}>Sign up</Text>
+                            </TouchableOpacity>
                         </View>
-
-                        <TouchableOpacity
-                            style={styles.googleButton}
-                            onPress={handleGoogleSignIn}
-                            disabled={loading}
-                        >
-                            <Image
-                                source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
-                                style={styles.googleIcon}
-                            />
-                            <Text style={styles.googleButtonText}>Continue with Google</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.footer}>
-                        <Text style={styles.footerText}>Don't have an account? </Text>
-                        <TouchableOpacity onPress={() => router.replace('/(auth)/signup')}>
-                            <Text style={styles.footerLink}>Sign up</Text>
-                        </TouchableOpacity>
-                    </View>
+                    )}
                 </View>
             </ScrollView>
 
@@ -449,6 +620,14 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 4,
     },
+    superAdminInput: {
+        borderColor: '#4f46e5',
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
+    },
     inputIcon: {
         marginRight: 16,
         opacity: 0.7,
@@ -532,6 +711,45 @@ const styles = StyleSheet.create({
     loadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    superAdminButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#4f46e5',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        marginBottom: 16,
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 4,
+    },
+    superAdminButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 8,
+        letterSpacing: 0.3,
+    },
+    superAdminNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fef2f2',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#fecaca',
+    },
+    superAdminNoticeText: {
+        color: '#dc2626',
+        fontSize: 14,
+        fontWeight: '500',
+        marginLeft: 8,
     },
     footer: {
         flexDirection: 'row',

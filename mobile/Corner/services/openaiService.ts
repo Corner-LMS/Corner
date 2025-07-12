@@ -210,6 +210,8 @@ Your job is to:
 - Help draft announcements and follow-ups
 - Analyze student engagement patterns
 
+IMPORTANT: Keep your responses concise but informative (2-4 sentences). Be direct and actionable. Avoid unnecessary elaboration while still providing valuable insights.
+
 Always remember you're speaking to the instructor, so focus on pedagogical insights and class management.`;
         } else {
             basePrompt = `You are helping a student enrolled in ${courseContext.courseName} (code: ${courseContext.courseCode}).
@@ -225,6 +227,8 @@ Your job is to:
 - Provide brief, easy-to-understand explanations
 - Recommend relevant discussions/announcements
 - Ask follow-up questions to deepen understanding
+
+IMPORTANT: Keep your responses concise but helpful (2-4 sentences). Be clear and supportive without being overly verbose. Focus on the most relevant information.
 
 Always remember you're speaking to a student, so keep explanations clear and supportive.`;
         }

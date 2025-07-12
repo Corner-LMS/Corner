@@ -283,6 +283,10 @@ export default function RootLayout() {
           <Stack.Screen name="course-resources" options={{ headerShown: false }} />
           <Stack.Screen name="migrate-data" options={{ headerShown: false }} />
           <Stack.Screen name="support" options={{ headerShown: false }} />
+          <Stack.Screen name="feedback" options={{ headerShown: false }} />
+          <Stack.Screen name="survey" options={{ headerShown: false }} />
+          <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
+          <Stack.Screen name="super-admin-dashboard" options={{ headerShown: false }} />
         </Stack>
 
         {/* Global teacher online notification - only for students */}

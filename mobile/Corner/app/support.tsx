@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Linking, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import auth from '@react-native-firebase/auth';
 
 const faqs = [
     {
@@ -41,8 +42,38 @@ const faqs = [
 ];
 
 export default function SupportPage() {
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+    useEffect(() => {
+        const user = auth().currentUser;
+        if (user && user.email === 'corner.e.learning@gmail.com') {
+            setIsSuperAdmin(true);
+        }
+    }, []);
+
     const handleContactSupport = () => {
         Linking.openURL('mailto:corner.e.learning@gmail.com');
+    };
+
+    const handlePrivacyPolicy = () => {
+        Linking.openURL('https://www.freeprivacypolicy.com/live/ade03075-e62f-468b-a5a8-b60f50037ddd');
+    };
+
+    const handleTermsOfService = () => {
+        // Add Terms of Service URL when available
+        // Linking.openURL('https://your-terms-of-service-url.com');
+    };
+
+    const handleFeedback = () => {
+        router.push('/feedback');
+    };
+
+    const handleSurvey = () => {
+        router.push('/survey');
+    };
+
+    const handleAdminDashboard = () => {
+        router.push('/admin-dashboard');
     };
 
     return (
@@ -71,18 +102,43 @@ export default function SupportPage() {
                 </View>
 
                 <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Feedback & Surveys</Text>
+                    <TouchableOpacity style={styles.linkItem} onPress={handleFeedback}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4f46e5" />
+                        <Text style={styles.linkText}>Rate Corner</Text>
+                        <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.linkItem} onPress={handleSurvey}>
+                        <Ionicons name="clipboard-outline" size={20} color="#4f46e5" />
+                        <Text style={styles.linkText}>Take Survey</Text>
+                        <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Quick Links</Text>
-                    <TouchableOpacity style={styles.linkItem}>
+                    <TouchableOpacity style={styles.linkItem} onPress={handlePrivacyPolicy}>
                         <Ionicons name="document-text-outline" size={20} color="#4f46e5" />
                         <Text style={styles.linkText}>Privacy Policy</Text>
                         <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.linkItem}>
+                    <TouchableOpacity style={styles.linkItem} onPress={handleTermsOfService}>
                         <Ionicons name="shield-checkmark-outline" size={20} color="#4f46e5" />
                         <Text style={styles.linkText}>Terms of Service</Text>
                         <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
                     </TouchableOpacity>
                 </View>
+
+                {isSuperAdmin && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Admin</Text>
+                        <TouchableOpacity style={styles.linkItem} onPress={handleAdminDashboard}>
+                            <Ionicons name="analytics-outline" size={20} color="#dc2626" />
+                            <Text style={[styles.linkText, { color: '#dc2626' }]}>Admin Dashboard</Text>
+                            <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 <TouchableOpacity
                     style={styles.contactButton}
