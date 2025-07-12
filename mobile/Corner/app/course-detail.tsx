@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -12,6 +12,8 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { draftManager, DraftPost } from '../services/draftManager';
 import ConnectivityIndicator from '../components/ConnectivityIndicator';
 import CustomAlert from '../components/CustomAlert';
+import RichTextEditor from '../components/RichTextEditor';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 
 interface Announcement {
     id: string;
@@ -51,6 +53,7 @@ export default function CourseDetailScreen() {
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [newTitle, setNewTitle] = useState('');
     const [newContent, setNewContent] = useState('');
+    const [newContentHtml, setNewContentHtml] = useState('');
     const [loading, setLoading] = useState(false);
     const [isAnonymous, setIsAnonymous] = useState(false);
     const [editingItem, setEditingItem] = useState<{ id: string, type: 'announcement' | 'discussion', title: string, content: string } | null>(null);
@@ -58,10 +61,18 @@ export default function CourseDetailScreen() {
     const [drafts, setDrafts] = useState<DraftPost[]>([]);
     const [syncingDrafts, setSyncingDrafts] = useState(false);
     const [expandedAnnouncements, setExpandedAnnouncements] = useState<Set<string>>(new Set());
-    const textInputRef = useRef<TextInput>(null);
-    const [showFormattingToolbar, setShowFormattingToolbar] = useState(false);
-    const [selection, setSelection] = useState({ start: 0, end: 0 });
     const [alertConfig, setAlertConfig] = useState<any>(null);
+
+    // Convert plain text to HTML for RichTextEditor
+    const handleContentChange = (html: string) => {
+        try {
+            setNewContentHtml(html);
+            // Use the HTML content directly for storage to preserve formatting
+            setNewContent(html);
+        } catch (error) {
+            console.error('📝 CourseDetail: Error in handleContentChange:', error);
+        }
+    };
 
     // Initialize cache on component mount
     useEffect(() => {
@@ -346,6 +357,7 @@ export default function CourseDetailScreen() {
 
             setNewTitle('');
             setNewContent('');
+            setNewContentHtml('');
             setIsAnonymous(false);
             setShowCreateForm(false);
             setAlertConfig({
@@ -414,6 +426,7 @@ export default function CourseDetailScreen() {
 
             setNewTitle('');
             setNewContent('');
+            setNewContentHtml('');
             setIsAnonymous(false);
             setShowCreateForm(false);
 
@@ -513,6 +526,7 @@ export default function CourseDetailScreen() {
         });
         setNewTitle(item.title);
         setNewContent(item.content);
+        setNewContentHtml(item.content); // Initialize RichTextEditor with existing content
         setShowCreateForm(true);
     };
 
@@ -583,6 +597,7 @@ export default function CourseDetailScreen() {
     const resetForm = () => {
         setNewTitle('');
         setNewContent('');
+        setNewContentHtml('');
         setEditingItem(null);
         setIsAnonymous(false);
         setShowCreateForm(false);
@@ -683,233 +698,6 @@ export default function CourseDetailScreen() {
         return content.substring(0, maxLength) + '...';
     };
 
-    // Formatting functions
-    const applyFormatting = (prefix: string, suffix: string = '') => {
-        if (!textInputRef.current) return;
-
-        const currentText = newContent;
-        const { start, end } = selection;
-
-        // If text is selected, wrap it with formatting
-        if (start !== end) {
-            const selectedText = currentText.substring(start, end);
-            const newText =
-                currentText.substring(0, start) +
-                prefix + selectedText + suffix +
-                currentText.substring(end);
-            setNewContent(newText);
-
-            // Set cursor position after the formatted text
-            setTimeout(() => {
-                if (textInputRef.current) {
-                    textInputRef.current.focus();
-                    textInputRef.current.setNativeProps({
-                        selection: {
-                            start: start + prefix.length,
-                            end: start + prefix.length + selectedText.length
-                        }
-                    });
-                }
-            }, 50);
-        } else {
-            // No selection - insert formatting markers at cursor
-            const newText =
-                currentText.substring(0, start) +
-                prefix + suffix +
-                currentText.substring(start);
-            setNewContent(newText);
-
-            // Position cursor between the markers
-            setTimeout(() => {
-                if (textInputRef.current) {
-                    textInputRef.current.focus();
-                    textInputRef.current.setNativeProps({
-                        selection: {
-                            start: start + prefix.length,
-                            end: start + prefix.length
-                        }
-                    });
-                }
-            }, 50);
-        }
-    };
-
-    const toggleFormattingToolbar = () => {
-        setShowFormattingToolbar(!showFormattingToolbar);
-    };
-
-    // MarkdownText component to render formatted text
-    const MarkdownText = ({ text, style }: { text: string; style?: any }) => {
-        if (!text) return null;
-
-        const parts = [];
-        let currentIndex = 0;
-
-        // Bold: **text**
-        const boldRegex = /\*\*(.*?)\*\*/g;
-        let boldMatch;
-        while ((boldMatch = boldRegex.exec(text)) !== null) {
-            // Add text before the match
-            if (boldMatch.index > currentIndex) {
-                parts.push(
-                    <Text key={`text-${currentIndex}`} style={style}>
-                        {text.slice(currentIndex, boldMatch.index)}
-                    </Text>
-                );
-            }
-
-            // Add bold text
-            parts.push(
-                <Text key={`bold-${currentIndex}`} style={[style, { fontWeight: 'bold' }]}>
-                    {boldMatch[1]}
-                </Text>
-            );
-
-            currentIndex = boldMatch.index + boldMatch[0].length;
-        }
-
-        // Italic: *text*
-        const italicRegex = /\*(.*?)\*/g;
-        let italicMatch;
-        while ((italicMatch = italicRegex.exec(text)) !== null) {
-            // Add text before the match
-            if (italicMatch.index > currentIndex) {
-                parts.push(
-                    <Text key={`text-${currentIndex}`} style={style}>
-                        {text.slice(currentIndex, italicMatch.index)}
-                    </Text>
-                );
-            }
-
-            // Add italic text
-            parts.push(
-                <Text key={`italic-${currentIndex}`} style={[style, { fontStyle: 'italic' }]}>
-                    {italicMatch[1]}
-                </Text>
-            );
-
-            currentIndex = italicMatch.index + italicMatch[0].length;
-        }
-
-        // Strikethrough: ~~text~~
-        const strikeRegex = /~~(.*?)~~/g;
-        let strikeMatch;
-        while ((strikeMatch = strikeRegex.exec(text)) !== null) {
-            // Add text before the match
-            if (strikeMatch.index > currentIndex) {
-                parts.push(
-                    <Text key={`text-${currentIndex}`} style={style}>
-                        {text.slice(currentIndex, strikeMatch.index)}
-                    </Text>
-                );
-            }
-
-            // Add strikethrough text
-            parts.push(
-                <Text key={`strike-${currentIndex}`} style={[style, { textDecorationLine: 'line-through' }]}>
-                    {strikeMatch[1]}
-                </Text>
-            );
-
-            currentIndex = strikeMatch.index + strikeMatch[0].length;
-        }
-
-        // Code: `text`
-        const codeRegex = /`(.*?)`/g;
-        let codeMatch;
-        while ((codeMatch = codeRegex.exec(text)) !== null) {
-            // Add text before the match
-            if (codeMatch.index > currentIndex) {
-                parts.push(
-                    <Text key={`text-${currentIndex}`} style={style}>
-                        {text.slice(currentIndex, codeMatch.index)}
-                    </Text>
-                );
-            }
-
-            // Add code text
-            parts.push(
-                <Text key={`code-${currentIndex}`} style={[style, { fontFamily: 'monospace', backgroundColor: '#f1f5f9', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }]}>
-                    {codeMatch[1]}
-                </Text>
-            );
-
-            currentIndex = codeMatch.index + codeMatch[0].length;
-        }
-
-        // Add remaining text
-        if (currentIndex < text.length) {
-            parts.push(
-                <Text key={`text-${currentIndex}`} style={style}>
-                    {text.slice(currentIndex)}
-                </Text>
-            );
-        }
-
-        // If no formatting found, return plain text
-        if (parts.length === 0) {
-            return <Text style={style}>{text}</Text>;
-        }
-
-        return <Text>{parts}</Text>;
-    };
-
-    // Formatting toolbar component
-    const FormattingToolbar = () => (
-        <View style={styles.toolbarContainer}>
-            <View style={styles.formattingRow}>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('**', '**')}
-                >
-                    <Text style={{ fontWeight: 'bold' }}>B</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('*', '*')}
-                >
-                    <Text style={{ fontStyle: 'italic' }}>I</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('~~', '~~')}
-                >
-                    <Text style={{ textDecorationLine: 'line-through' }}>S</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('`', '`')}
-                >
-                    <Text style={{ fontFamily: 'monospace' }}>{'</>'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('\n- ', '')}
-                >
-                    <Text>•</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('\n1. ', '')}
-                >
-                    <Text>1.</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('[', '](url)')}
-                >
-                    <Text>🔗</Text>
-                </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-                style={styles.closeToolbarButton}
-                onPress={() => setShowFormattingToolbar(false)}
-            >
-                <Ionicons name="chevron-down" size={16} color="#64748b" />
-            </TouchableOpacity>
-        </View>
-    );
-
     const renderAnnouncements = () => (
         <ScrollView style={styles.contentContainer}>
             {/* Offline/Cache Status Indicator */}
@@ -968,12 +756,15 @@ export default function CourseDetailScreen() {
                                 )}
                             </View>
                         </View>
-                        <Text style={styles.postContent}>
-                            {expandedAnnouncements.has(announcement.id)
-                                ? announcement.content
-                                : getAnnouncementPreview(announcement.content)
-                            }
-                        </Text>
+                        <View style={styles.postContentContainer}>
+                            <MarkdownRenderer
+                                content={
+                                    expandedAnnouncements.has(announcement.id)
+                                        ? announcement.content
+                                        : getAnnouncementPreview(announcement.content)
+                                }
+                            />
+                        </View>
 
                         {/* Show "read more" indicator if content is truncated and not expanded */}
                         {announcement.content.length > 100 && !expandedAnnouncements.has(announcement.id) && (
@@ -1168,7 +959,9 @@ export default function CourseDetailScreen() {
                                 )}
                             </View>
                         </View>
-                        <MarkdownText text={discussion.content} style={styles.postContent} />
+                        <View style={styles.postContentContainer}>
+                            <MarkdownRenderer content={discussion.content} />
+                        </View>
                         <View style={styles.postMeta}>
                             <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
                             <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
@@ -1215,92 +1008,80 @@ export default function CourseDetailScreen() {
         </ScrollView>
     );
 
-    const renderCreateForm = () => (
-        <View style={styles.createFormContainer}>
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.createForm}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-            >
-                <ScrollView style={styles.formScrollView} showsVerticalScrollIndicator={false}>
-                    <View style={styles.formHeader}>
-                        <Text style={styles.formTitle}>
-                            {editingItem ? 'Edit' : 'Create'} {activeTab === 'announcements' ? 'Announcement' : 'Discussion'}
-                        </Text>
-                        <TouchableOpacity onPress={resetForm}>
-                            <Ionicons name="close" size={24} color="#4f46e5" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <TextInput
-                        style={styles.titleInput}
-                        placeholder="Title"
-                        value={newTitle}
-                        onChangeText={setNewTitle}
-                        placeholderTextColor="#666"
-                    />
-
-                    {/* Formatting toolbar toggle button - only for discussions */}
-                    {activeTab === 'discussions' && (
-                        <TouchableOpacity
-                            style={styles.formattingToggleButton}
-                            onPress={toggleFormattingToolbar}
-                        >
-                            <Ionicons
-                                name={showFormattingToolbar ? "chevron-up" : "text"}
-                                size={20}
-                                color="#4f46e5"
-                            />
-                            <Text style={styles.formattingToggleText}>
-                                {showFormattingToolbar ? "Hide formatting" : "Formatting"}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Formatting toolbar - only for discussions */}
-                    {activeTab === 'discussions' && showFormattingToolbar && <FormattingToolbar />}
-
-                    <TextInput
-                        ref={textInputRef}
-                        style={styles.contentInput}
-                        placeholder="Content"
-                        value={newContent}
-                        onChangeText={setNewContent}
-                        onSelectionChange={(e) => {
-                            setSelection(e.nativeEvent.selection);
-                        }}
-                        multiline
-                        numberOfLines={6}
-                        textAlignVertical="top"
-                        placeholderTextColor="#666"
-                    />
-
-                    {/* Anonymity option for students creating discussions */}
-                    {activeTab === 'discussions' && role === 'student' && (
-                        <View style={styles.anonymityOption}>
-                            <Text style={styles.anonymityLabel}>Post anonymously</Text>
-                            <Switch
-                                value={isAnonymous}
-                                onValueChange={setIsAnonymous}
-                                trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
-                                thumbColor={isAnonymous ? '#fff' : '#f4f3f4'}
-                            />
-                        </View>
-                    )}
-
-                    <TouchableOpacity
-                        style={[styles.createButton, loading && styles.buttonDisabled]}
-                        onPress={handleCreate}
-                        disabled={loading}
+    const renderCreateForm = () => {
+        return (
+            <View style={styles.createFormContainer}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.keyboardAvoidingView}
+                >
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
                     >
-                        <Text style={styles.createButtonText}>
-                            {loading ? (editingItem ? 'Updating...' : 'Creating...') : (editingItem ? 'Update' : 'Create')}
-                        </Text>
-                    </TouchableOpacity>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </View>
-    );
+                        <View style={styles.formHeader}>
+                            <Text style={styles.formTitle}>
+                                {editingItem ? `Edit ${editingItem.type}` : `Create ${activeTab === 'announcements' ? 'Announcement' : 'Discussion'}`}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.closeButton}
+                                onPress={() => {
+                                    setShowCreateForm(false);
+                                    resetForm();
+                                }}
+                            >
+                                <Ionicons name="close" size={24} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.formContent}>
+                            <TextInput
+                                style={styles.titleInput}
+                                value={newTitle}
+                                onChangeText={setNewTitle}
+                                placeholder={`${activeTab === 'announcements' ? 'Announcement' : 'Discussion'} title`}
+                                placeholderTextColor="#666"
+                            />
+
+                            <RichTextEditor
+                                value={newContentHtml}
+                                onChange={handleContentChange}
+                                placeholder="Write your content here..."
+                                style={styles.contentInput}
+                            />
+
+                            {/* Anonymity option for students creating discussions */}
+                            {activeTab === 'discussions' && role === 'student' && (
+                                <View style={styles.anonymityOption}>
+                                    <Text style={styles.anonymityLabel}>Post anonymously</Text>
+                                    <Switch
+                                        value={isAnonymous}
+                                        onValueChange={setIsAnonymous}
+                                        trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                                        thumbColor={isAnonymous ? '#fff' : '#f4f3f4'}
+                                    />
+                                </View>
+                            )}
+
+                            <View style={styles.buttonContainer}>
+                                <TouchableOpacity
+                                    style={[styles.createButton, loading && styles.buttonDisabled]}
+                                    onPress={handleCreate}
+                                    disabled={loading}
+                                >
+                                    <Text style={styles.createButtonText}>
+                                        {loading ? (editingItem ? 'Updating...' : 'Creating...') : (editingItem ? 'Update' : 'Create')}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </View>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -1362,6 +1143,7 @@ export default function CourseDetailScreen() {
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'announcements' && styles.activeTab]}
                     onPress={() => setActiveTab('announcements')}
+                    activeOpacity={0.7}
                 >
                     <Text style={[styles.tabText, activeTab === 'announcements' && styles.activeTabText]}>
                         Announcements
@@ -1370,6 +1152,7 @@ export default function CourseDetailScreen() {
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'discussions' && styles.activeTab]}
                     onPress={() => setActiveTab('discussions')}
+                    activeOpacity={0.7}
                 >
                     <Text style={[styles.tabText, activeTab === 'discussions' && styles.activeTabText]}>
                         Discussions
@@ -1450,32 +1233,53 @@ const styles = StyleSheet.create({
     },
     tabContainer: {
         flexDirection: 'row',
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
+        paddingHorizontal: 8,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e2e8f0',
     },
     tab: {
         flex: 1,
-        paddingVertical: 16,
+        paddingVertical: 12,
         alignItems: 'center',
-        borderBottomWidth: 3,
-        borderBottomColor: 'transparent',
+        borderBottomWidth: 0,
+        backgroundColor: '#e2e8f0',
+        borderRadius: 12,
+        marginHorizontal: 6,
+        marginTop: 8,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     activeTab: {
-        backgroundColor: '#fff',
-        borderBottomColor: '#4f46e5',
+        backgroundColor: '#4f46e5',
+        borderColor: '#4f46e5',
+        shadowColor: '#4f46e5',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
     },
     tabText: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#64748b',
         fontWeight: '600',
         letterSpacing: 0.3,
     },
     activeTabText: {
-        color: '#4f46e5',
+        color: '#fff',
         fontWeight: '700',
     },
     contentContainer: {
         flex: 1,
-        padding: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 20,
     },
     emptyState: {
         flex: 1,
@@ -1528,6 +1332,10 @@ const styles = StyleSheet.create({
         color: '#475569',
         lineHeight: 24,
         marginBottom: 20,
+    },
+    postContentContainer: {
+        marginBottom: 20,
+        paddingVertical: 4,
     },
     postMeta: {
         flexDirection: 'row',
@@ -1592,6 +1400,7 @@ const styles = StyleSheet.create({
     },
     createFormContainer: {
         flex: 1,
+        backgroundColor: '#f1f5f9',
     },
     createForm: {
         flex: 1,
@@ -1605,6 +1414,7 @@ const styles = StyleSheet.create({
         paddingBottom: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#f1f5f9',
+        paddingHorizontal: 16,
     },
     formTitle: {
         fontSize: 22,
@@ -1612,13 +1422,16 @@ const styles = StyleSheet.create({
         color: '#1e293b',
         letterSpacing: -0.3,
     },
+    formContent: {
+        paddingHorizontal: 16,
+    },
     titleInput: {
         backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 16,
+        padding: 16,
+        borderRadius: 12,
         fontSize: 17,
         marginBottom: 16,
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: '#e2e8f0',
         color: '#1e293b',
         fontWeight: '500',
@@ -1629,32 +1442,21 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     contentInput: {
-        backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 16,
-        fontSize: 16,
-        minHeight: 140,
-        marginBottom: 24,
-        borderWidth: 2,
-        borderColor: '#e2e8f0',
-        color: '#1e293b',
-        lineHeight: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
+        marginBottom: 20,
     },
     createButton: {
         backgroundColor: '#4f46e5',
-        padding: 18,
-        borderRadius: 16,
+        padding: 16,
+        borderRadius: 12,
         alignItems: 'center',
         shadowColor: '#4f46e5',
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 6,
+        shadowRadius: 8,
+        elevation: 4,
+        alignSelf: 'center',
+        width: '80%',
+        maxWidth: 300,
     },
     buttonDisabled: {
         opacity: 0.6,
@@ -1670,7 +1472,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
         padding: 16,
         backgroundColor: '#f8fafc',
         borderRadius: 12,
@@ -1896,58 +1698,37 @@ const styles = StyleSheet.create({
         color: '#92400e',
         fontWeight: '600',
     },
-    toolbarContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: '#fff',
-        borderTopWidth: 1,
-        borderTopColor: '#f1f5f9',
-    },
-    formattingRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-    },
-    formattingButton: {
-        padding: 8,
-        borderRadius: 8,
-        backgroundColor: '#f8fafc',
-    },
-    closeToolbarButton: {
-        padding: 8,
-        borderRadius: 8,
-        backgroundColor: '#f8fafc',
-    },
-    formattingToggleButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 8,
-        backgroundColor: '#f1f5f9',
-        borderRadius: 8,
-        marginBottom: 8,
-        alignSelf: 'flex-start',
-    },
-    formattingToggleText: {
-        marginLeft: 8,
-        color: '#4f46e5',
-        fontWeight: '500',
-    },
     manualSyncButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
         backgroundColor: '#f8fafc',
         borderRadius: 12,
-        marginTop: 20,
         borderWidth: 1,
         borderColor: '#e2e8f0',
+        marginBottom: 16,
     },
     manualSyncText: {
         marginLeft: 8,
         color: '#4f46e5',
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
+    },
+    keyboardAvoidingView: {
+        flex: 1,
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
+    },
+    closeButton: {
+        padding: 8,
+    },
+    buttonContainer: {
+        marginTop: 8,
     },
 }); 

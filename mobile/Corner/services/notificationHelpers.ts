@@ -21,20 +21,12 @@ class NotificationHelpers {
     // Update user's notification badge count
     private async updateUserBadgeCount(userId: string, incrementBy: number = 1, reset: boolean = false) {
         try {
-            console.log('🔔 [NOTIFICATIONS] Updating badge count for user:', userId, {
-                incrementBy,
-                reset,
-                operation: reset ? 'reset' : 'increment'
-            });
-
             const userRef = firestore().collection('users').doc(userId);
             await userRef.update({
                 'notificationData.unreadCount': reset ? 0 :
                     increment(incrementBy > 0 ? incrementBy : 0),
                 'notificationData.lastNotificationTime': new Date()
             });
-
-            console.log('✅ [NOTIFICATIONS] Badge count updated successfully');
         } catch (error) {
             console.error('❌ [NOTIFICATIONS] Error updating user badge count:', error);
         }
@@ -42,13 +34,10 @@ class NotificationHelpers {
 
     private async shouldCreateNotification(userId: string, notificationType: string): Promise<boolean> {
         try {
-            console.log('🔔 [NOTIFICATIONS] Checking notification settings for user:', userId, 'type:', notificationType);
-
             const userDoc = await firestore().collection('users').doc(userId).get();
             const userData = userDoc.data();
 
             if (!userData?.notificationSettings) {
-                console.log('🔔 [NOTIFICATIONS] No notification settings found, defaulting to true');
                 return true; // Default to true if settings don't exist
             }
 
@@ -72,13 +61,6 @@ class NotificationHelpers {
                     shouldCreate = true;
             }
 
-            console.log('🔔 [NOTIFICATIONS] Notification setting result:', {
-                userId,
-                notificationType,
-                shouldCreate,
-                settings: userData.notificationSettings
-            });
-
             return shouldCreate;
         } catch (error) {
             console.error('❌ [NOTIFICATIONS] Error checking notification settings:', error);
@@ -89,18 +71,10 @@ class NotificationHelpers {
     // Notify students of new announcement
     async notifyStudentsOfAnnouncement(courseId: string, announcementData: any, teacherId: string) {
         try {
-            console.log('🔔 [NOTIFICATIONS] Starting announcement notification process:', {
-                courseId,
-                announcementTitle: announcementData.title,
-                teacherId
-            });
-
             // Get course details
             const courseRef = firestore().collection('courses').doc(courseId);
             const courseDoc = await courseRef.get();
             const courseName = courseDoc.data()?.name || 'Course';
-
-            console.log('🔔 [NOTIFICATIONS] Course details retrieved:', { courseName });
 
             // Get all students in the course
             const studentsQuery = firestore().collection('users').where('role', '==', 'student').where('courseIds', 'array-contains', courseId);
@@ -109,8 +83,6 @@ class NotificationHelpers {
                 id: doc.id,
                 ...doc.data()
             })) as StudentUser[];
-
-            console.log('🔔 [NOTIFICATIONS] Found students to notify:', students.length);
 
             const notificationData: NotificationData = {
                 type: 'announcement',
@@ -126,24 +98,13 @@ class NotificationHelpers {
                 }
             };
 
-            console.log('🔔 [NOTIFICATIONS] Notification data prepared:', {
-                title: notificationData.title,
-                body: notificationData.body,
-                studentCount: students.length
-            });
-
             // Send notifications to all students
             const notificationPromises = students.map(async (student: StudentUser) => {
-                console.log('🔔 [NOTIFICATIONS] Processing notification for student:', student.id);
-
                 // Check if notification should be created based on user settings
                 const shouldCreate = await this.shouldCreateNotification(student.id, 'announcement');
                 if (!shouldCreate) {
-                    console.log('🔔 [NOTIFICATIONS] Notification blocked by user settings for student:', student.id);
                     return;
                 }
-
-                console.log('🔔 [NOTIFICATIONS] Creating notification for student:', student.id);
 
                 // Save notification to Firestore
                 await firestore().collection('notifications').add({
@@ -158,28 +119,17 @@ class NotificationHelpers {
                     data: notificationData.data
                 });
 
-                console.log('🔔 [NOTIFICATIONS] Notification saved to Firestore for student:', student.id);
-
                 // Update badge count
                 await this.updateUserBadgeCount(student.id, 1);
-
-                console.log('✅ [NOTIFICATIONS] Notification processed successfully for student:', student.id);
             });
 
             await Promise.all(notificationPromises);
 
-            console.log('✅ [NOTIFICATIONS] All announcement notifications processed');
-
             // Send push notifications to all students
             try {
-                console.log('🔔 [PUSH] Sending push notifications for announcement');
-
                 // Calculate total badge count for all students
                 const totalBadgeCount = students.length;
-                console.log('🔔 [PUSH] Badge count for push notifications:', totalBadgeCount);
-
                 await notificationService.sendPushNotificationToCourse(courseId, notificationData, totalBadgeCount);
-                console.log('✅ [PUSH] Push notifications sent for announcement');
             } catch (error) {
                 console.error('❌ [PUSH] Error sending push notifications for announcement:', error);
             }
@@ -194,8 +144,6 @@ class NotificationHelpers {
                     studentCount: students.length
                 }
             });
-
-            console.log('✅ [NOTIFICATIONS] Announcement notification process completed successfully');
 
         } catch (error) {
             console.error('❌ [NOTIFICATIONS] Error sending announcement notifications:', error);
@@ -216,8 +164,6 @@ class NotificationHelpers {
                 ...doc.data()
             })) as StudentUser[];
 
-            console.log('🔔 [NOTIFICATIONS] Notifying students of discussion milestone:', students.length);
-
             // Create notification data
             const notificationData: NotificationData = {
                 type: 'discussion_milestone',
@@ -234,16 +180,11 @@ class NotificationHelpers {
 
             // Create in-app notifications for each student
             const notificationPromises = students.map(async (student: StudentUser) => {
-                console.log('🔔 [NOTIFICATIONS] Processing discussion milestone notification for student:', student.id);
-
                 // Check if notification should be created based on user settings
                 const shouldCreate = await this.shouldCreateNotification(student.id, 'discussion_milestone');
                 if (!shouldCreate) {
-                    console.log('🔔 [NOTIFICATIONS] Notification blocked by user settings for student:', student.id);
                     return;
                 }
-
-                console.log('🔔 [NOTIFICATIONS] Creating discussion milestone notification for student:', student.id);
 
                 // Save notification to Firestore
                 await firestore().collection('notifications').add({
@@ -258,28 +199,17 @@ class NotificationHelpers {
                     data: notificationData.data
                 });
 
-                console.log('🔔 [NOTIFICATIONS] Discussion milestone notification saved to Firestore for student:', student.id);
-
                 // Update badge count
                 await this.updateUserBadgeCount(student.id, 1);
-
-                console.log('✅ [NOTIFICATIONS] Discussion milestone notification processed successfully for student:', student.id);
             });
 
             await Promise.all(notificationPromises);
 
-            console.log('✅ [NOTIFICATIONS] All discussion milestone notifications processed');
-
             // Send push notifications to all students
             try {
-                console.log('🔔 [PUSH] Sending push notifications for discussion milestone');
-
                 // Calculate total badge count for all students
                 const totalBadgeCount = students.length;
-                console.log('🔔 [PUSH] Badge count for discussion milestone push notifications:', totalBadgeCount);
-
                 await notificationService.sendPushNotificationToCourse(courseId, notificationData, totalBadgeCount);
-                console.log('✅ [PUSH] Push notifications sent for discussion milestone');
             } catch (error) {
                 console.error('❌ [PUSH] Error sending push notifications for discussion milestone:', error);
             }
@@ -317,7 +247,6 @@ class NotificationHelpers {
             // Check if notification should be created based on user settings
             const shouldCreate = await this.shouldCreateNotification(teacherId, 'teacher_discussion_milestone');
             if (!shouldCreate) {
-                console.log('Notification blocked by user settings for teacher:', teacherId);
                 return;
             }
 
@@ -394,7 +323,6 @@ class NotificationHelpers {
                 // Check if notification should be created based on user settings
                 const shouldCreate = await this.shouldCreateNotification(originalAuthorId, 'discussion_replies');
                 if (!shouldCreate) {
-                    console.log('Notification blocked by user settings for user:', originalAuthorId);
                     return;
                 }
 
@@ -457,12 +385,8 @@ class NotificationHelpers {
     // Clear all notifications for a user
     async clearUserNotifications(userId: string) {
         try {
-            console.log('🔔 [NOTIFICATIONS] Clearing all notifications for user:', userId);
-
             // Reset the badge count
             await this.updateUserBadgeCount(userId, 0, true); // true = reset completely
-
-            console.log('✅ [NOTIFICATIONS] User notifications cleared successfully');
 
             // Note: We don't delete individual notifications from Firestore
             // as they serve as a record. The badge count reset is sufficient.
@@ -482,7 +406,6 @@ class NotificationHelpers {
                 .map(doc => ({ id: doc.id, ...doc.data() } as StudentUser))
                 .filter(student => excludeUserId ? student.id !== excludeUserId : true);
 
-
             return students;
         } catch (error) {
             console.error('Error getting students in course:', error);
@@ -493,19 +416,10 @@ class NotificationHelpers {
     // Log notification for analytics
     private async logNotification(data: any) {
         try {
-            console.log('🔔 [NOTIFICATIONS] Logging notification for analytics:', {
-                type: data.type,
-                courseId: data.courseId,
-                triggeredBy: data.triggeredBy,
-                metadata: data.metadata
-            });
-
             await firestore().collection('notificationLogs').add({
                 ...data,
                 timestamp: serverTimestamp()
             });
-
-            console.log('✅ [NOTIFICATIONS] Notification logged successfully');
         } catch (error) {
             console.error('❌ [NOTIFICATIONS] Error logging notification:', error);
         }
@@ -531,15 +445,12 @@ class NotificationHelpers {
     // Check and notify for discussion milestones
     async checkDiscussionMilestone(courseId: string, newPostAuthorId: string) {
         try {
-            console.log('🔔 [NOTIFICATIONS] Checking discussion milestone for course:', courseId);
-
             // Get course details
             const courseRef = firestore().collection('courses').doc(courseId);
             const courseDoc = await courseRef.get();
             const courseData = courseDoc.data();
 
             if (!courseData) {
-                console.log('🔔 [NOTIFICATIONS] Course not found:', courseId);
                 return;
             }
 
@@ -550,21 +461,11 @@ class NotificationHelpers {
             const discussionsSnapshot = await discussionsQuery.get();
             const totalDiscussions = discussionsSnapshot.size;
 
-            console.log('🔔 [NOTIFICATIONS] Discussion count:', totalDiscussions);
-
             // Check for milestone (every 10 discussions)
             const milestone = Math.floor(totalDiscussions / 10) * 10;
             const lastMilestone = courseData.notificationSettings?.lastDiscussionMilestone || 0;
 
-            console.log('🔔 [NOTIFICATIONS] Milestone check:', {
-                currentMilestone: milestone,
-                lastMilestone,
-                totalDiscussions
-            });
-
             if (milestone > lastMilestone && milestone > 0) {
-                console.log('🔔 [NOTIFICATIONS] Milestone reached! Notifying students and teacher');
-
                 // Notify students
                 await this.notifyStudentsOfDiscussionMilestone(courseId, newPostAuthorId, totalDiscussions, courseName);
 
@@ -577,10 +478,6 @@ class NotificationHelpers {
                 await courseRef.update({
                     'notificationSettings.lastDiscussionMilestone': milestone
                 });
-
-                console.log('✅ [NOTIFICATIONS] Discussion milestone notifications sent and course updated');
-            } else {
-                console.log('🔔 [NOTIFICATIONS] No new milestone reached');
             }
 
         } catch (error) {

@@ -51,12 +51,7 @@ export class CacheManager {
     // Check if cache is stale
     static async isCacheStale(): Promise<boolean> {
         try {
-            const lastSync = await this.getLastSyncTime();
-            if (!lastSync) return true;
-
-            const now = Date.now();
-            const staleThreshold = 24 * 60 * 60 * 1000; // 24 hours
-            return (now - lastSync) > staleThreshold;
+            return await offlineCacheService.isCacheStale();
         } catch (error) {
             console.error('Error checking cache staleness:', error);
             return true;

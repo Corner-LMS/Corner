@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar, Switch, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-
-import auth from '@react-native-firebase/auth';
 import firestore, { serverTimestamp, increment } from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { notificationHelpers } from '../services/notificationHelpers';
 import { offlineCacheService, CachedComment } from '../services/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { draftManager, DraftPost } from '../services/draftManager';
 import ConnectivityIndicator from '../components/ConnectivityIndicator';
 import CustomAlert from '../components/CustomAlert';
+import RichTextEditor from '../components/RichTextEditor';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 
 interface Comment {
     id: string;
@@ -48,6 +49,7 @@ export default function DiscussionDetailScreen() {
     const [discussion, setDiscussion] = useState<Discussion | null>(null);
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
+    const [newCommentHtml, setNewCommentHtml] = useState('');
     const [loading, setLoading] = useState(false);
     const [isAnonymousComment, setIsAnonymousComment] = useState(false);
     const [editingComment, setEditingComment] = useState<{ id: string, content: string } | null>(null);
@@ -55,10 +57,34 @@ export default function DiscussionDetailScreen() {
     const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
     const [drafts, setDrafts] = useState<DraftPost[]>([]);
     const [syncingDrafts, setSyncingDrafts] = useState(false);
-    const textInputRef = useRef<TextInput>(null);
-    const [showFormattingToolbar, setShowFormattingToolbar] = useState(false);
-    const [selection, setSelection] = useState({ start: 0, end: 0 });
     const [alertConfig, setAlertConfig] = useState<any>(null);
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+    // Keyboard event listeners
+    useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+            setIsKeyboardVisible(true);
+        });
+        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+            setIsKeyboardVisible(false);
+        });
+
+        return () => {
+            keyboardDidShowListener?.remove();
+            keyboardDidHideListener?.remove();
+        };
+    }, []);
+
+    // Convert plain text to HTML for RichTextEditor
+    const handleCommentChange = (html: string) => {
+        try {
+            setNewCommentHtml(html);
+            // Use the HTML content directly for storage to preserve formatting
+            setNewComment(html);
+        } catch (error) {
+            console.error('💬 DiscussionDetail: Error in handleCommentChange:', error);
+        }
+    };
 
     // Build nested comment tree from flat array
     const buildCommentTree = (allComments: Comment[]): Comment[] => {
@@ -304,6 +330,7 @@ export default function DiscussionDetailScreen() {
             content: comment.content
         });
         setNewComment(comment.content);
+        setNewCommentHtml(comment.content); // Initialize RichTextEditor with existing content
     };
 
     const handleUpdateComment = async () => {
@@ -328,7 +355,7 @@ export default function DiscussionDetailScreen() {
         try {
             await firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).collection('comments').doc(editingComment.id).update({
                 content: newComment.trim(),
-                updatedAt: firestore.FieldValue.serverTimestamp()
+                updatedAt: serverTimestamp()
             });
 
             setNewComment('');
@@ -369,6 +396,7 @@ export default function DiscussionDetailScreen() {
 
     const resetCommentForm = () => {
         setNewComment('');
+        setNewCommentHtml('');
         setEditingComment(null);
         setReplyingTo(null);
         setIsAnonymousComment(false);
@@ -429,7 +457,7 @@ export default function DiscussionDetailScreen() {
             // Add comment
             const commentData: any = {
                 content: newComment.trim(),
-                createdAt: firestore.FieldValue.serverTimestamp(),
+                createdAt: serverTimestamp(),
                 authorName: userName,
                 authorRole: role,
                 authorId: user.uid
@@ -465,6 +493,7 @@ export default function DiscussionDetailScreen() {
             }
 
             setNewComment('');
+            setNewCommentHtml('');
             setIsAnonymousComment(false);
             setReplyingTo(null);
             setAlertConfig({
@@ -515,6 +544,7 @@ export default function DiscussionDetailScreen() {
             const draftId = await draftManager.saveDraft(draftData);
 
             setNewComment('');
+            setNewCommentHtml('');
             setIsAnonymousComment(false);
             setReplyingTo(null);
 
@@ -551,87 +581,6 @@ export default function DiscussionDetailScreen() {
         }
     };
 
-    // MarkdownText component to render formatted text
-    const MarkdownText = ({ text, style }: { text: string; style?: any }) => {
-        if (!text) return null;
-
-        try {
-            // Parse markdown and create styled text components
-            const parts = [];
-            let currentIndex = 0;
-            let keyCounter = 0;
-
-            // Create a single regex that matches all markdown patterns
-            // Order matters: bold (**) should be processed before italic (*)
-            const markdownRegex = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(~~([^~]+)~~)|(`([^`]+)`)/g;
-
-            let match;
-            while ((match = markdownRegex.exec(text)) !== null) {
-                // Add text before the match
-                if (match.index > currentIndex) {
-                    parts.push(
-                        <Text key={`text-${keyCounter++}`} style={style}>
-                            {text.slice(currentIndex, match.index)}
-                        </Text>
-                    );
-                }
-
-                // Determine which pattern matched and apply appropriate styling
-                if (match[1]) {
-                    // Bold: **text**
-                    parts.push(
-                        <Text key={`bold-${keyCounter++}`} style={[style, { fontWeight: 'bold' }]}>
-                            {match[2]}
-                        </Text>
-                    );
-                } else if (match[3]) {
-                    // Italic: *text*
-                    parts.push(
-                        <Text key={`italic-${keyCounter++}`} style={[style, { fontStyle: 'italic' }]}>
-                            {match[4]}
-                        </Text>
-                    );
-                } else if (match[5]) {
-                    // Strikethrough: ~~text~~
-                    parts.push(
-                        <Text key={`strike-${keyCounter++}`} style={[style, { textDecorationLine: 'line-through' }]}>
-                            {match[6]}
-                        </Text>
-                    );
-                } else if (match[7]) {
-                    // Code: `text`
-                    parts.push(
-                        <Text key={`code-${keyCounter++}`} style={[style, { fontFamily: 'monospace', backgroundColor: '#f1f5f9', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }]}>
-                            {match[8]}
-                        </Text>
-                    );
-                }
-
-                currentIndex = match.index + match[0].length;
-            }
-
-            // Add remaining text
-            if (currentIndex < text.length) {
-                parts.push(
-                    <Text key={`text-${keyCounter++}`} style={style}>
-                        {text.slice(currentIndex)}
-                    </Text>
-                );
-            }
-
-            // If no formatting found, return plain text
-            if (parts.length === 0) {
-                return <Text style={style}>{text}</Text>;
-            }
-
-            return <Text>{parts}</Text>;
-        } catch (error) {
-            console.error('Error rendering markdown text:', error);
-            // Fallback to plain text if markdown rendering fails
-            return <Text style={style}>{text}</Text>;
-        }
-    };
-
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'Just now';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -652,167 +601,6 @@ export default function DiscussionDetailScreen() {
         });
         setNewComment('');
     };
-
-    // Formatting functions
-    const applyFormatting = (prefix: string, suffix: string = '') => {
-        try {
-            if (!textInputRef.current) {
-                setAlertConfig({
-                    visible: true,
-                    title: 'Formatting Error',
-                    message: 'Unable to apply formatting. Please try again.',
-                    type: 'error',
-                    actions: [
-                        {
-                            text: 'OK',
-                            onPress: () => setAlertConfig(null),
-                            style: 'primary',
-                        },
-                    ],
-                });
-                return;
-            }
-
-            const currentText = newComment;
-            const { start, end } = selection;
-
-            // Validate selection values
-            if (start === undefined || end === undefined || start < 0 || end < 0 || start > currentText.length || end > currentText.length) {
-                setAlertConfig({
-                    visible: true,
-                    title: 'Formatting Error',
-                    message: 'Invalid text selection. Please try selecting the text again.',
-                    type: 'error',
-                    actions: [
-                        {
-                            text: 'OK',
-                            onPress: () => setAlertConfig(null),
-                            style: 'primary',
-                        },
-                    ],
-                });
-                return;
-            }
-
-            // If text is selected, wrap it with formatting
-            if (start !== end) {
-                const selectedText = currentText.substring(start, end);
-                const newText =
-                    currentText.substring(0, start) +
-                    prefix + selectedText + suffix +
-                    currentText.substring(end);
-                setNewComment(newText);
-
-                // Set cursor position after the formatted text
-                setTimeout(() => {
-                    if (textInputRef.current) {
-                        textInputRef.current.focus();
-                        textInputRef.current.setNativeProps({
-                            selection: {
-                                start: start + prefix.length,
-                                end: start + prefix.length + selectedText.length
-                            }
-                        });
-                    }
-                }, 50);
-            } else {
-                // No selection - insert formatting markers at cursor
-                const newText =
-                    currentText.substring(0, start) +
-                    prefix + suffix +
-                    currentText.substring(start);
-                setNewComment(newText);
-
-                // Position cursor between the markers
-                setTimeout(() => {
-                    if (textInputRef.current) {
-                        textInputRef.current.focus();
-                        textInputRef.current.setNativeProps({
-                            selection: {
-                                start: start + prefix.length,
-                                end: start + prefix.length
-                            }
-                        });
-                    }
-                }, 50);
-            }
-        } catch (error) {
-            console.error('Error applying formatting:', error);
-            setAlertConfig({
-                visible: true,
-                title: 'Formatting Error',
-                message: 'An error occurred while applying formatting. Please try again.',
-                type: 'error',
-                actions: [
-                    {
-                        text: 'OK',
-                        onPress: () => setAlertConfig(null),
-                        style: 'primary',
-                    },
-                ],
-            });
-        }
-    };
-
-    const toggleFormattingToolbar = () => {
-        setShowFormattingToolbar(!showFormattingToolbar);
-    };
-
-    // Formatting toolbar component
-    const FormattingToolbar = () => (
-        <View style={styles.toolbarContainer}>
-            <View style={styles.formattingRow}>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('**', '**')}
-                >
-                    <Text style={{ fontWeight: 'bold' }}>B</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('*', '*')}
-                >
-                    <Text style={{ fontStyle: 'italic' }}>I</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('~~', '~~')}
-                >
-                    <Text style={{ textDecorationLine: 'line-through' }}>S</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('`', '`')}
-                >
-                    <Text style={{ fontFamily: 'monospace' }}>{'</>'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('\n- ', '')}
-                >
-                    <Text>•</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('\n1. ', '')}
-                >
-                    <Text>1.</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.formattingButton}
-                    onPress={() => applyFormatting('[', '](url)')}
-                >
-                    <Text>🔗</Text>
-                </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-                style={styles.closeToolbarButton}
-                onPress={() => setShowFormattingToolbar(false)}
-            >
-                <Ionicons name="chevron-down" size={16} color="#64748b" />
-            </TouchableOpacity>
-        </View>
-    );
 
     const renderComment = (comment: Comment, depth: number = 0) => {
         const maxDepth = 6; // Limit nesting to prevent comments from becoming unreadable
@@ -898,7 +686,7 @@ export default function DiscussionDetailScreen() {
                     </View>
 
                     <View style={styles.commentContent}>
-                        <MarkdownText text={comment.content} style={styles.commentText} />
+                        <MarkdownRenderer content={comment.content} />
                     </View>
 
                     {courseIsArchived && (
@@ -949,247 +737,236 @@ export default function DiscussionDetailScreen() {
                 <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
             </LinearGradient>
 
-            <ScrollView style={styles.content}>
-                {discussion && (
-                    <View style={styles.discussionCard}>
-                        <View style={styles.postHeader}>
-                            <Text style={styles.discussionTitle}>{discussion.title}</Text>
-                            <View style={[
-                                styles.roleTag,
-                                discussion.isAnonymous ? styles.studentTag :
-                                    discussion.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
-                            ]}>
-                                <Text style={styles.roleTagText}>
-                                    {discussion.authorRole}
-                                </Text>
-                            </View>
-                        </View>
-                        <Text style={styles.discussionContent}>{discussion.content}</Text>
-                        <View style={styles.postMeta}>
-                            <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
-                            <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
-                        </View>
-                    </View>
-                )}
-
-                <View style={styles.commentsSection}>
-                    {/* Offline/Cache Status Indicator */}
-                    {(!isOnline || isLoadingFromCache) && (
-                        <View style={styles.offlineIndicator}>
-                            <Ionicons
-                                name={!isOnline ? "cloud-offline" : "refresh"}
-                                size={16}
-                                color={!isOnline ? "#f59e0b" : "#4f46e5"}
-                            />
-                            <Text style={styles.offlineText}>
-                                {!isOnline ? "Offline - Showing cached comments" : "Loading cached comments..."}
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Draft Sync Status */}
-                    {syncingDrafts && (
-                        <View style={styles.syncIndicator}>
-                            <Ionicons name="sync" size={16} color="#4f46e5" />
-                            <Text style={styles.syncText}>Syncing drafts...</Text>
-                        </View>
-                    )}
-
-                    {/* Manual Sync Button */}
-                    {isOnline && drafts.filter(d => d.type === 'comment' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
-                        <TouchableOpacity
-                            style={styles.manualSyncButton}
-                            onPress={syncDrafts}
-                            disabled={syncingDrafts}
-                        >
-                            <Ionicons
-                                name={syncingDrafts ? "sync" : "cloud-upload"}
-                                size={16}
-                                color="#4f46e5"
-                            />
-                            <Text style={styles.manualSyncText}>
-                                {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-
-                    <View style={styles.commentsSeparator}>
-                        <View style={styles.separatorLine} />
-                        <Text style={styles.commentsTitle}>
-                            Comments ({totalComments + drafts.filter(d => d.type === 'comment').length})
-                        </Text>
-                        <View style={styles.separatorLine} />
-                    </View>
-
-                    {/* Draft Comments */}
-                    {drafts.filter(draft => draft.type === 'comment' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
-                        <View key={draft.id} style={[styles.commentCard, styles.draftCommentCard]}>
-                            <View style={styles.commentHeader}>
-                                <View style={styles.commentAuthorSection}>
-                                    <Text style={styles.commentAuthor}>
-                                        {draft.isAnonymous ? 'Anonymous Student' : `${draft.authorRole}`}
-                                    </Text>
-                                    <View style={[styles.statusBadge,
-                                    draft.status === 'pending' ? styles.pendingBadge :
-                                        draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
-                                    ]}>
-                                        <Ionicons
-                                            name={
-                                                draft.status === 'pending' ? "sync" :
-                                                    draft.status === 'failed' ? "alert-circle" : "document-text"
-                                            }
-                                            size={12}
-                                            color="#fff"
-                                        />
-                                        <Text style={styles.statusBadgeText}>
-                                            {draft.status === 'pending' ? 'Syncing' :
-                                                draft.status === 'failed' ? 'Failed' : 'Draft'}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-                            <View style={styles.commentContent}>
-                                <MarkdownText text={draft.content} style={styles.commentText} />
-                            </View>
-                            <View style={styles.commentActionsRow}>
-                                <Text style={styles.commentDate}>
-                                    {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </Text>
-                            </View>
-                            {draft.status === 'failed' && (
-                                <View style={styles.errorNotice}>
-                                    <Ionicons name="warning" size={14} color="#ef4444" />
-                                    <Text style={styles.errorNoticeText}>
-                                        Failed to sync. Will retry when online.
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                    ))}
-
-                    {comments.length === 0 && drafts.filter(d => d.type === 'comment').length === 0 ? (
-                        <View style={styles.emptyComments}>
-                            <Text style={styles.emptyText}>
-                                {!isOnline ? "No cached comments available" : "No comments yet. Be the first to comment!"}
-                            </Text>
-                        </View>
-                    ) : (
-                        <View style={styles.commentsContainer}>
-                            {comments.map((comment) => (
-                                <View key={comment.id}>
-                                    {renderComment(comment)}
-                                    {!isOnline && (
-                                        <View style={styles.cachedIndicator}>
-                                            <Ionicons name="download" size={12} color="#4f46e5" />
-                                            <Text style={styles.cachedText}>Cached content</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            ))}
-                        </View>
-                    )}
-                </View>
-            </ScrollView>
-
-            {!courseIsArchived && (
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={styles.commentInputContainer}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            <View style={styles.mainContainer}>
+                <ScrollView
+                    style={styles.content}
+                    keyboardShouldPersistTaps="always"
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.contentContainer}
+                    keyboardDismissMode="interactive"
+                    automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
                 >
-                    {/* Reply context banner */}
-                    {replyingTo && (
-                        <View style={styles.replyContext}>
-                            <Ionicons name="chatbubble-outline" size={16} color="#4f46e5" />
-                            <Text style={styles.replyContextText}>
-                                Replying to {replyingTo.authorName}
-                            </Text>
-                            <TouchableOpacity
-                                style={styles.cancelReplyButton}
-                                onPress={() => setReplyingTo(null)}
-                            >
-                                <Ionicons name="close" size={16} color="#666" />
-                            </TouchableOpacity>
+                    {discussion && (
+                        <View style={styles.discussionCard}>
+                            <View style={styles.postHeader}>
+                                <Text style={styles.discussionTitle}>{discussion.title}</Text>
+                                <View style={[
+                                    styles.roleTag,
+                                    discussion.isAnonymous ? styles.studentTag :
+                                        discussion.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                ]}>
+                                    <Text style={styles.roleTagText}>
+                                        {discussion.authorRole}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={styles.discussionContentContainer}>
+                                <MarkdownRenderer content={discussion.content} />
+                            </View>
+                            <View style={styles.postMeta}>
+                                <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
+                                <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
+                            </View>
                         </View>
                     )}
 
-                    {/* Anonymity option for students */}
-                    {role === 'student' && (
-                        <View style={styles.anonymityOption}>
-                            <Text style={styles.anonymityLabel}>Comment anonymously</Text>
-                            <Switch
-                                value={isAnonymousComment}
-                                onValueChange={setIsAnonymousComment}
-                                trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
-                                thumbColor={isAnonymousComment ? '#fff' : '#f4f3f4'}
-                            />
-                        </View>
-                    )}
+                    <View style={styles.commentsSection}>
+                        {/* Offline/Cache Status Indicator */}
+                        {(!isOnline || isLoadingFromCache) && (
+                            <View style={styles.offlineIndicator}>
+                                <Ionicons
+                                    name={!isOnline ? "cloud-offline" : "refresh"}
+                                    size={16}
+                                    color={!isOnline ? "#f59e0b" : "#4f46e5"}
+                                />
+                                <Text style={styles.offlineText}>
+                                    {!isOnline ? "Offline - Showing cached comments" : "Loading cached comments..."}
+                                </Text>
+                            </View>
+                        )}
 
-                    {/* Formatting toolbar toggle button */}
-                    <TouchableOpacity
-                        style={styles.formattingToggleButton}
-                        onPress={toggleFormattingToolbar}
-                    >
-                        <Ionicons
-                            name={showFormattingToolbar ? "chevron-up" : "text"}
-                            size={20}
-                            color="#4f46e5"
-                        />
-                        <Text style={styles.formattingToggleText}>
-                            {showFormattingToolbar ? "Hide formatting" : "Formatting"}
-                        </Text>
-                    </TouchableOpacity>
+                        {/* Draft Sync Status */}
+                        {syncingDrafts && (
+                            <View style={styles.syncIndicator}>
+                                <Ionicons name="sync" size={16} color="#4f46e5" />
+                                <Text style={styles.syncText}>Syncing drafts...</Text>
+                            </View>
+                        )}
 
-                    {/* Formatting toolbar */}
-                    {showFormattingToolbar && <FormattingToolbar />}
-
-                    <View style={styles.commentInputRow}>
-                        <TextInput
-                            ref={textInputRef}
-                            style={styles.commentInput}
-                            placeholder={
-                                editingComment ? "Edit your comment..." :
-                                    replyingTo ? `Reply to ${replyingTo.authorName}...` :
-                                        "Add a comment..."
-                            }
-                            value={newComment}
-                            onChangeText={setNewComment}
-                            multiline
-                            placeholderTextColor="#666"
-                            onSelectionChange={(e) => {
-                                setSelection(e.nativeEvent.selection);
-                            }}
-                        />
-                        {(editingComment || replyingTo) && (
+                        {/* Manual Sync Button */}
+                        {isOnline && drafts.filter(d => d.type === 'comment' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
                             <TouchableOpacity
-                                style={styles.cancelButton}
-                                onPress={resetCommentForm}
+                                style={styles.manualSyncButton}
+                                onPress={syncDrafts}
+                                disabled={syncingDrafts}
                             >
-                                <Ionicons name="close" size={20} color="#666" />
+                                <Ionicons
+                                    name={syncingDrafts ? "sync" : "cloud-upload"}
+                                    size={16}
+                                    color="#4f46e5"
+                                />
+                                <Text style={styles.manualSyncText}>
+                                    {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
+                                </Text>
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity
-                            style={[styles.sendButton, loading && styles.buttonDisabled]}
-                            onPress={handleAddComment}
-                            disabled={loading || !newComment.trim()}
-                        >
-                            {editingComment ? (
-                                <Ionicons name="checkmark" size={20} color="#fff" />
-                            ) : (
-                                <Ionicons name="send" size={20} color="#fff" />
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </KeyboardAvoidingView>
-            )}
 
-            {courseIsArchived && (
-                <View style={styles.archivedBanner}>
-                    <Ionicons name="archive" size={20} color="#666" />
-                    <Text style={styles.archivedBannerText}>This course is archived - Comments are disabled</Text>
-                </View>
-            )}
+                        <View style={styles.commentsSeparator}>
+                            <View style={styles.separatorLine} />
+                            <Text style={styles.commentsTitle}>
+                                Comments ({totalComments + drafts.filter(d => d.type === 'comment').length})
+                            </Text>
+                            <View style={styles.separatorLine} />
+                        </View>
+
+                        {/* Draft Comments */}
+                        {drafts.filter(draft => draft.type === 'comment' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
+                            <View key={draft.id} style={[styles.commentCard, styles.draftCommentCard]}>
+                                <View style={styles.commentHeader}>
+                                    <View style={styles.commentAuthorSection}>
+                                        <Text style={styles.commentAuthor}>
+                                            {draft.isAnonymous ? 'Anonymous Student' : `${draft.authorRole}`}
+                                        </Text>
+                                        <View style={[styles.statusBadge,
+                                        draft.status === 'pending' ? styles.pendingBadge :
+                                            draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
+                                        ]}>
+                                            <Ionicons
+                                                name={
+                                                    draft.status === 'pending' ? "sync" :
+                                                        draft.status === 'failed' ? "alert-circle" : "document-text"
+                                                }
+                                                size={12}
+                                                color="#fff"
+                                            />
+                                            <Text style={styles.statusBadgeText}>
+                                                {draft.status === 'pending' ? 'Syncing' :
+                                                    draft.status === 'failed' ? 'Failed' : 'Draft'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                                <View style={styles.commentContent}>
+                                    <Text style={styles.commentText}>{draft.content}</Text>
+                                </View>
+                                <View style={styles.commentActionsRow}>
+                                    <Text style={styles.commentDate}>
+                                        {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                </View>
+                                {draft.status === 'failed' && (
+                                    <View style={styles.errorNotice}>
+                                        <Ionicons name="warning" size={14} color="#ef4444" />
+                                        <Text style={styles.errorNoticeText}>
+                                            Failed to sync. Will retry when online.
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        ))}
+
+                        {comments.length === 0 && drafts.filter(d => d.type === 'comment').length === 0 ? (
+                            <View style={styles.emptyComments}>
+                                <Text style={styles.emptyText}>
+                                    {!isOnline ? "No cached comments available" : "No comments yet. Be the first to comment!"}
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={styles.commentsContainer}>
+                                {comments.map((comment) => (
+                                    <View key={comment.id}>
+                                        {renderComment(comment)}
+                                        {!isOnline && (
+                                            <View style={styles.cachedIndicator}>
+                                                <Ionicons name="download" size={12} color="#4f46e5" />
+                                                <Text style={styles.cachedText}>Cached content</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                    </View>
+                </ScrollView>
+
+                {!courseIsArchived && (
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={styles.commentInputContainer}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                    >
+                        {/* Reply context banner */}
+                        {replyingTo && (
+                            <View style={styles.replyContext}>
+                                <Ionicons name="chatbubble-outline" size={16} color="#4f46e5" />
+                                <Text style={styles.replyContextText}>
+                                    Replying to {replyingTo.authorName}
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.cancelReplyButton}
+                                    onPress={() => setReplyingTo(null)}
+                                >
+                                    <Ionicons name="close" size={16} color="#666" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        <View style={styles.commentInputContent}>
+                            {/* Anonymity option for students */}
+                            {role === 'student' && (
+                                <View style={styles.anonymityOption}>
+                                    <Text style={styles.anonymityLabel}>Comment anonymously</Text>
+                                    <Switch
+                                        value={isAnonymousComment}
+                                        onValueChange={setIsAnonymousComment}
+                                        trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                                        thumbColor={isAnonymousComment ? '#fff' : '#f4f3f4'}
+                                    />
+                                </View>
+                            )}
+
+                            <View style={styles.commentInputRow}>
+                                <RichTextEditor
+                                    value={newCommentHtml}
+                                    onChange={handleCommentChange}
+                                    placeholder={
+                                        editingComment ? "Edit your comment..." :
+                                            replyingTo ? `Reply to ${replyingTo.authorName}...` :
+                                                "Add a comment..."
+                                    }
+                                    style={styles.commentInput}
+                                />
+                                {(editingComment || replyingTo) && (
+                                    <TouchableOpacity
+                                        style={styles.cancelButton}
+                                        onPress={resetCommentForm}
+                                    >
+                                        <Ionicons name="close" size={20} color="#666" />
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity
+                                    style={[styles.sendButton, loading && styles.buttonDisabled]}
+                                    onPress={handleAddComment}
+                                    disabled={loading || !newComment.trim()}
+                                >
+                                    {editingComment ? (
+                                        <Ionicons name="checkmark" size={20} color="#fff" />
+                                    ) : (
+                                        <Ionicons name="send" size={20} color="#fff" />
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                )}
+
+                {courseIsArchived && (
+                    <View style={styles.archivedBanner}>
+                        <Ionicons name="archive" size={20} color="#666" />
+                        <Text style={styles.archivedBannerText}>This course is archived - Comments are disabled</Text>
+                    </View>
+                )}
+            </View>
 
             <CustomAlert
                 visible={alertConfig?.visible || false}
@@ -1235,20 +1012,29 @@ const styles = StyleSheet.create({
         marginTop: 4,
         fontWeight: '500',
     },
+    mainContainer: {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+    },
     content: {
         flex: 1,
-        padding: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 20,
+    },
+    contentContainer: {
+        paddingBottom: 100, // Back to reasonable padding
     },
     discussionCard: {
         backgroundColor: '#fff',
-        padding: 24,
-        borderRadius: 20,
+        padding: 20,
+        borderRadius: 16,
         marginBottom: 24,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.08,
-        shadowRadius: 20,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 3,
         borderWidth: 1,
         borderColor: 'rgba(241, 245, 249, 0.8)',
     },
@@ -1371,29 +1157,28 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     commentCard: {
-        backgroundColor: 'transparent',
+        backgroundColor: '#fff',
         padding: 16,
-        borderRadius: 0,
-        shadowColor: 'transparent',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0,
-        shadowRadius: 0,
-        elevation: 0,
-        borderLeftWidth: 0,
-        borderWidth: 0,
-        borderColor: 'transparent',
-        marginLeft: 0,
-        minWidth: 280, // Ensure minimum width for readability
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+        borderWidth: 1,
+        borderColor: '#f1f5f9',
+        marginBottom: 12,
     },
     replyCard: {
-        backgroundColor: 'transparent',
-        borderLeftWidth: 0,
-        marginLeft: 12, // Small margin to separate from threading lines
-        shadowColor: 'transparent',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0,
-        shadowRadius: 0,
-        elevation: 0,
+        backgroundColor: '#f8fafc',
+        borderLeftWidth: 3,
+        borderLeftColor: '#4f46e5',
+        marginLeft: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.02,
+        shadowRadius: 4,
+        elevation: 1,
     },
     deepNestedCard: {
         backgroundColor: 'transparent',
@@ -1438,8 +1223,8 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     commentAuthor: {
-        fontSize: 15,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
         color: '#1e293b',
         marginRight: 12,
     },
@@ -1479,13 +1264,14 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     commentContent: {
-        fontSize: 15,
+        fontSize: 16,
         color: '#475569',
-        lineHeight: 22,
+        lineHeight: 24,
         marginBottom: 0,
+        paddingVertical: 4,
     },
     commentDate: {
-        fontSize: 12,
+        fontSize: 13,
         color: '#94a3b8',
         fontWeight: '500',
     },
@@ -1493,26 +1279,31 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#e2e8f0',
         backgroundColor: '#fff',
-        padding: 20,
+        padding: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.05,
         shadowRadius: 8,
         elevation: 3,
     },
+    commentInputContent: {
+        paddingHorizontal: 0,
+    },
     commentInputRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
         gap: 12,
+        marginTop: 12,
     },
     commentInput: {
         flex: 1,
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: '#e2e8f0',
-        borderRadius: 16,
+        borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        maxHeight: 120,
+        minHeight: 100,
+        maxHeight: 200, // Increased to allow more content and proper scrolling
         fontSize: 15,
         color: '#1e293b',
         backgroundColor: '#fff',
@@ -1531,10 +1322,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#4f46e5',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowRadius: 4,
+        elevation: 3,
     },
     buttonDisabled: {
         opacity: 0.5,
@@ -1544,17 +1335,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
+        padding: 8,
         backgroundColor: '#f8fafc',
-        padding: 16,
-        borderRadius: 12,
+        borderRadius: 8,
         borderWidth: 1,
         borderColor: '#e2e8f0',
+        marginBottom: 8,
     },
     anonymityLabel: {
-        fontSize: 15,
+        fontSize: 13,
         color: '#1e293b',
-        fontWeight: '600',
+        fontWeight: '500',
     },
     editButton: {
         padding: 8,
@@ -1732,46 +1523,6 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginLeft: 8,
     },
-    toolbarContainer: {
-        flexDirection: 'row',
-        backgroundColor: '#fff',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
-        justifyContent: 'space-between',
-    },
-    formattingButton: {
-        padding: 8,
-        borderRadius: 4,
-        backgroundColor: '#f1f5f9',
-        marginHorizontal: 2,
-    },
-    activeFormattingButton: {
-        backgroundColor: '#e0e7ff',
-    },
-    formattingRow: {
-        flexDirection: 'row',
-    },
-    closeToolbarButton: {
-        padding: 8,
-        borderRadius: 4,
-        backgroundColor: '#f1f5f9',
-    },
-    formattingToggleButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 8,
-        backgroundColor: '#f1f5f9',
-        borderRadius: 8,
-        marginBottom: 8,
-        alignSelf: 'flex-start',
-    },
-    formattingToggleText: {
-        marginLeft: 8,
-        color: '#4f46e5',
-        fontWeight: '500',
-    },
     commentText: {
         fontSize: 15,
         color: '#475569',
@@ -1822,5 +1573,11 @@ const styles = StyleSheet.create({
         color: '#4f46e5',
         fontSize: 15,
         fontWeight: '600',
+    },
+    discussionContentContainer: {
+        marginBottom: 20,
+    },
+    commentContentContainer: {
+        marginBottom: 12,
     },
 }); 
