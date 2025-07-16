@@ -63,6 +63,17 @@ export default function JoinCourseScreen() {
                 return;
             }
 
+            // Check if course is archived
+            if (courseData.archived) {
+                Alert.alert(
+                    'Course Unavailable',
+                    'This course has been archived and is no longer accepting new enrollments.',
+                    [{ text: 'OK', style: 'default' }]
+                );
+                setLoading(false);
+                return;
+            }
+
             // Check if student is already enrolled
             const currentCourseIds = userData?.courseIds || [];
             if (currentCourseIds.includes(courseId)) {
@@ -72,7 +83,7 @@ export default function JoinCourseScreen() {
             }
 
             // Update student's user document with course details
-                await userRef.update({
+            await userRef.update({
                 courseIds: [...currentCourseIds, courseId],
                 courseJoinDates: {
                     ...(userData?.courseJoinDates || {}),

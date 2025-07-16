@@ -4,7 +4,6 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     Image,
     ScrollView,
 } from 'react-native';
@@ -15,11 +14,19 @@ import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 
 import { sendVerificationEmail } from '../../services/authService';
+import CustomAlert from '../../components/CustomAlert';
 
 export default function EmailVerificationScreen() {
     const [loading, setLoading] = useState(false);
     const [resendLoading, setResendLoading] = useState(false);
     const [userEmail, setUserEmail] = useState('');
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info' as 'info' | 'warning' | 'error' | 'success' | 'confirm',
+        actions: [] as any[]
+    });
 
     useEffect(() => {
         const unsubscribe = auth().onAuthStateChanged(async (user) => {
@@ -53,17 +60,28 @@ export default function EmailVerificationScreen() {
         return () => unsubscribe();
     }, []);
 
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' | 'confirm', actions: any[]) => {
+        setAlertConfig({ title, message, type, actions });
+        setAlertVisible(true);
+    };
+
     const handleResendVerification = async () => {
         try {
             setResendLoading(true);
             await sendVerificationEmail();
-            Alert.alert(
-                'Verification Email Sent',
-                'A new verification email has been sent to your inbox. Please check your email and click the verification link.',
-                [{ text: 'OK' }]
+            showAlert(
+                'Email Sent!',
+                'Check your inbox and click the verification link.',
+                'success',
+                [{ text: 'OK', onPress: () => { }, style: 'primary' }]
             );
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to send verification email. Please try again.');
+            showAlert(
+                'Error',
+                error.message || 'Failed to send verification email.',
+                'error',
+                [{ text: 'OK', onPress: () => { }, style: 'default' }]
+            );
         } finally {
             setResendLoading(false);
         }
@@ -91,42 +109,44 @@ export default function EmailVerificationScreen() {
                         });
                     }
 
-                    Alert.alert(
-                        'Email Verified!',
-                        'Your email has been successfully verified. Welcome to the Super Admin Dashboard.',
-                        [
-                            {
-                                text: 'Continue',
-                                onPress: () => {
-                                    router.replace('/super-admin-dashboard');
-                                }
-                            }
-                        ]
+                    showAlert(
+                        'Welcome!',
+                        'Email verified. Going to Super Admin Dashboard.',
+                        'success',
+                        [{
+                            text: 'Continue',
+                            onPress: () => router.replace('/super-admin-dashboard'),
+                            style: 'primary'
+                        }]
                     );
                 } else {
                     // Normal user - go to role selection
-                    Alert.alert(
-                        'Email Verified!',
-                        'Your email has been successfully verified. Let\'s set up your profile.',
-                        [
-                            {
-                                text: 'Continue',
-                                onPress: () => {
-                                    router.replace('/role');
-                                }
-                            }
-                        ]
+                    showAlert(
+                        'Success!',
+                        'Email verified. Let\'s set up your profile.',
+                        'success',
+                        [{
+                            text: 'Continue',
+                            onPress: () => router.replace('/role'),
+                            style: 'primary'
+                        }]
                     );
                 }
             } else {
-                Alert.alert(
-                    'Not Verified Yet',
-                    'Your email has not been verified yet. Please check your inbox and click the verification link, then try again.',
-                    [{ text: 'OK' }]
+                showAlert(
+                    'Not Verified',
+                    'Click the link in your email, then try again.',
+                    'warning',
+                    [{ text: 'OK', onPress: () => { }, style: 'default' }]
                 );
             }
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to check verification status. Please try again.');
+            showAlert(
+                'Error',
+                error.message || 'Failed to check verification.',
+                'error',
+                [{ text: 'OK', onPress: () => { }, style: 'default' }]
+            );
         } finally {
             setLoading(false);
         }
@@ -137,7 +157,12 @@ export default function EmailVerificationScreen() {
             await auth().signOut();
             router.replace('/(auth)/login');
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to sign out. Please try again.');
+            showAlert(
+                'Error',
+                error.message || 'Failed to sign out.',
+                'error',
+                [{ text: 'OK', onPress: () => { }, style: 'default' }]
+            );
         }
     };
 
@@ -168,44 +193,21 @@ export default function EmailVerificationScreen() {
                         />
                     </View>
 
-                    <Text style={styles.title}>Verify Your Email</Text>
-                    <Text style={styles.subtitle}>We've sent a verification link to:</Text>
+                    <Text style={styles.title}>Check Your Email</Text>
                     <Text style={styles.email}>{userEmail}</Text>
 
-                    <View style={styles.infoCard}>
-                        <View style={styles.infoIcon}>
-                            <Ionicons name="mail-outline" size={24} color="#4f46e5" />
+                    <View style={styles.mainCard}>
+                        <View style={styles.mainIcon}>
+                            <Ionicons name="mail" size={32} color="#4f46e5" />
                         </View>
-                        <View style={styles.infoContent}>
-                            <Text style={styles.infoTitle}>Check Your Inbox</Text>
-                            <Text style={styles.infoText}>
-                                Open the email we sent you and click the verification link to activate your account.
-                            </Text>
-                        </View>
+                        <Text style={styles.mainText}>
+                            Click the verification link in your email to continue
+                        </Text>
                     </View>
 
-                    <View style={styles.infoCard}>
-                        <View style={styles.infoIcon}>
-                            <Ionicons name="checkmark-circle-outline" size={24} color="#10b981" />
-                        </View>
-                        <View style={styles.infoContent}>
-                            <Text style={styles.infoTitle}>After Verification</Text>
-                            <Text style={styles.infoText}>
-                                Once verified, you can sign in to your account and start using Corner.
-                            </Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.infoCard}>
-                        <View style={styles.infoIcon}>
-                            <Ionicons name="refresh-outline" size={24} color="#f59e0b" />
-                        </View>
-                        <View style={styles.infoContent}>
-                            <Text style={styles.infoTitle}>Didn't Receive Email?</Text>
-                            <Text style={styles.infoText}>
-                                Check your spam folder or request a new verification email below.
-                            </Text>
-                        </View>
+                    <View style={styles.quickTip}>
+                        <Ionicons name="bulb-outline" size={16} color="#f59e0b" />
+                        <Text style={styles.quickTipText}>Check spam folder if you don't see it</Text>
                     </View>
                 </View>
 
@@ -236,12 +238,21 @@ export default function EmailVerificationScreen() {
                         ) : (
                             <>
                                 <Ionicons name="refresh" size={20} color="#4f46e5" />
-                                <Text style={styles.secondaryButtonText}>Resend Verification Email</Text>
+                                <Text style={styles.secondaryButtonText}>Resend Email</Text>
                             </>
                         )}
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+
+            <CustomAlert
+                visible={alertVisible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                actions={alertConfig.actions}
+                onDismiss={() => setAlertVisible(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -313,13 +324,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         letterSpacing: -0.5,
     },
-    subtitle: {
-        fontSize: 16,
-        color: '#64748b',
-        textAlign: 'center',
-        marginBottom: 8,
-        fontWeight: '500',
-    },
     email: {
         fontSize: 16,
         fontWeight: '700',
@@ -333,8 +337,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#e0e7ff',
     },
-    infoCard: {
-        flexDirection: 'row',
+    mainCard: {
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 20,
@@ -347,29 +350,43 @@ const styles = StyleSheet.create({
         elevation: 3,
         borderWidth: 1,
         borderColor: '#f1f5f9',
+        alignItems: 'center',
     },
-    infoIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+    mainIcon: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         backgroundColor: '#f1f5f9',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 16,
+        marginBottom: 12,
     },
-    infoContent: {
-        flex: 1,
-    },
-    infoTitle: {
+    mainText: {
         fontSize: 16,
-        fontWeight: '700',
-        color: '#1e293b',
-        marginBottom: 4,
-    },
-    infoText: {
-        fontSize: 14,
         color: '#64748b',
-        lineHeight: 20,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    quickTip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fffbeb',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 16,
+        width: '100%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#fde68a',
+    },
+    quickTipText: {
+        fontSize: 14,
+        color: '#d97706',
+        marginLeft: 8,
         fontWeight: '500',
     },
     actions: {

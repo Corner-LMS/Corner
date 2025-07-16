@@ -43,6 +43,7 @@ const faqs = [
 
 export default function SupportPage() {
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [expandedFaqs, setExpandedFaqs] = useState<Set<number>>(new Set());
     const scrollViewRef = useRef<ScrollView>(null);
     const [feedbackSectionY, setFeedbackSectionY] = useState(0);
     const { scrollToFeedback } = useLocalSearchParams();
@@ -69,6 +70,16 @@ export default function SupportPage() {
     const handleFeedbackSectionLayout = (event: any) => {
         const { y } = event.nativeEvent.layout;
         setFeedbackSectionY(y);
+    };
+
+    const toggleFaq = (index: number) => {
+        const newExpandedFaqs = new Set(expandedFaqs);
+        if (newExpandedFaqs.has(index)) {
+            newExpandedFaqs.delete(index);
+        } else {
+            newExpandedFaqs.add(index);
+        }
+        setExpandedFaqs(newExpandedFaqs);
     };
 
     const handleContactSupport = () => {
@@ -115,8 +126,20 @@ export default function SupportPage() {
                     <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
                     {faqs.map((faq, index) => (
                         <View key={index} style={styles.faqItem}>
-                            <Text style={styles.question}>{faq.question}</Text>
-                            <Text style={styles.answer}>{faq.answer}</Text>
+                            <TouchableOpacity
+                                style={styles.questionContainer}
+                                onPress={() => toggleFaq(index)}
+                            >
+                                <Text style={styles.question}>{faq.question}</Text>
+                                <Ionicons
+                                    name={expandedFaqs.has(index) ? 'chevron-up' : 'chevron-down'}
+                                    size={24}
+                                    color="#4f46e5"
+                                />
+                            </TouchableOpacity>
+                            {expandedFaqs.has(index) && (
+                                <Text style={styles.answer}>{faq.answer}</Text>
+                            )}
                         </View>
                     ))}
                 </View>
@@ -155,6 +178,21 @@ export default function SupportPage() {
                         <TouchableOpacity style={styles.linkItem} onPress={handleAdminDashboard}>
                             <Ionicons name="analytics-outline" size={20} color="#dc2626" />
                             <Text style={[styles.linkText, { color: '#dc2626' }]}>Admin Dashboard</Text>
+                            <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Development Tools - Only show in development */}
+                {__DEV__ && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Development</Text>
+                        <TouchableOpacity
+                            style={styles.linkItem}
+                            onPress={() => router.push('/dev-seed')}
+                        >
+                            <Ionicons name="leaf-outline" size={20} color="#059669" />
+                            <Text style={[styles.linkText, { color: '#059669' }]}>Seed Data Generator</Text>
                             <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
                         </TouchableOpacity>
                     </View>
@@ -228,16 +266,23 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e2e8f0',
     },
+    questionContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 16,
+    },
     question: {
         fontSize: 16,
         fontWeight: '600',
         color: '#1a202c',
-        marginBottom: 8,
+        flex: 1,
     },
     answer: {
         fontSize: 14,
         color: '#64748b',
         lineHeight: 20,
+        marginTop: 10,
     },
     linkItem: {
         flexDirection: 'row',

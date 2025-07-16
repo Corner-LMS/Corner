@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView, Alert } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView, Alert, StatusBar } from 'react-native';
 import { signUp, googleSignIn } from '../../services/authService';
 import { router } from 'expo-router';
 import auth from '@react-native-firebase/auth';
@@ -19,6 +19,27 @@ export default function Signup() {
     const [passwordFocused, setPasswordFocused] = useState(false);
     const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
     const [alertConfig, setAlertConfig] = useState<any>(null);
+
+    const isFormValid = email.length > 0 && password.length >= 6 && password === confirmPassword;
+
+    const renderLogoSection = () => {
+        return (
+            <View style={styles.logoSection}>
+                <View style={styles.logoIconContainer}>
+                    <Text style={styles.logoIconText}>C</Text>
+                </View>
+            </View>
+        );
+    };
+
+    const renderTextSection = () => {
+        return (
+            <View style={styles.textSection}>
+                <Text style={styles.title}>Create Account</Text>
+                <Text style={styles.subtitle}>Join Corner to start your learning journey</Text>
+            </View>
+        );
+    };
 
     const handleSignup = async () => {
         try {
@@ -181,41 +202,38 @@ export default function Signup() {
         }
     };
 
-    const isFormValid = email && password && confirmPassword && password === confirmPassword && password.length >= 6;
-
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" translucent={true} />
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.header}>
+                {/* Back Button */}
+                <View style={styles.backButtonContainer}>
                     <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => router.replace('/(auth)/login')}
                     >
-                        <Ionicons name="arrow-back" size={24} color="#4f46e5" />
+                        <Ionicons name="arrow-back" size={24} color="#ffffff" />
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.content}>
-                    <View style={styles.logoSection}>
-                        <View style={styles.logoContainer}>
-                            <Image
-                                source={require('../../assets/images/corner-splash-logo.png')}
-                                style={styles.logoImage}
-                                resizeMode="contain"
-                            />
-                        </View>
-                        <Text style={styles.title}>Create Account</Text>
-                        <Text style={styles.subtitle}>Join Corner to start your learning journey</Text>
-                    </View>
+                {/* Logo Section with Background */}
+                <View style={styles.logoBackgroundSection}>
+                    {renderLogoSection()}
+                    {renderTextSection()}
+                </View>
 
+                {/* Text Section */}
+                {/* Removed - now overlaid on logo section */}
+
+                <View style={styles.content}>
                     <View style={styles.formSection}>
                         <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Email Address</Text>
@@ -226,13 +244,13 @@ export default function Signup() {
                                 <Ionicons
                                     name="mail-outline"
                                     size={20}
-                                    color={emailFocused ? "#4f46e5" : "#64748b"}
+                                    color={emailFocused ? "#ffffff" : "#e0e7ff"}
                                     style={styles.inputIcon}
                                 />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Enter your email"
-                                    placeholderTextColor="#94a3b8"
+                                    placeholderTextColor="rgba(255, 255, 255, 0.6)" // More subtle placeholder
                                     onChangeText={(text) => {
                                         setEmail(text);
                                         setError(null);
@@ -244,6 +262,7 @@ export default function Signup() {
                                     autoComplete="email"
                                     onFocus={() => setEmailFocused(true)}
                                     onBlur={() => setEmailFocused(false)}
+                                    contextMenuHidden={true}
                                 />
                             </View>
                         </View>
@@ -257,13 +276,13 @@ export default function Signup() {
                                 <Ionicons
                                     name="lock-closed-outline"
                                     size={20}
-                                    color={passwordFocused ? "#4f46e5" : "#64748b"}
+                                    color={passwordFocused ? "#ffffff" : "#e0e7ff"}
                                     style={styles.inputIcon}
                                 />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Create a password"
-                                    placeholderTextColor="#94a3b8"
+                                    placeholderTextColor="rgba(255, 255, 255, 0.6)" // More subtle placeholder
                                     onChangeText={(text) => {
                                         setPassword(text);
                                         setError(null);
@@ -274,6 +293,7 @@ export default function Signup() {
                                     autoComplete="new-password"
                                     onFocus={() => setPasswordFocused(true)}
                                     onBlur={() => setPasswordFocused(false)}
+                                    contextMenuHidden={true}
                                 />
                             </View>
                         </View>
@@ -287,13 +307,13 @@ export default function Signup() {
                                 <Ionicons
                                     name="lock-closed-outline"
                                     size={20}
-                                    color={confirmPasswordFocused ? "#4f46e5" : "#64748b"}
+                                    color={confirmPasswordFocused ? "#ffffff" : "#e0e7ff"}
                                     style={styles.inputIcon}
                                 />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Confirm your password"
-                                    placeholderTextColor="#94a3b8"
+                                    placeholderTextColor="rgba(255, 255, 255, 0.6)" // More subtle placeholder
                                     onChangeText={(text) => {
                                         setConfirmPassword(text);
                                         setError(null);
@@ -304,13 +324,14 @@ export default function Signup() {
                                     autoComplete="new-password"
                                     onFocus={() => setConfirmPasswordFocused(true)}
                                     onBlur={() => setConfirmPasswordFocused(false)}
+                                    contextMenuHidden={true}
                                 />
                             </View>
                         </View>
 
                         {error && (
                             <View style={styles.errorContainer}>
-                                <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
+                                <Ionicons name="alert-circle-outline" size={16} color="#fecaca" />
                                 <View style={styles.errorContent}>
                                     <Text style={styles.errorText}>{error}</Text>
                                     {errorGuidance?.showAction && (
@@ -340,7 +361,7 @@ export default function Signup() {
                             ) : (
                                 <>
                                     <Text style={styles.primaryButtonText}>Create Account</Text>
-                                    <Ionicons name="arrow-forward" size={20} color="#fff" />
+                                    <Ionicons name="arrow-forward" size={20} color="#4f46e5" />
                                 </>
                             )}
                         </TouchableOpacity>
@@ -388,7 +409,7 @@ export default function Signup() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#ffffff',
+        backgroundColor: '#4f46e5', // Full indigo background
     },
     scrollContent: {
         flexGrow: 1,
@@ -399,56 +420,66 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         paddingBottom: 20,
     },
+    backButtonContainer: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 80 : 60,
+        left: 24,
+        zIndex: 10,
+    },
     backButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#f8fafc',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'transparent', // Remove circle background
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        // Removed shadow and elevation
     },
     content: {
         flex: 1,
         paddingHorizontal: 24,
         flexDirection: 'column',
+        backgroundColor: '#4f46e5', // Indigo background
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 20,
-        marginTop: 20,
+        justifyContent: 'center',
+        flex: 1,
+        width: '100%',
+        backgroundColor: 'transparent', // Remove any background
     },
-    logoContainer: {
-        width: 100,
-        height: 100,
-        borderRadius: 20,
-        backgroundColor: '#f0f4ff',
+    logoIconContainer: {
+        width: 96, // w-24 = 96px
+        height: 96, // h-24 = 96px
+        borderRadius: 48, // Perfect circle
+        backgroundColor: '#4f46e5', // bg-indigo-600
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: '#e0e7ff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+        marginBottom: 50, // Add space between logo and text
     },
-    logoImage: {
-        width: 80,
-        height: 80,
-        borderRadius: 16,
+    logoIconText: {
+        fontSize: 50, // text-5xl equivalent
+        fontWeight: '800', // font-extrabold
+        color: '#ffffff', // text-white
+        fontFamily: 'Georgia',
+        letterSpacing: 4, // tracking-widest equivalent
     },
     title: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: '700',
-        color: '#1e293b',
-        marginBottom: 8,
+        color: '#ffffff', // White text on indigo
+        marginBottom: 12,
         textAlign: 'center',
         letterSpacing: -0.5,
     },
     subtitle: {
         fontSize: 16,
-        color: '#64748b',
+        color: '#e0e7ff', // Light blue text on indigo
         textAlign: 'center',
         lineHeight: 22,
         fontWeight: '400',
@@ -463,61 +494,61 @@ const styles = StyleSheet.create({
     inputLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#374151',
+        color: '#ffffff', // White labels
         marginBottom: 4,
         letterSpacing: 0.3,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)', // Semi-transparent white
         borderRadius: 16,
         paddingHorizontal: 20,
         paddingVertical: 14,
         borderWidth: 2,
-        borderColor: '#e5e7eb',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
+        shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 2,
     },
     inputContainerFocused: {
-        borderColor: '#4f46e5',
-        shadowColor: '#4f46e5',
+        borderColor: '#ffffff',
+        shadowColor: '#ffffff',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.2,
         shadowRadius: 12,
         elevation: 4,
     },
     inputIcon: {
         marginRight: 16,
-        opacity: 0.7,
+        opacity: 0.8,
     },
     input: {
         flex: 1,
         fontSize: 16,
-        color: '#1f2937',
+        color: '#ffffff', // White text
         padding: 0,
         fontWeight: '500',
     },
     errorContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: '#fef2f2',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)', // Semi-transparent red
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 8,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: '#fecaca',
+        borderColor: 'rgba(239, 68, 68, 0.3)',
     },
     errorContent: {
         flex: 1,
         marginLeft: 6,
     },
     errorText: {
-        color: '#dc2626',
+        color: '#fecaca', // Light red text
         fontSize: 14,
         fontWeight: '500',
         flex: 1,
@@ -528,10 +559,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 6,
-        backgroundColor: '#4f46e5',
+        backgroundColor: '#ffffff',
     },
     errorActionText: {
-        color: '#fff',
+        color: '#4f46e5', // Indigo text on white button
         fontSize: 12,
         fontWeight: '600',
     },
@@ -539,23 +570,23 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#4f46e5',
+        backgroundColor: '#ffffff', // White button
         paddingVertical: 16,
         paddingHorizontal: 24,
         borderRadius: 12,
         marginBottom: 16,
-        shadowColor: '#4f46e5',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 12,
         elevation: 4,
     },
     primaryButtonDisabled: {
-        backgroundColor: '#9ca3af',
+        backgroundColor: 'rgba(255, 255, 255, 0.5)', // Semi-transparent white
         shadowOpacity: 0.1,
     },
     primaryButtonText: {
-        color: '#fff',
+        color: '#4f46e5', // Indigo text on white button
         fontSize: 16,
         fontWeight: '600',
         marginRight: 8,
@@ -573,10 +604,10 @@ const styles = StyleSheet.create({
     divider: {
         flex: 1,
         height: 1,
-        backgroundColor: '#e5e7eb',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)', // Semi-transparent white
     },
     dividerText: {
-        color: '#6b7280',
+        color: '#e0e7ff', // Light blue text
         fontSize: 14,
         fontWeight: '600',
         marginHorizontal: 12,
@@ -584,12 +615,12 @@ const styles = StyleSheet.create({
     googleButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)', // Semi-transparent white
         paddingVertical: 16,
         paddingHorizontal: 24,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
         marginBottom: 12,
     },
     googleIcon: {
@@ -598,7 +629,7 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     googleButtonText: {
-        color: '#1f2937',
+        color: '#ffffff', // White text
         fontSize: 16,
         fontWeight: '600',
     },
@@ -610,13 +641,31 @@ const styles = StyleSheet.create({
         paddingBottom: Platform.OS === 'ios' ? 20 : 16,
     },
     footerText: {
-        color: '#6b7280',
+        color: '#e0e7ff', // Light blue text
         fontSize: 15,
         fontWeight: '400',
     },
     footerLink: {
-        color: '#4f46e5',
+        color: '#ffffff', // White text
         fontSize: 15,
         fontWeight: '600',
+    },
+    logoBackgroundSection: {
+        width: '100%',
+        height: 380, // Significantly increased height for more space
+        backgroundColor: '#4f46e5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 40,
+        paddingBottom: 20,
+        position: 'relative', // For absolute positioning of text
+    },
+    textSection: {
+        position: 'absolute',
+        bottom: 60, // Significantly increased from 40 to 60 for more space
+        left: 0,
+        right: 0,
+        paddingHorizontal: 24,
+        alignItems: 'center',
     },
 }); 

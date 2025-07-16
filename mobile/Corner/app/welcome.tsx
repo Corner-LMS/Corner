@@ -1,56 +1,31 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function WelcomeScreen() {
+    const renderLogoSection = () => {
+        return (
+            <View style={styles.logoSection}>
+                <View style={styles.logoIconContainer}>
+                    <Text style={styles.logoIconText}>C</Text>
+                </View>
+                <Text style={styles.tagline}>Connect, learn, and grow.</Text>
+            </View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
             <ScrollView contentContainerStyle={styles.scrollContent}>
+                {/* Logo Section with Background */}
+                <View style={styles.logoBackgroundSection}>
+                    {renderLogoSection()}
+                </View>
+
                 <View style={styles.content}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        {/* Option 1: Current Style (100x100 container, 80x80 logo) */}
-                        <View style={styles.logoContainer}>
-                            <Image
-                                source={require('../assets/images/corner-splash-logo.png')}
-                                style={styles.logoImage}
-                                resizeMode="contain"
-                            />
-                        </View>
-
-                        {/* Option 2: Larger, more prominent logo */}
-                        {/* <View style={styles.logoContainerLarge}>
-                            <Image
-                                source={require('../assets/images/corner-splash-logo.png')}
-                                style={styles.logoImageLarge}
-                                resizeMode="contain"
-                            />
-                        </View> */}
-
-                        {/* Option 3: Square container with rounded logo */}
-                        {/* <View style={styles.logoContainerSquare}>
-                            <Image
-                                source={require('../assets/images/corner-splash-logo.png')}
-                                style={styles.logoImageSquare}
-                                resizeMode="contain"
-                            />
-                        </View> */}
-
-                        {/* Option 4: Minimal style with no background */}
-                        {/* <View style={styles.logoContainerMinimal}>
-                            <Image
-                                source={require('../assets/images/corner-splash-logo.png')}
-                                style={styles.logoImageMinimal}
-                                resizeMode="contain"
-                            />
-                        </View> */}
-
-                        <Text style={styles.appName}>Corner</Text>
-                        <Text style={styles.tagline}>Connect • Learn • Grow</Text>
-                    </View>
-
                     {/* Welcome Message */}
                     <View style={styles.welcomeSection}>
                         <Text style={styles.welcomeTitle}>Welcome to Corner</Text>
@@ -139,108 +114,60 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
     },
+    // Logo Background Section - matches splash screen
+    logoBackgroundSection: {
+        width: '100%',
+        height: 320, // Slightly taller for better centering
+        backgroundColor: '#4f46e5', // Match logo color
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 40, // More top padding for better centering
+        paddingBottom: 20,
+    },
+    logoSection: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+        width: '100%',
+        backgroundColor: 'transparent', // Remove any background
+    },
+    logoIconContainer: {
+        width: 96, // w-24 = 96px
+        height: 96, // h-24 = 96px
+        borderRadius: 48, // Perfect circle
+        backgroundColor: '#4f46e5', // bg-indigo-600
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+        marginBottom: 24, // Space between logo and tagline
+    },
+    logoIconText: {
+        fontSize: 50, // text-5xl equivalent
+        fontWeight: '800', // font-extrabold
+        color: '#ffffff', // text-white
+        fontFamily: 'Georgia',
+        letterSpacing: 4, // tracking-widest equivalent
+    },
+    tagline: {
+        fontSize: 20,
+        color: '#e0e7ff', // Lighter color for contrast
+        fontWeight: '600',
+        letterSpacing: 0.5,
+        textAlign: 'center',
+        lineHeight: 24,
+    },
     content: {
         flex: 1,
         padding: 24,
     },
-    header: {
-        alignItems: 'center',
-        marginBottom: 32,
-        marginTop: 20,
-    },
-    logoContainer: {
-        width: 100,
-        height: 100,
-        borderRadius: 20,
-        backgroundColor: '#f0f4ff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#e0e7ff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        elevation: 3,
-    },
-    logoImage: {
-        width: 80,
-        height: 80,
-        borderRadius: 16,
-    },
-    // Option 2: Larger, more prominent logo
-    logoContainerLarge: {
-        width: 120,
-        height: 120,
-        borderRadius: 24,
-        backgroundColor: '#f0f4ff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-        borderWidth: 2,
-        borderColor: '#e0e7ff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.1,
-        shadowRadius: 16,
-        elevation: 4,
-    },
-    logoImageLarge: {
-        width: 100,
-        height: 100,
-        borderRadius: 20,
-    },
-    // Option 3: Square container with rounded logo
-    logoContainerSquare: {
-        width: 90,
-        height: 90,
-        borderRadius: 12,
-        backgroundColor: '#ffffff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-        borderWidth: 2,
-        borderColor: '#4f46e5',
-        shadowColor: '#4f46e5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 4,
-    },
-    logoImageSquare: {
-        width: 70,
-        height: 70,
-        borderRadius: 8,
-    },
-    // Option 4: Minimal style with no background
-    logoContainerMinimal: {
-        width: 80,
-        height: 80,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-    },
-    logoImageMinimal: {
-        width: 80,
-        height: 80,
-    },
-    appName: {
-        fontSize: 32,
-        fontWeight: '800',
-        color: '#4f46e5',
-        marginBottom: 8,
-        letterSpacing: -0.5,
-    },
-    tagline: {
-        fontSize: 15,
-        color: '#64748b',
-        fontWeight: '600',
-        letterSpacing: 0.5,
-    },
     welcomeSection: {
         alignItems: 'center',
         marginBottom: 32,
+        marginTop: 20,
     },
     welcomeTitle: {
         fontSize: 28,

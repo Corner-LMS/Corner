@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import auth from '@react-native-firebase/auth';
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ProfileInitials } from '@/components/ui/ProfileInitials';
 import { getSchoolById } from '@/constants/Schools';
 import ConnectivityIndicator from '../../components/ConnectivityIndicator';
+import CustomAlert from '../../components/CustomAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface UserData {
@@ -23,6 +24,7 @@ export default function Profile() {
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState(auth().currentUser);
     const [userData, setUserData] = useState<UserData | null>(null);
+    const [alertConfig, setAlertConfig] = useState<any>(null);
 
     useEffect(() => {
         const unsubscribe = auth().onAuthStateChanged(async (user) => {
@@ -53,26 +55,45 @@ export default function Profile() {
     }, []);
 
     const handleLogout = async () => {
-        Alert.alert(
-            'Log Out',
-            'Are you sure you want to log out?',
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Log Out',
+            message: 'Are you sure you want to log out?',
+            type: 'confirm',
+            actions: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig(null),
+                    style: 'cancel',
+                },
                 {
                     text: 'Log Out',
-                    style: 'destructive',
                     onPress: async () => {
+                        setAlertConfig(null);
                         try {
                             await auth().signOut();
                             router.replace('/(auth)/login');
                         } catch (error) {
                             console.error('Error signing out:', error);
-                            Alert.alert('Error', 'Failed to log out. Please try again.');
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: 'Failed to log out. Please try again.',
+                                type: 'error',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
                         }
-                    }
-                }
-            ]
-        );
+                    },
+                    style: 'destructive',
+                },
+            ],
+        });
     };
 
     if (loading) {
@@ -255,6 +276,14 @@ export default function Profile() {
                     </View>
                 )}
             </ScrollView>
+            <CustomAlert
+                visible={alertConfig?.visible || false}
+                title={alertConfig?.title || ''}
+                message={alertConfig?.message || ''}
+                type={alertConfig?.type || 'info'}
+                actions={alertConfig?.actions || []}
+                onDismiss={() => setAlertConfig(null)}
+            />
         </SafeAreaView>
     );
 }
