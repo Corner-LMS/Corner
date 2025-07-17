@@ -1,6 +1,7 @@
 import firestore from '@react-native-firebase/firestore';
 import { increment, serverTimestamp } from '@react-native-firebase/firestore';
 import { notificationService, NotificationData } from './notificationService';
+import auth from '@react-native-firebase/auth';
 
 export interface NotificationTrigger {
     type: 'announcement' | 'discussion_milestone' | 'discussion_replies' | 'teacher_discussion_milestone';
@@ -130,8 +131,34 @@ class NotificationHelpers {
                 // Calculate total badge count for all students
                 const totalBadgeCount = students.length;
                 await notificationService.sendPushNotificationToCourse(courseId, notificationData, totalBadgeCount);
+
+                // Also show a local notification for the current user (teacher) to confirm it was sent
+                const currentUser = auth().currentUser;
+                if (currentUser && currentUser.uid === teacherId) {
+                    await notificationService.showImmediateNotification({
+                        ...notificationData,
+                        title: `Announcement Sent!`,
+                        body: `Your announcement "${announcementData.title}" has been sent to ${students.length} students.`
+                    });
+                }
             } catch (error) {
                 console.error('❌ [PUSH] Error sending push notifications for announcement:', error);
+
+                // Fallback: Show local notification to confirm the announcement was created
+                const currentUser = auth().currentUser;
+                if (currentUser && currentUser.uid === teacherId) {
+                    try {
+                        await notificationService.showImmediateNotification({
+                            type: 'announcement',
+                            courseId: courseId,
+                            courseName: courseName,
+                            title: `Announcement Created`,
+                            body: `Your announcement "${announcementData.title}" has been created. Push notifications may not have been sent.`
+                        });
+                    } catch (localError) {
+                        console.error('❌ [PUSH] Error showing local notification:', localError);
+                    }
+                }
             }
 
             // Track notification in Firestore

@@ -48,7 +48,7 @@ export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
             await GoogleSignin.signOut();
         } catch (error) {
             // Ignore sign out errors
-            console.log('Sign out before sign in (expected):', error);
+            // console.log('Sign out before sign in (expected):', error);
         }
 
         // Get the users ID token

@@ -105,7 +105,7 @@ export class CacheManager {
             // Check if cache is stale and needs refreshing
             const isStale = await this.isCacheStale();
             if (isStale) {
-                console.log('Cache is stale - will refresh on next online sync');
+                // console.log('Cache is stale - will refresh on next online sync');
             }
         } catch (error) {
             console.error('Error initializing cache with maintenance:', error);

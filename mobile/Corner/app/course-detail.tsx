@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +39,16 @@ interface Discussion {
     likes?: { [userId: string]: any }; // Track who liked the discussion and when
 }
 
+interface CourseConversation {
+    id: string;
+    otherUserId: string;
+    otherUserName: string;
+    otherUserRole: string;
+    lastMessage: string;
+    lastMessageTime: string;
+    unreadCount: number;
+}
+
 export default function CourseDetailScreen() {
     const params = useLocalSearchParams();
     const { courseId, courseName, courseCode, instructorName, role, isArchived } = params;
@@ -47,7 +57,7 @@ export default function CourseDetailScreen() {
     // Check if course is archived
     const courseIsArchived = isArchived === 'true';
 
-    const [activeTab, setActiveTab] = useState<'announcements' | 'discussions'>('announcements');
+    const [activeTab, setActiveTab] = useState<'announcements' | 'discussions' | 'inbox'>('announcements');
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [discussions, setDiscussions] = useState<Discussion[]>([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -62,6 +72,9 @@ export default function CourseDetailScreen() {
     const [syncingDrafts, setSyncingDrafts] = useState(false);
     const [expandedAnnouncements, setExpandedAnnouncements] = useState<Set<string>>(new Set());
     const [alertConfig, setAlertConfig] = useState<any>(null);
+    const [courseConversations, setCourseConversations] = useState<CourseConversation[]>([]);
+    const [loadingInbox, setLoadingInbox] = useState(false);
+    const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
 
     // Convert plain text to HTML for RichTextEditor
     const handleContentChange = (html: string) => {
@@ -101,6 +114,135 @@ export default function CourseDetailScreen() {
             syncDataAfterReconnection();
         }
     }, [courseId, isOnline, hasReconnected]);
+
+    // Load course conversations when inbox tab is active
+    useEffect(() => {
+        if (activeTab === 'inbox' && courseId) {
+            loadCourseConversations();
+        }
+    }, [activeTab, courseId]);
+
+    const loadCourseConversations = async () => {
+        try {
+            setLoadingInbox(true);
+            const user = auth().currentUser;
+            if (!user) return;
+
+            // Get all messages related to this course where user is either sender or receiver
+            const sentMessagesQuery = await firestore()
+                .collection('messages')
+                .where('senderId', '==', user.uid)
+                .where('courseId', '==', courseId)
+                .orderBy('timestamp', 'desc')
+                .get();
+
+            const receivedMessagesQuery = await firestore()
+                .collection('messages')
+                .where('receiverId', '==', user.uid)
+                .where('courseId', '==', courseId)
+                .orderBy('timestamp', 'desc')
+                .get();
+
+            // Combine and group messages by conversation
+            const conversationMap = new Map<string, CourseConversation>();
+
+            // Process sent messages
+            for (const messageDoc of sentMessagesQuery.docs) {
+                const messageData = messageDoc.data();
+                const otherUserId = messageData.receiverId;
+                const conversationId = otherUserId;
+
+                if (!conversationMap.has(conversationId)) {
+                    // Get other user info
+                    let otherUserName = 'Unknown';
+                    let otherUserRole = 'student';
+
+                    try {
+                        const otherUserDoc = await firestore().collection('users').doc(otherUserId).get();
+                        if (otherUserDoc.exists()) {
+                            const otherUserData = otherUserDoc.data();
+                            otherUserName = otherUserData?.name || 'Unknown';
+                            otherUserRole = otherUserData?.role || 'student';
+                        }
+                    } catch (error) {
+                        console.error('Error fetching other user info:', error);
+                    }
+
+                    conversationMap.set(conversationId, {
+                        id: conversationId,
+                        otherUserId: otherUserId,
+                        otherUserName: otherUserName,
+                        otherUserRole: otherUserRole,
+                        lastMessage: messageData.content,
+                        lastMessageTime: messageData.timestamp,
+                        unreadCount: 0 // Sent messages are not unread
+                    });
+                } else {
+                    const conversation = conversationMap.get(conversationId)!;
+                    if (new Date(messageData.timestamp) > new Date(conversation.lastMessageTime)) {
+                        conversation.lastMessage = messageData.content;
+                        conversation.lastMessageTime = messageData.timestamp;
+                    }
+                }
+            }
+
+            // Process received messages
+            for (const messageDoc of receivedMessagesQuery.docs) {
+                const messageData = messageDoc.data();
+                const otherUserId = messageData.senderId;
+                const conversationId = otherUserId;
+
+                if (!conversationMap.has(conversationId)) {
+                    // Get other user info
+                    let otherUserName = 'Unknown';
+                    let otherUserRole = 'student';
+
+                    try {
+                        const otherUserDoc = await firestore().collection('users').doc(otherUserId).get();
+                        if (otherUserDoc.exists()) {
+                            const otherUserData = otherUserDoc.data();
+                            otherUserName = otherUserData?.name || 'Unknown';
+                            otherUserRole = otherUserData?.role || 'student';
+                        }
+                    } catch (error) {
+                        console.error('Error fetching other user info:', error);
+                    }
+
+                    conversationMap.set(conversationId, {
+                        id: conversationId,
+                        otherUserId: otherUserId,
+                        otherUserName: otherUserName,
+                        otherUserRole: otherUserRole,
+                        lastMessage: messageData.content,
+                        lastMessageTime: messageData.timestamp,
+                        unreadCount: messageData.read ? 0 : 1
+                    });
+                } else {
+                    const conversation = conversationMap.get(conversationId)!;
+                    if (new Date(messageData.timestamp) > new Date(conversation.lastMessageTime)) {
+                        conversation.lastMessage = messageData.content;
+                        conversation.lastMessageTime = messageData.timestamp;
+                        if (!messageData.read) {
+                            conversation.unreadCount += 1;
+                        }
+                    }
+                }
+            }
+
+            // Convert to array and sort by last message time
+            const conversationsList = Array.from(conversationMap.values())
+                .sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+
+            setCourseConversations(conversationsList);
+
+            // Reset unread count when inbox is viewed
+            setInboxUnreadCount(0);
+        } catch (error) {
+            console.error('Error loading course conversations:', error);
+        } finally {
+            setLoadingInbox(false);
+        }
+    };
 
     const loadDrafts = async () => {
         if (!courseId) return;
@@ -206,6 +348,26 @@ export default function CourseDetailScreen() {
                 console.error('Error caching discussions:', error);
             }
         });
+
+        // Listen to unread messages for inbox badge count
+        const user = auth().currentUser;
+        if (user) {
+            const unreadMessagesQuery = firestore()
+                .collection('messages')
+                .where('receiverId', '==', user.uid)
+                .where('courseId', '==', courseId)
+                .where('read', '==', false);
+
+            const unsubscribeUnreadMessages = unreadMessagesQuery.onSnapshot((snapshot) => {
+                setInboxUnreadCount(snapshot.docs.length);
+            });
+
+            return () => {
+                unsubscribeAnnouncements();
+                unsubscribeDiscussions();
+                unsubscribeUnreadMessages();
+            };
+        }
 
         return () => {
             unsubscribeAnnouncements();
@@ -1083,6 +1245,132 @@ export default function CourseDetailScreen() {
         );
     };
 
+    const renderInbox = () => {
+        const handleConversationPress = (conversation: CourseConversation) => {
+            router.push({
+                pathname: '/course-conversation',
+                params: {
+                    courseId: courseId as string,
+                    courseName: courseName as string,
+                    otherUserId: conversation.otherUserId,
+                    otherUserName: conversation.otherUserName,
+                    otherUserRole: conversation.otherUserRole
+                }
+            });
+        };
+
+        const handleNewMessage = () => {
+            router.push({
+                pathname: '/course-compose-message',
+                params: {
+                    courseId: courseId as string,
+                    courseName: courseName as string,
+                    role: role as string
+                }
+            });
+        };
+
+        const formatTimestamp = (timestamp: string) => {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+            if (diffInHours < 24) {
+                return date.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            } else if (diffInHours < 48) {
+                return 'Yesterday';
+            } else {
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
+                });
+            }
+        };
+
+        const getInitials = (name: string) => {
+            const nameParts = name.trim().split(' ');
+            if (nameParts.length >= 2) {
+                return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+            } else {
+                return name.substring(0, 2).toUpperCase();
+            }
+        };
+
+        return (
+            <View style={styles.contentContainer}>
+                {loadingInbox ? (
+                    <View style={styles.emptyState}>
+                        <ActivityIndicator size="large" color="#4f46e5" />
+                        <Text style={styles.emptyText}>Loading conversations...</Text>
+                    </View>
+                ) : courseConversations.length > 0 ? (
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        {courseConversations.map((conversation) => (
+                            <TouchableOpacity
+                                key={conversation.id}
+                                style={styles.conversationCard}
+                                onPress={() => handleConversationPress(conversation)}
+                            >
+                                <View style={styles.conversationHeader}>
+                                    <View style={styles.userInfo}>
+                                        <View style={styles.avatar}>
+                                            <Text style={styles.avatarText}>
+                                                {getInitials(conversation.otherUserName)}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.userDetails}>
+                                            <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
+                                                {conversation.otherUserName}
+                                            </Text>
+                                            <Text style={styles.userRole}>
+                                                {conversation.otherUserRole === 'teacher' ? 'Teacher' : 'Student'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.messageMeta}>
+                                        <Text style={styles.timestamp}>
+                                            {formatTimestamp(conversation.lastMessageTime)}
+                                        </Text>
+                                        {conversation.unreadCount > 0 && (
+                                            <View style={styles.unreadBadge}>
+                                                <Text style={styles.unreadCount}>{conversation.unreadCount}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                                <Text style={styles.lastMessage} numberOfLines={2}>
+                                    {conversation.lastMessage}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                ) : (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="chatbubbles-outline" size={64} color="#cbd5e0" />
+                        <Text style={styles.emptyText}>No conversations yet</Text>
+                        <Text style={styles.emptySubtext}>
+                            Start a conversation with someone in this course.
+                        </Text>
+                    </View>
+                )}
+
+                {/* New Message Button */}
+                {!courseIsArchived && (
+                    <TouchableOpacity
+                        style={styles.newMessageButton}
+                        onPress={handleNewMessage}
+                    >
+                        <Ionicons name="create" size={20} color="#fff" />
+                    </TouchableOpacity>
+                )}
+            </View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
@@ -1158,14 +1446,34 @@ export default function CourseDetailScreen() {
                         Discussions
                     </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'inbox' && styles.activeTab]}
+                    onPress={() => setActiveTab('inbox')}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.tabContent}>
+                        <Text style={[styles.tabText, activeTab === 'inbox' && styles.activeTabText]}>
+                            Inbox
+                        </Text>
+                        {inboxUnreadCount > 0 && (
+                            <View style={[styles.tabBadge, activeTab === 'inbox' && styles.activeTabBadge]}>
+                                <Text style={[styles.tabBadgeText, activeTab === 'inbox' && styles.activeTabBadgeText]}>
+                                    {inboxUnreadCount > 99 ? '99+' : inboxUnreadCount}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
             </View>
 
             {showCreateForm ? renderCreateForm() : (
                 <>
-                    {activeTab === 'announcements' ? renderAnnouncements() : renderDiscussions()}
+                    {activeTab === 'announcements' ? renderAnnouncements() :
+                        activeTab === 'discussions' ? renderDiscussions() :
+                            activeTab === 'inbox' ? renderInbox() : null}
 
-                    {/* Only show FAB if not archived and user can create content */}
-                    {!courseIsArchived && (activeTab === 'discussions' || role === 'teacher' || role === 'admin') && (
+                    {/* Only show FAB if not archived and user can create content, but not on inbox tab */}
+                    {!courseIsArchived && activeTab !== 'inbox' && (activeTab === 'discussions' || role === 'teacher' || role === 'admin') && (
                         <TouchableOpacity
                             style={styles.fab}
                             onPress={() => setShowCreateForm(true)}
@@ -1241,12 +1549,12 @@ const styles = StyleSheet.create({
     },
     tab: {
         flex: 1,
-        paddingVertical: 12,
+        paddingVertical: 10,
         alignItems: 'center',
         borderBottomWidth: 0,
         backgroundColor: '#e2e8f0',
         borderRadius: 12,
-        marginHorizontal: 6,
+        marginHorizontal: 4,
         marginTop: 8,
         marginBottom: 8,
         borderWidth: 1,
@@ -1267,10 +1575,10 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     tabText: {
-        fontSize: 15,
+        fontSize: 13,
         color: '#64748b',
         fontWeight: '600',
-        letterSpacing: 0.3,
+        letterSpacing: 0.2,
     },
     activeTabText: {
         color: '#fff',
@@ -1730,5 +2038,139 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         marginTop: 8,
+    },
+    conversationCard: {
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    conversationHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+    },
+    userInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        flex: 1,
+        marginRight: 8,
+    },
+    avatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#4f46e5',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    userDetails: {
+        flex: 1,
+        minWidth: 0,
+    },
+    userName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1e293b',
+    },
+    userRole: {
+        fontSize: 13,
+        color: '#64748b',
+    },
+    messageMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexShrink: 0,
+    },
+    timestamp: {
+        fontSize: 12,
+        color: '#94a3b8',
+        fontWeight: '500',
+        textAlign: 'right',
+    },
+    unreadBadge: {
+        backgroundColor: '#4f46e5',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    unreadCount: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    lastMessage: {
+        fontSize: 14,
+        color: '#475569',
+        lineHeight: 20,
+    },
+    newMessageButton: {
+        position: 'absolute',
+        bottom: 24,
+        right: 24,
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        backgroundColor: '#4f46e5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 12,
+        shadowColor: '#4f46e5',
+        shadowOffset: {
+            width: 0,
+            height: 8,
+        },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        flexDirection: 'row',
+    },
+    newMessageButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: '#64748b',
+        marginTop: 8,
+        textAlign: 'center',
+    },
+    tabContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    tabBadge: {
+        backgroundColor: '#ef4444',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginLeft: 8,
+    },
+    activeTabBadge: {
+        backgroundColor: '#fff',
+    },
+    tabBadgeText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    activeTabBadgeText: {
+        color: '#ef4444',
     },
 }); 

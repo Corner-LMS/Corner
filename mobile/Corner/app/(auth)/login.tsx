@@ -75,26 +75,33 @@ export default function Login() {
                         onPress: async () => {
                             setAlertConfig(null);
                             try {
-                                // Use normal login flow but with super admin privileges
-                                await login(email, password);
+                                // Use Firebase auth directly for super admin
+                                const userCredential = await auth().signInWithEmailAndPassword(email, password);
+                                const user = userCredential.user;
 
-                                // After successful login, ensure super admin user document exists
-                                const user = auth().currentUser;
-                                if (user) {
-                                    await firestore().collection('users').doc(user.uid).set({
-                                        email: 'corner.e.learning@gmail.com',
-                                        role: 'superadmin',
-                                        name: 'Super Admin',
-                                        createdAt: new Date(),
-                                        isSuperAdmin: true
-                                    }, { merge: true });
+                                // Check if email is verified
+                                if (!user.emailVerified) {
+                                    await auth().signOut();
+                                    throw new Error('Please verify your email before signing in.');
                                 }
 
-                                // Navigate to super admin dashboard instead of normal app
+                                // Create or update super admin user document
+                                await firestore().collection('users').doc(user.uid).set({
+                                    email: 'corner.e.learning@gmail.com',
+                                    role: 'superadmin',
+                                    name: 'Super Admin',
+                                    createdAt: new Date(),
+                                    isSuperAdmin: true,
+                                    // Skip school assignment for super admin
+                                    schoolId: null
+                                }, { merge: true });
+
+                                // Navigate to super admin dashboard
                                 router.replace('/super-admin-dashboard');
-                            } catch (error) {
+                            } catch (error: any) {
                                 console.error('Error in super admin login:', error);
-                                setError('Failed to login as super admin. Please check your credentials.');
+                                const errorMessage = error.message || 'Failed to login as super admin. Please check your credentials.';
+                                setError(errorMessage);
                             }
                         },
                         style: 'primary',
@@ -622,6 +629,67 @@ export default function Login() {
                                     Super Admin Access - Special privileges enabled
                                 </Text>
                             </View>
+                        )}
+
+                        {isSuperAdmin && (
+                            <TouchableOpacity
+                                style={styles.forgotPasswordButton}
+                                onPress={() => {
+                                    setAlertConfig({
+                                        visible: true,
+                                        title: 'Reset Super Admin Password',
+                                        message: 'A password reset link will be sent to corner.e.learning@gmail.com. Check your email and follow the instructions.',
+                                        type: 'info',
+                                        actions: [
+                                            {
+                                                text: 'Send Reset Link',
+                                                onPress: async () => {
+                                                    setAlertConfig(null);
+                                                    try {
+                                                        await auth().sendPasswordResetEmail('corner.e.learning@gmail.com');
+                                                        setAlertConfig({
+                                                            visible: true,
+                                                            title: 'Reset Link Sent',
+                                                            message: 'Check your email at corner.e.learning@gmail.com for password reset instructions.',
+                                                            type: 'success',
+                                                            actions: [
+                                                                {
+                                                                    text: 'OK',
+                                                                    onPress: () => setAlertConfig(null),
+                                                                    style: 'primary',
+                                                                },
+                                                            ],
+                                                        });
+                                                    } catch (error) {
+                                                        console.error('Error sending reset email:', error);
+                                                        setAlertConfig({
+                                                            visible: true,
+                                                            title: 'Error',
+                                                            message: 'Failed to send reset email. Please try again.',
+                                                            type: 'error',
+                                                            actions: [
+                                                                {
+                                                                    text: 'OK',
+                                                                    onPress: () => setAlertConfig(null),
+                                                                    style: 'primary',
+                                                                },
+                                                            ],
+                                                        });
+                                                    }
+                                                },
+                                                style: 'primary',
+                                            },
+                                            {
+                                                text: 'Cancel',
+                                                onPress: () => setAlertConfig(null),
+                                                style: 'cancel',
+                                            },
+                                        ],
+                                    });
+                                }}
+                            >
+                                <Text style={styles.forgotPasswordText}>Forgot Super Admin Password?</Text>
+                            </TouchableOpacity>
                         )}
 
                         {error && (

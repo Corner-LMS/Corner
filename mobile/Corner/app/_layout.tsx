@@ -287,6 +287,12 @@ export default function RootLayout() {
           <Stack.Screen name="survey" options={{ headerShown: false }} />
           <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
           <Stack.Screen name="super-admin-dashboard" options={{ headerShown: false }} />
+          <Stack.Screen name="manage-students" options={{ headerShown: false }} />
+          <Stack.Screen name="compose-message" options={{ headerShown: false }} />
+          <Stack.Screen name="message-detail" options={{ headerShown: false }} />
+          <Stack.Screen name="conversation" options={{ headerShown: false }} />
+          <Stack.Screen name="course-compose-message" options={{ headerShown: false }} />
+          <Stack.Screen name="course-conversation" options={{ headerShown: false }} />
         </Stack>
 
         {/* Global teacher online notification - only for students */}

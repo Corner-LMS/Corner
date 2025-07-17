@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 
@@ -11,8 +12,38 @@ import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
+// Custom Inbox Tab with Badge
+const InboxTab = ({ color }: { color: string }) => {
+  const [unreadCount, setUnreadCount] = useState(0);
 
+  useEffect(() => {
+    const user = auth().currentUser;
+    if (!user) return;
 
+    const unsubscribe = firestore()
+      .collection('messages')
+      .where('receiverId', '==', user.uid)
+      .where('read', '==', false)
+      .onSnapshot((snapshot) => {
+        setUnreadCount(snapshot.docs.length);
+      });
+
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <View style={styles.tabContainer}>
+      <Ionicons name="chatbox-ellipses" size={28} color={color} />
+      {unreadCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+};
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -71,6 +102,14 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="inbox"
+        options={{
+          title: 'Inbox',
+          tabBarIcon: ({ color }) => <InboxTab color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
         name="analytics"
         options={{
           title: 'Analytics',
@@ -97,3 +136,26 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabContainer: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -8,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});

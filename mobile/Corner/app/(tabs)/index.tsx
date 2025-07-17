@@ -29,6 +29,50 @@ interface CourseCardProps {
     children?: React.ReactNode;
 }
 
+// Custom Action Menu Component
+const ActionMenu = ({ visible, onClose, onArchive, onDelete, onManageStudents, courseName }: {
+    visible: boolean;
+    onClose: () => void;
+    onArchive: () => void;
+    onDelete: () => void;
+    onManageStudents: () => void;
+    courseName: string;
+}) => {
+    if (!visible) return null;
+
+    return (
+        <View style={styles.actionMenuOverlay}>
+            <TouchableOpacity style={styles.actionMenuBackdrop} onPress={onClose} />
+            <View style={styles.actionMenu}>
+                <View style={styles.actionMenuHeader}>
+                    <Text style={styles.actionMenuTitle}>{courseName}</Text>
+                    <TouchableOpacity onPress={onClose} style={styles.actionMenuClose}>
+                        <Ionicons name="close" size={20} color="#64748b" />
+                    </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.actionMenuItem} onPress={onManageStudents}>
+                    <Ionicons name="people" size={20} color="#4f46e5" />
+                    <Text style={styles.actionMenuText}>Manage Students</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionMenuItem} onPress={onArchive}>
+                    <Ionicons name="archive" size={20} color="#f59e0b" />
+                    <Text style={styles.actionMenuText}>Archive Course</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.actionMenuItem, styles.actionMenuItemDanger]} onPress={onDelete}>
+                    <Ionicons name="trash" size={20} color="#ef4444" />
+                    <Text style={[styles.actionMenuText, styles.actionMenuTextDanger]}>Delete Course</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+};
+
 export default function DashboardScreen() {
     const [loading, setLoading] = useState(true);
     const [courses, setCourses] = useState<any[]>([]);
@@ -38,6 +82,8 @@ export default function DashboardScreen() {
     const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
     const [schoolInfo, setSchoolInfo] = useState<any>(null);
     const [userData, setUserData] = useState<any>(null);
+    const [actionMenuVisible, setActionMenuVisible] = useState(false);
+    const [selectedCourse, setSelectedCourse] = useState<any>(null);
 
     // Memoized helper functions
     const getUserInitials = useCallback((user: FirebaseAuthTypes.User, userData: any) => {
@@ -142,10 +188,20 @@ export default function DashboardScreen() {
                     if (courseSnap.exists()) {
                         const courseData = courseSnap.data();
                         if (courseData) {
+                            // Get student count for this course
+                            const enrolledStudentsQuery = await firestore()
+                                .collection('users')
+                                .where('role', '==', 'student')
+                                .where('courseIds', 'array-contains', courseId)
+                                .get();
+
+                            const studentCount = enrolledStudentsQuery.size;
+
                             studentCoursesList.push({
                                 ...courseData,
                                 id: courseId,
-                                joinedAt: userData.courseJoinDates?.[courseId] || new Date().toISOString()
+                                joinedAt: userData.courseJoinDates?.[courseId] || new Date().toISOString(),
+                                studentCount: studentCount
                             });
 
                             // Fetch teacher name if not already cached
@@ -177,8 +233,25 @@ export default function DashboardScreen() {
                 const teacherCoursesList = snapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data() as any }))
                     .filter((course: any) => course.archived !== true);
-                setCourses(teacherCoursesList);
-                coursesList = teacherCoursesList;
+
+                // Get student counts for teacher's courses
+                const coursesWithStudentCounts = await Promise.all(
+                    teacherCoursesList.map(async (course: any) => {
+                        const enrolledStudentsQuery = await firestore()
+                            .collection('users')
+                            .where('role', '==', 'student')
+                            .where('courseIds', 'array-contains', course.id)
+                            .get();
+
+                        return {
+                            ...course,
+                            studentCount: enrolledStudentsQuery.size
+                        };
+                    })
+                );
+
+                setCourses(coursesWithStudentCounts);
+                coursesList = coursesWithStudentCounts;
             }
 
             if (userData.role === 'admin') {
@@ -194,10 +267,27 @@ export default function DashboardScreen() {
                         .where('schoolId', '==', adminSchoolId)
                         .get();
                     const adminCoursesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-                    setCourses(adminCoursesList);
+
+                    // Get student counts for admin's courses
+                    const coursesWithStudentCounts = await Promise.all(
+                        adminCoursesList.map(async (course: any) => {
+                            const enrolledStudentsQuery = await firestore()
+                                .collection('users')
+                                .where('role', '==', 'student')
+                                .where('courseIds', 'array-contains', course.id)
+                                .get();
+
+                            return {
+                                ...course,
+                                studentCount: enrolledStudentsQuery.size
+                            };
+                        })
+                    );
+
+                    setCourses(coursesWithStudentCounts);
 
                     // Batch fetch teacher names
-                    const teacherIds = [...new Set(adminCoursesList.map((course: any) => course.teacherId).filter(Boolean))];
+                    const teacherIds = [...new Set(coursesWithStudentCounts.map((course: any) => course.teacherId).filter(Boolean))];
                     const adminTeacherNamesMap: Record<string, string> = {};
 
                     const teacherPromises = teacherIds.map(async (teacherId: string) => {
@@ -216,7 +306,7 @@ export default function DashboardScreen() {
                     });
 
                     setTeacherNames(adminTeacherNamesMap);
-                    coursesList = adminCoursesList;
+                    coursesList = coursesWithStudentCounts;
                     teacherNamesMap = adminTeacherNamesMap;
                 }
             }
@@ -341,6 +431,86 @@ export default function DashboardScreen() {
             ]
         );
     }, []);
+
+    const handleActionMenu = useCallback((course: any) => {
+        setSelectedCourse(course);
+        setActionMenuVisible(true);
+    }, []);
+
+    const handleCloseActionMenu = useCallback(() => {
+        setActionMenuVisible(false);
+        setSelectedCourse(null);
+    }, []);
+
+    const handleManageStudents = useCallback(() => {
+        if (selectedCourse) {
+            handleCloseActionMenu();
+            router.push({
+                pathname: '/manage-students',
+                params: {
+                    courseId: selectedCourse.id,
+                    courseName: selectedCourse.name,
+                    courseCode: selectedCourse.code || 'N/A'
+                }
+            });
+        }
+    }, [selectedCourse, handleCloseActionMenu]);
+
+    const handleArchiveFromMenu = useCallback(() => {
+        if (selectedCourse) {
+            handleCloseActionMenu();
+            Alert.alert(
+                'Archive Course',
+                `Are you sure you want to archive "${selectedCourse.name}"?`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Archive',
+                        onPress: async () => {
+                            try {
+                                await firestore().collection('courses').doc(selectedCourse.id).update({
+                                    archived: true,
+                                    archivedAt: new Date().toISOString()
+                                });
+                                setCourses(prev => prev.filter(course => course.id !== selectedCourse.id));
+                                Alert.alert('Success', `"${selectedCourse.name}" has been archived.`);
+                            } catch (error) {
+                                console.error('Error archiving course:', error);
+                                Alert.alert('Error', 'Failed to archive course. Please try again.');
+                            }
+                        }
+                    }
+                ]
+            );
+        }
+    }, [selectedCourse, handleCloseActionMenu]);
+
+    const handleDeleteFromMenu = useCallback(() => {
+        if (selectedCourse) {
+            handleCloseActionMenu();
+            Alert.alert(
+                'Delete Course',
+                `Are you sure you want to delete "${selectedCourse.name}"?`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                await firestore().collection('courses').doc(selectedCourse.id).delete();
+                                setCourses(prev => prev.filter(course => course.id !== selectedCourse.id));
+                                Alert.alert('Success', `"${selectedCourse.name}" has been deleted.`);
+                            } catch (error) {
+                                console.error('Error deleting course:', error);
+                                Alert.alert('Error', 'Failed to delete course. Please try again.');
+                            }
+                        }
+                    }
+                ]
+            );
+        }
+    }, [selectedCourse, handleCloseActionMenu]);
 
     if (loading) {
         return (
@@ -495,17 +665,7 @@ export default function DashboardScreen() {
                                 teacherName={course.instructorName || 'You'}
                                 actionIcon="ellipsis-horizontal"
                                 actionColor="#4f46e5"
-                                onActionMenu={() => {
-                                    Alert.alert(
-                                        'Course Actions',
-                                        `Choose an action for ${course.name}`,
-                                        [
-                                            { text: 'Archive', onPress: () => handleArchiveCourse(course.id, course.name) },
-                                            { text: 'Delete', style: 'destructive', onPress: () => handleDeleteCourse(course.id, course.name) },
-                                            { text: 'Cancel', style: 'cancel' }
-                                        ]
-                                    );
-                                }}
+                                onActionMenu={() => handleActionMenu(course)}
                             />
                         ))
                     ) : role === 'admin' && courses.length > 0 ? (
@@ -572,6 +732,14 @@ export default function DashboardScreen() {
                     </TouchableOpacity>
                 )}
             </ScrollView>
+            <ActionMenu
+                visible={actionMenuVisible}
+                onClose={handleCloseActionMenu}
+                onArchive={handleArchiveFromMenu}
+                onDelete={handleDeleteFromMenu}
+                onManageStudents={handleManageStudents}
+                courseName={selectedCourse?.name || ''}
+            />
         </SafeAreaView>
     );
 }
@@ -641,6 +809,15 @@ const CourseCard: React.FC<CourseCardProps> = ({
                     <Ionicons name="person" size={16} color="#4f46e5" />
                     <Text style={styles.detailText}>By {teacherName}</Text>
                 </View>
+
+                {course.studentCount !== undefined && (
+                    <View style={styles.detailRow}>
+                        <Ionicons name="people" size={16} color="#10b981" />
+                        <Text style={styles.detailText}>
+                            {course.studentCount} {course.studentCount === 1 ? 'student' : 'students'} enrolled
+                        </Text>
+                    </View>
+                )}
 
                 {course.createdAt && (
                     <View style={styles.detailRow}>
@@ -1004,6 +1181,73 @@ const styles = StyleSheet.create({
     },
     loadingIndicator: {
         marginVertical: 40,
+    },
+    actionMenuOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    actionMenuBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    actionMenu: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        width: '80%',
+        maxWidth: 350,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    actionMenuHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e2e8f0',
+    },
+    actionMenuTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1a202c',
+    },
+    actionMenuClose: {
+        padding: 8,
+    },
+    actionMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f7fafc',
+    },
+    actionMenuItemDanger: {
+        borderBottomColor: '#fef3f2',
+    },
+    actionMenuText: {
+        flex: 1,
+        marginLeft: 12,
+        fontSize: 16,
+        color: '#4a5568',
+        fontWeight: '500',
+    },
+    actionMenuTextDanger: {
+        color: '#ef4444',
     },
 });
 

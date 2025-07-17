@@ -21,6 +21,9 @@ Notifications.setNotificationHandler({
         shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
+        shouldPresentAlert: true, // Show alert even when app is in foreground
+        shouldPresentBadge: true, // Show badge even when app is in foreground
+        shouldPresentSound: true, // Play sound even when app is in foreground
     }),
 });
 
@@ -235,19 +238,26 @@ class NotificationService {
             }
 
             const settings = userData.notificationSettings;
+            let shouldSend = false;
 
             switch (notificationType) {
                 case 'announcement':
-                    return settings.announcementNotifications ?? true;
+                    shouldSend = settings.announcementNotifications ?? true;
+                    break;
                 case 'discussion_milestone':
-                    return settings.discussionMilestoneNotifications ?? true;
+                    shouldSend = settings.discussionMilestoneNotifications ?? true;
+                    break;
                 case 'discussion_replies':
-                    return settings.replyNotifications ?? true;
+                    shouldSend = settings.replyNotifications ?? true;
+                    break;
                 case 'teacher_discussion_milestone':
-                    return settings.teacherDiscussionMilestoneNotifications ?? true;
+                    shouldSend = settings.teacherDiscussionMilestoneNotifications ?? true;
+                    break;
                 default:
-                    return true;
+                    shouldSend = true;
             }
+
+            return shouldSend;
         } catch (error) {
             console.error('❌ [PUSH] Error checking notification settings:', error);
             return true; // Default to true on error
@@ -310,6 +320,8 @@ class NotificationService {
                     body: notificationData.body,
                     data: { ...notificationData },
                     sound: 'default',
+                    priority: Notifications.AndroidNotificationPriority.HIGH,
+                    vibrate: [0, 250, 250, 250],
                 },
                 trigger: null, // Send immediately
             });
@@ -317,6 +329,29 @@ class NotificationService {
             return notificationId;
         } catch (error) {
             console.error('❌ [PUSH] Error scheduling local notification:', error);
+            throw error;
+        }
+    }
+
+    // Show immediate local notification (guaranteed to show in foreground)
+    async showImmediateNotification(notificationData: NotificationData) {
+        try {
+            const notificationId = await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: notificationData.title,
+                    body: notificationData.body,
+                    data: { ...notificationData },
+                    sound: 'default',
+                    priority: Notifications.AndroidNotificationPriority.HIGH,
+                    vibrate: [0, 250, 250, 250],
+                    autoDismiss: false, // Don't auto-dismiss
+                },
+                trigger: null, // Send immediately
+            });
+
+            return notificationId;
+        } catch (error) {
+            console.error('❌ [PUSH] Error showing immediate notification:', error);
             throw error;
         }
     }

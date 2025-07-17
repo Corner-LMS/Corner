@@ -28,7 +28,7 @@ export default function MigrateDataScreen() {
 
     const addLog = (message: string) => {
         setMigrationLog(prev => [...prev, message]);
-        console.log(message);
+        // console.log(message);
     };
 
     const migrateCourseSchools = async () => {

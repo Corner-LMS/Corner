@@ -135,7 +135,22 @@ const getAllCourses = async (req, res) => {
             return res.status(403).json({ msg: 'Access denied' });
         }
 
-        res.status(200).json({ courses });
+        // Add student count for each course
+        const coursesWithStudentCount = await Promise.all(
+            courses.map(async (course) => {
+                const studentCount = await User.countDocuments({
+                    role: 'student',
+                    courses: course._id
+                });
+
+                return {
+                    ...course.toObject(),
+                    studentCount
+                };
+            })
+        );
+
+        res.status(200).json({ courses: coursesWithStudentCount });
     } catch (error) {
         console.error('Error fetching courses:', error.message);
         res.status(500).json({ error: 'Failed to fetch courses' });
@@ -165,7 +180,22 @@ const getStudentCourses = async (req, res) => {
         // Find all courses associated with these instructors
         const courses = await Course.find({ teacherId: { $in: instructorIds } });
 
-        res.status(200).json({ courses });
+        // Add student count for each course
+        const coursesWithStudentCount = await Promise.all(
+            courses.map(async (course) => {
+                const studentCount = await User.countDocuments({
+                    role: 'student',
+                    courses: course._id
+                });
+
+                return {
+                    ...course.toObject(),
+                    studentCount
+                };
+            })
+        );
+
+        res.status(200).json({ courses: coursesWithStudentCount });
     } catch (error) {
         console.error('Error fetching student courses:', error);
         res.status(500).json({ message: 'Failed to fetch courses', error: error.message });
@@ -191,7 +221,22 @@ const getTeacherCourses = async (req, res) => {
         // Fetch all courses where the teacher is the instructor
         const courses = await Course.find({ teacherId: user.userId });
 
-        res.status(200).json({ courses });
+        // Add student count for each course
+        const coursesWithStudentCount = await Promise.all(
+            courses.map(async (course) => {
+                const studentCount = await User.countDocuments({
+                    role: 'student',
+                    courses: course._id
+                });
+
+                return {
+                    ...course.toObject(),
+                    studentCount
+                };
+            })
+        );
+
+        res.status(200).json({ courses: coursesWithStudentCount });
     } catch (error) {
         console.error('Error fetching teacher courses:', error);
         res.status(500).json({ message: 'Failed to fetch courses', error: error.message });
