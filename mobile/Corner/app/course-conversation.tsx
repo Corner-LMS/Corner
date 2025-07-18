@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,9 +35,11 @@ export default function CourseConversationScreen() {
     const [userData, setUserData] = useState<any>(null);
     const scrollViewRef = useRef<ScrollView>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         loadUserAndMessages();
+        setupRealTimeListener();
 
         // Add keyboard listeners
         const keyboardDidShowListener = Keyboard.addListener(
@@ -64,6 +66,68 @@ export default function CourseConversationScreen() {
         };
     }, [courseId, otherUserId]);
 
+    const setupRealTimeListener = () => {
+        const user = auth().currentUser;
+        if (!user) return;
+
+        // Set up real-time listener for messages between these two users in this course
+        const unsubscribe = firestore()
+            .collection('messages')
+            .where('courseId', '==', courseId)
+            .where('senderId', 'in', [user.uid, otherUserId])
+            .where('receiverId', 'in', [user.uid, otherUserId])
+            .orderBy('timestamp', 'asc')
+            .onSnapshot(async (snapshot) => {
+                const messagesList: Message[] = [];
+
+                for (const messageDoc of snapshot.docs) {
+                    const messageData = messageDoc.data();
+
+                    // Only include messages between these two users for this course
+                    if ((messageData.senderId === user.uid && messageData.receiverId === otherUserId) ||
+                        (messageData.senderId === otherUserId && messageData.receiverId === user.uid)) {
+
+                        messagesList.push({
+                            id: messageDoc.id,
+                            senderId: messageData.senderId,
+                            senderName: messageData.senderName,
+                            receiverId: messageData.receiverId,
+                            receiverName: messageData.receiverName,
+                            content: messageData.content,
+                            timestamp: messageData.timestamp,
+                            read: messageData.read || false,
+                            courseId: messageData.courseId,
+                            courseName: messageData.courseName
+                        });
+
+                        // Mark received messages as read
+                        if (messageData.receiverId === user.uid && !messageData.read) {
+                            try {
+                                await firestore().collection('messages').doc(messageDoc.id).update({
+                                    read: true
+                                });
+                            } catch (error) {
+                                console.error('Error marking message as read:', error);
+                            }
+                        }
+                    }
+                }
+
+                setMessages(messagesList);
+
+                // Scroll to bottom for new messages
+                if (messagesList.length > messages.length) {
+                    setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                    }, 100);
+                }
+            }, (error) => {
+                console.error('Error in real-time listener:', error);
+            });
+
+        return unsubscribe;
+    };
+
     const loadUserAndMessages = async () => {
         try {
             const user = auth().currentUser;
@@ -73,69 +137,10 @@ export default function CourseConversationScreen() {
             if (userDoc.exists()) {
                 setUserData(userDoc.data());
             }
-
-            await loadMessages(user.uid);
         } catch (error) {
             console.error('Error loading user data:', error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const loadMessages = async (userId: string) => {
-        try {
-            // Get messages between the two users for this specific course
-            const messagesQuery = await firestore()
-                .collection('messages')
-                .where('courseId', '==', courseId)
-                .where('senderId', 'in', [userId, otherUserId])
-                .where('receiverId', 'in', [userId, otherUserId])
-                .orderBy('timestamp', 'asc')
-                .get();
-
-            const messagesList: Message[] = [];
-
-            for (const messageDoc of messagesQuery.docs) {
-                const messageData = messageDoc.data();
-
-                // Only include messages between these two users for this course
-                if ((messageData.senderId === userId && messageData.receiverId === otherUserId) ||
-                    (messageData.senderId === otherUserId && messageData.receiverId === userId)) {
-
-                    messagesList.push({
-                        id: messageDoc.id,
-                        senderId: messageData.senderId,
-                        senderName: messageData.senderName,
-                        receiverId: messageData.receiverId,
-                        receiverName: messageData.receiverName,
-                        content: messageData.content,
-                        timestamp: messageData.timestamp,
-                        read: messageData.read || false,
-                        courseId: messageData.courseId,
-                        courseName: messageData.courseName
-                    });
-
-                    // Mark received messages as read
-                    if (messageData.receiverId === userId && !messageData.read) {
-                        try {
-                            await firestore().collection('messages').doc(messageDoc.id).update({
-                                read: true
-                            });
-                        } catch (error) {
-                            console.error('Error marking message as read:', error);
-                        }
-                    }
-                }
-            }
-
-            setMessages(messagesList);
-
-            // Scroll to bottom after messages load
-            setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        } catch (error) {
-            console.error('Error loading messages:', error);
         }
     };
 
@@ -160,14 +165,6 @@ export default function CourseConversationScreen() {
             };
 
             await firestore().collection('messages').add(messageData);
-
-            // Add message to local state
-            const newMessageObj: Message = {
-                id: Date.now().toString(), // Temporary ID
-                ...messageData
-            };
-
-            setMessages(prev => [...prev, newMessageObj]);
             setNewMessage('');
 
             // Scroll to bottom
@@ -178,6 +175,19 @@ export default function CourseConversationScreen() {
             console.error('Error sending message:', error);
         } finally {
             setSending(false);
+        }
+    };
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            // Force a refresh by temporarily clearing messages and letting the listener reload
+            setMessages([]);
+            // The real-time listener will automatically reload the messages
+        } catch (error) {
+            console.error('Error refreshing messages:', error);
+        } finally {
+            setRefreshing(false);
         }
     };
 
@@ -251,6 +261,9 @@ export default function CourseConversationScreen() {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     onScrollBeginDrag={() => Keyboard.dismiss()}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+                    }
                 >
                     {messages.map((message) => {
                         const isOwnMessage = message.senderId === auth().currentUser?.uid;

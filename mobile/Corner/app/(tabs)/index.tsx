@@ -26,6 +26,7 @@ interface CourseCardProps {
     actionColor?: string;
     onAction?: () => void;
     onActionMenu?: () => void;
+    onViewStudents?: () => void;
     children?: React.ReactNode;
 }
 
@@ -442,19 +443,30 @@ export default function DashboardScreen() {
         setSelectedCourse(null);
     }, []);
 
-    const handleManageStudents = useCallback(() => {
+    const handleManageStudents = () => {
         if (selectedCourse) {
-            handleCloseActionMenu();
             router.push({
                 pathname: '/manage-students',
                 params: {
                     courseId: selectedCourse.id,
                     courseName: selectedCourse.name,
-                    courseCode: selectedCourse.code || 'N/A'
+                    role: role
                 }
             });
         }
-    }, [selectedCourse, handleCloseActionMenu]);
+        setActionMenuVisible(false);
+    };
+
+    const handleViewStudents = (courseId: string, courseName: string) => {
+        router.push({
+            pathname: '/view-students',
+            params: {
+                courseId: courseId,
+                courseName: courseName,
+                role: role
+            }
+        });
+    };
 
     const handleArchiveFromMenu = useCallback(() => {
         if (selectedCourse) {
@@ -654,6 +666,7 @@ export default function DashboardScreen() {
                                 onAction={() => handleUnjoinCourse(course.id, course.name)}
                                 actionIcon="exit-outline"
                                 actionColor="#ff6b6b"
+                                onViewStudents={() => handleViewStudents(course.id, course.name)}
                             />
                         ))
                     ) : role === 'teacher' && courses.length > 0 ? (
@@ -754,6 +767,7 @@ const CourseCard: React.FC<CourseCardProps> = ({
     actionColor,
     onAction,
     onActionMenu,
+    onViewStudents,
     children
 }) => {
     return (
@@ -837,6 +851,20 @@ const CourseCard: React.FC<CourseCardProps> = ({
                     </View>
                 )}
             </View>
+
+            {/* View Students Button for Students */}
+            {role === 'student' && onViewStudents && (
+                <TouchableOpacity
+                    style={styles.viewStudentsBtn}
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        onViewStudents();
+                    }}
+                >
+                    <Ionicons name="people-outline" size={16} color="#4f46e5" />
+                    <Text style={styles.viewStudentsText}>View Students</Text>
+                </TouchableOpacity>
+            )}
         </TouchableOpacity>
     );
 };
@@ -1248,6 +1276,24 @@ const styles = StyleSheet.create({
     },
     actionMenuTextDanger: {
         color: '#ef4444',
+    },
+    viewStudentsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        backgroundColor: '#f7fafc',
+        borderRadius: 12,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    viewStudentsText: {
+        marginLeft: 8,
+        fontSize: 14,
+        color: '#4f46e5',
+        fontWeight: '600',
     },
 });
 

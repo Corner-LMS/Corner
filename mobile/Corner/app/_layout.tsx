@@ -293,6 +293,7 @@ export default function RootLayout() {
           <Stack.Screen name="conversation" options={{ headerShown: false }} />
           <Stack.Screen name="course-compose-message" options={{ headerShown: false }} />
           <Stack.Screen name="course-conversation" options={{ headerShown: false }} />
+          <Stack.Screen name="view-students" options={{ headerShown: false }} />
         </Stack>
 
         {/* Global teacher online notification - only for students */}

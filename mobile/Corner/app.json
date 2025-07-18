@@ -4,10 +4,10 @@
     "slug": "Corner",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.jpg",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/images/splash-icon.jpg",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#4f46e5"
     },
@@ -18,32 +18,31 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.cornerbusinessgroup.corner",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "icon": "./assets/images/icon.jpg"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.jpg",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#4f46e5"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.cornerbusinessgroup.corner",
       "googleServicesFile": "./google-services.json",
-      "icon": "./assets/images/icon.jpg",
+      "icon": "./assets/images/icon.png",
       "notification": {
-        "icon": "./assets/images/notification-icon.jpg",
+        "icon": "./assets/images/notification-icon.png",
         "color": "#4f46e5"
       }
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.jpg"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen"
-       
       ],
       [
         "@react-native-google-signin/google-signin"
