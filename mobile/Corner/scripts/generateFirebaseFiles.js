@@ -23,4 +23,6 @@ function decodeFile(envVarName, outputFilename) {
 // === Firebase Files ===
 decodeFile('GOOGLE_SERVICES_JSON_B64', 'google-services.json'); // Android
 decodeFile('GOOGLE_SERVICES_PLIST_B64', 'GoogleService-Info.plist'); // iOS
+decodeFile('OPENAI_API_KEY_B64', 'config/openai.config.ts'); // OpenAI API Key
+decodeFile('GOOGLE_SIGN_IN_B64', 'config/googleSignIn.ts'); // Google Sign In Web Client ID
 // decodeFile('FIREBASE_ADMIN_SDK_B64', 'corner-70a1e-firebase-adminsdk-fbsvc-10c9a337c5.json'); // Optional

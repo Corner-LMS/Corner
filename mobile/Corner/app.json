@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Corner",
+    "name": "${APP_NAME}",
     "slug": "Corner",
     "version": "1.0.0",
     "orientation": "portrait",
