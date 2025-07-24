@@ -135,7 +135,8 @@ export default function CourseDetailScreen() {
     const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
     const [drafts, setDrafts] = useState<DraftPost[]>([]);
     const [syncingDrafts, setSyncingDrafts] = useState(false);
-    const [expandedAnnouncements, setExpandedAnnouncements] = useState<Set<string>>(new Set());
+    const [expandedAnnouncements, setExpandedAnnouncements] = useState<{ [key: string]: boolean }>({});
+    const [expandedDiscussions, setExpandedDiscussions] = useState<{ [key: string]: boolean }>({});
     const [alertConfig, setAlertConfig] = useState<any>(null);
     const [courseConversations, setCourseConversations] = useState<CourseConversation[]>([]);
     const [loadingInbox, setLoadingInbox] = useState(false);
@@ -143,7 +144,11 @@ export default function CourseDetailScreen() {
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
     const [selectedItem, setSelectedItem] = useState<{ id: string, type: 'announcement' | 'discussion', title: string } | null>(null);
     const [isLoadingContent, setIsLoadingContent] = useState(true);
-    const fadeAnim = new Animated.Value(0);
+    const fadeAnim = new Animated.Value(1); // Start visible instead of invisible
+
+    // Track if Firebase listeners are already set up
+    const listenersSetupRef = useRef(false);
+    const fadeAnimRef = useRef(1); // Start at 1 to match
 
     // Convert plain text to HTML for RichTextEditor
     const handleContentChange = (html: string) => {
@@ -217,39 +222,37 @@ export default function CourseDetailScreen() {
     // Animate content fade in when loading completes
     useEffect(() => {
         if (!isLoadingContent) {
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-            }).start();
+            // Ensure content is fully visible when not loading
+            fadeAnim.setValue(1);
+            fadeAnimRef.current = 1;
         } else {
             fadeAnim.setValue(0);
+            fadeAnimRef.current = 0;
         }
     }, [isLoadingContent]);
 
     // Animate content fade in when switching tabs (but not when closing modal)
     useEffect(() => {
         if (!isLoadingContent && !showCreateForm) {
-            // Only animate when switching tabs, not when closing modal
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-            }).start();
+            // Ensure content is visible when switching tabs
+            fadeAnim.setValue(1);
+            fadeAnimRef.current = 1;
         }
-    }, [activeTab]);
+    }, [activeTab, isLoadingContent, showCreateForm]);
 
     // Animate content fade in when modal is closed
     useEffect(() => {
         if (!showCreateForm && !isLoadingContent) {
             // Ensure content is visible when modal is closed
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 200,
-                useNativeDriver: true,
-            }).start();
+            fadeAnim.setValue(1);
+            fadeAnimRef.current = 1;
         }
     }, [showCreateForm, isLoadingContent]);
+
+    // Reset listeners setup flag when courseId changes
+    useEffect(() => {
+        listenersSetupRef.current = false;
+    }, [courseId]);
 
     const loadCourseConversations = async () => {
         try {
@@ -432,7 +435,17 @@ export default function CourseDetailScreen() {
     const setupFirebaseListeners = () => {
         if (!courseId) return;
 
-        setIsLoadingContent(true);
+        // Prevent duplicate listener setup
+        if (listenersSetupRef.current) {
+            return;
+        }
+
+        listenersSetupRef.current = true;
+
+        // Only set loading state if we don't have any content yet
+        if (announcements.length === 0 && discussions.length === 0) {
+            setIsLoadingContent(true);
+        }
 
         let announcementsLoaded = false;
         let discussionsLoaded = false;
@@ -991,7 +1004,77 @@ export default function CourseDetailScreen() {
         }
     };
 
+    const handleAnnouncementPress = async (announcement: Announcement) => {
+        // Toggle expansion using proper state update
+        const wasExpanded = expandedAnnouncements[announcement.id];
+
+        if (wasExpanded) {
+            setExpandedAnnouncements(prev => {
+                const newSet = { ...prev };
+                delete newSet[announcement.id];
+                return newSet;
+            });
+        } else {
+            setExpandedAnnouncements(prev => {
+                const newSet = { ...prev };
+                newSet[announcement.id] = true;
+                return newSet;
+            });
+        }
+    };
+
+    const handleAnnouncementReadMore = (announcement: Announcement) => {
+        setExpandedAnnouncements(prev => {
+            const newSet = { ...prev };
+            newSet[announcement.id] = true;
+            return newSet;
+        });
+    };
+
+    const handleAnnouncementReadLess = (announcement: Announcement) => {
+        setExpandedAnnouncements(prev => {
+            const newSet = { ...prev };
+            delete newSet[announcement.id];
+            return newSet;
+        });
+    };
+
     const handleDiscussionPress = (discussion: Discussion) => {
+        // Toggle expansion using proper state update
+        const wasExpanded = expandedDiscussions[discussion.id];
+
+        if (wasExpanded) {
+            setExpandedDiscussions(prev => {
+                const newSet = { ...prev };
+                delete newSet[discussion.id];
+                return newSet;
+            });
+        } else {
+            setExpandedDiscussions(prev => {
+                const newSet = { ...prev };
+                newSet[discussion.id] = true;
+                return newSet;
+            });
+        }
+    };
+
+    const handleDiscussionReadMore = (discussion: Discussion) => {
+        setExpandedDiscussions(prev => {
+            const newSet = { ...prev };
+            newSet[discussion.id] = true;
+            return newSet;
+        });
+    };
+
+    const handleDiscussionReadLess = (discussion: Discussion) => {
+        setExpandedDiscussions(prev => {
+            const newSet = { ...prev };
+            delete newSet[discussion.id];
+            return newSet;
+        });
+    };
+
+    const handleDiscussionNavigation = (discussion: Discussion) => {
         router.push({
             pathname: '/discussion-detail',
             params: {
@@ -1009,18 +1092,23 @@ export default function CourseDetailScreen() {
         if (!auth().currentUser || !courseId) return;
 
         try {
+            // Use a separate Firebase instance to avoid interfering with listeners
             const announcementRef = firestore().collection('courses').doc(courseId as string).collection('announcements').doc(announcementId);
-            const announcementDoc = await announcementRef.get();
 
-            if (announcementDoc.exists()) {
-                const views = announcementDoc.data()?.views || {};
-                // Only record view if user hasn't viewed it before
-                if (!views[auth().currentUser?.uid || '']) {
-                    await announcementRef.update({
-                        [`views.${auth().currentUser?.uid}`]: firestore.FieldValue.serverTimestamp()
-                    });
+            // Use a transaction to avoid race conditions
+            await firestore().runTransaction(async (transaction) => {
+                const announcementDoc = await transaction.get(announcementRef);
+
+                if (announcementDoc.exists()) {
+                    const views = announcementDoc.data()?.views || {};
+                    // Only record view if user hasn't viewed it before
+                    if (!views[auth().currentUser?.uid || '']) {
+                        transaction.update(announcementRef, {
+                            [`views.${auth().currentUser?.uid}`]: firestore.FieldValue.serverTimestamp()
+                        });
+                    }
                 }
-            }
+            });
         } catch (error) {
             console.error('Error recording announcement view:', error);
         }
@@ -1054,21 +1142,12 @@ export default function CourseDetailScreen() {
         }
     };
 
-    const handleAnnouncementPress = async (announcement: Announcement) => {
-        // Record view if not already viewed
-        await recordAnnouncementView(announcement.id);
-
-        // Toggle expansion
-        const newExpanded = new Set(expandedAnnouncements);
-        if (newExpanded.has(announcement.id)) {
-            newExpanded.delete(announcement.id);
-        } else {
-            newExpanded.add(announcement.id);
-        }
-        setExpandedAnnouncements(newExpanded);
+    const getAnnouncementPreview = (content: string, maxLength: number = 100) => {
+        if (content.length <= maxLength) return content;
+        return content.substring(0, maxLength) + '...';
     };
 
-    const getAnnouncementPreview = (content: string, maxLength: number = 100) => {
+    const getDiscussionPreview = (content: string, maxLength: number = 100) => {
         if (content.length <= maxLength) return content;
         return content.substring(0, maxLength) + '...';
     };
@@ -1113,11 +1192,7 @@ export default function CourseDetailScreen() {
             ) : (
                 <Animated.View style={{ opacity: fadeAnim }}>
                     {announcements.map((announcement) => (
-                        <TouchableOpacity
-                            key={announcement.id}
-                            style={styles.postCard}
-                            onPress={() => handleAnnouncementPress(announcement)}
-                        >
+                        <View key={announcement.id} style={styles.postCard}>
                             <View style={styles.postHeader}>
                                 <Text style={styles.postTitle}>{announcement.title}</Text>
                                 <View style={styles.postHeaderRight}>
@@ -1145,27 +1220,35 @@ export default function CourseDetailScreen() {
                             <View style={styles.postContentContainer}>
                                 <MarkdownRenderer
                                     content={
-                                        expandedAnnouncements.has(announcement.id)
+                                        expandedAnnouncements[announcement.id]
                                             ? announcement.content
                                             : getAnnouncementPreview(announcement.content)
                                     }
                                 />
                             </View>
 
-                            {/* Show "read more" indicator if content is truncated and not expanded */}
-                            {announcement.content.length > 100 && !expandedAnnouncements.has(announcement.id) && (
-                                <View style={styles.readMoreIndicator}>
+                            {/* Show "read more" button if content is truncated and not expanded */}
+                            {announcement.content.length > 100 && !expandedAnnouncements[announcement.id] && (
+                                <TouchableOpacity
+                                    style={styles.readMoreIndicator}
+                                    onPress={() => handleAnnouncementReadMore(announcement)}
+                                    activeOpacity={0.7}
+                                >
                                     <Ionicons name="chevron-down" size={16} color="#4f46e5" />
                                     <Text style={styles.readMoreText}>Read more</Text>
-                                </View>
+                                </TouchableOpacity>
                             )}
 
-                            {/* Show "read less" indicator if expanded */}
-                            {expandedAnnouncements.has(announcement.id) && (
-                                <View style={styles.readMoreIndicator}>
+                            {/* Show "read less" button if expanded */}
+                            {expandedAnnouncements[announcement.id] && (
+                                <TouchableOpacity
+                                    style={styles.readMoreIndicator}
+                                    onPress={() => handleAnnouncementReadLess(announcement)}
+                                    activeOpacity={0.7}
+                                >
                                     <Ionicons name="chevron-up" size={16} color="#4f46e5" />
                                     <Text style={styles.readMoreText}>Read less</Text>
-                                </View>
+                                </TouchableOpacity>
                             )}
 
                             {/* Unread indicator - only show for students, not for the author */}
@@ -1199,7 +1282,7 @@ export default function CourseDetailScreen() {
                                     <Text style={styles.cachedText}>Cached content</Text>
                                 </View>
                             )}
-                        </TouchableOpacity>
+                        </View>
                     ))}
                 </Animated.View>
             )}
@@ -1318,12 +1401,7 @@ export default function CourseDetailScreen() {
                 ) : (
                     <Animated.View style={{ opacity: fadeAnim }}>
                         {discussions.map((discussion) => (
-                            <TouchableOpacity
-                                key={discussion.id}
-                                style={styles.postCard}
-                                onPress={() => !courseIsArchived && handleDiscussionPress(discussion)}
-                                disabled={courseIsArchived}
-                            >
+                            <View key={discussion.id} style={styles.postCard}>
                                 <View style={styles.postHeader}>
                                     <Text style={styles.postTitle}>{discussion.title}</Text>
                                     <View style={styles.postHeaderRight}>
@@ -1352,8 +1430,39 @@ export default function CourseDetailScreen() {
                                     </View>
                                 </View>
                                 <View style={styles.postContentContainer}>
-                                    <MarkdownRenderer content={discussion.content} />
+                                    <MarkdownRenderer
+                                        content={
+                                            expandedDiscussions[discussion.id]
+                                                ? discussion.content
+                                                : getDiscussionPreview(discussion.content)
+                                        }
+                                    />
                                 </View>
+
+                                {/* Show "read more" button if content is truncated and not expanded */}
+                                {discussion.content.length > 100 && !expandedDiscussions[discussion.id] && (
+                                    <TouchableOpacity
+                                        style={styles.readMoreIndicator}
+                                        onPress={() => handleDiscussionReadMore(discussion)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="chevron-down" size={16} color="#4f46e5" />
+                                        <Text style={styles.readMoreText}>Read more</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Show "read less" button if expanded */}
+                                {expandedDiscussions[discussion.id] && (
+                                    <TouchableOpacity
+                                        style={styles.readMoreIndicator}
+                                        onPress={() => handleDiscussionReadLess(discussion)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="chevron-up" size={16} color="#4f46e5" />
+                                        <Text style={styles.readMoreText}>Read less</Text>
+                                    </TouchableOpacity>
+                                )}
+
                                 <View style={styles.postMeta}>
                                     <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
                                     <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
@@ -1380,7 +1489,18 @@ export default function CourseDetailScreen() {
                                             <Ionicons name="chatbubble-outline" size={14} color="#666" /> {discussion.replies} replies
                                         </Text>
                                     </View>
-                                    {!courseIsArchived && <Ionicons name="chevron-forward" size={16} color="#666" />}
+                                    {!courseIsArchived && (
+                                        <TouchableOpacity
+                                            style={styles.viewDiscussionButton}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                handleDiscussionNavigation(discussion);
+                                            }}
+                                        >
+                                            <Text style={styles.viewDiscussionText}>View Discussion</Text>
+                                            <Ionicons name="chevron-forward" size={16} color="#4f46e5" />
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                                 {courseIsArchived && (
                                     <View style={styles.archivedNotice}>
@@ -1394,7 +1514,7 @@ export default function CourseDetailScreen() {
                                         <Text style={styles.cachedText}>Cached content</Text>
                                     </View>
                                 )}
-                            </TouchableOpacity>
+                            </View>
                         ))}
                     </Animated.View>
                 )}
@@ -2255,17 +2375,28 @@ const styles = StyleSheet.create({
     readMoreIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
-        padding: 8,
+        justifyContent: 'center',
+        marginTop: 12,
+        marginBottom: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
         backgroundColor: '#f8fafc',
-        borderRadius: 8,
-        gap: 4,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        alignSelf: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     readMoreText: {
         fontSize: 14,
         color: '#4f46e5',
-        fontWeight: '500',
-        marginLeft: 4,
+        fontWeight: '600',
+        marginLeft: 6,
+        letterSpacing: 0.3,
     },
     unreadIndicator: {
         flexDirection: 'row',
@@ -2591,5 +2722,27 @@ const styles = StyleSheet.create({
         fontSize: 18,
         color: '#64748b',
         marginTop: 10,
+    },
+    viewDiscussionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        backgroundColor: '#f8fafc',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    viewDiscussionText: {
+        color: '#4f46e5',
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.3,
     },
 }); 
