@@ -21,7 +21,6 @@ interface CourseCardProps {
     course: any;
     role: string;
     teacherName: string;
-    isArchived?: boolean;
     actionIcon?: keyof typeof Ionicons.glyphMap;
     actionColor?: string;
     onAction?: () => void;
@@ -199,7 +198,7 @@ export default function DashboardScreen() {
 
                     if (courseSnap.exists()) {
                         const courseData = courseSnap.data();
-                        if (courseData) {
+                        if (courseData && !courseData.archived) { // Filter out archived courses
                             // Get student count for this course
                             const enrolledStudentsQuery = await firestore()
                                 .collection('users')
@@ -237,14 +236,16 @@ export default function DashboardScreen() {
                     .orderBy('createdAt', 'desc')
                     .get();
 
-                coursesList = teacherCoursesQuery.docs.map(doc => {
-                    const courseData = doc.data();
-                    return {
-                        id: doc.id,
-                        ...courseData,
-                        studentCount: 0 // Will be calculated separately
-                    };
-                });
+                coursesList = teacherCoursesQuery.docs
+                    .map(doc => {
+                        const courseData = doc.data();
+                        return {
+                            id: doc.id,
+                            ...courseData,
+                            studentCount: 0 // Will be calculated separately
+                        } as any; // Type as any to include archived property
+                    })
+                    .filter(course => !course.archived); // Filter out archived courses after fetching
 
                 // Calculate student count for each course
                 for (const course of coursesList) {
@@ -266,14 +267,16 @@ export default function DashboardScreen() {
                     .orderBy('createdAt', 'desc')
                     .get();
 
-                coursesList = adminCoursesQuery.docs.map(doc => {
-                    const courseData = doc.data();
-                    return {
-                        id: doc.id,
-                        ...courseData,
-                        studentCount: 0 // Will be calculated separately
-                    };
-                });
+                coursesList = adminCoursesQuery.docs
+                    .map(doc => {
+                        const courseData = doc.data();
+                        return {
+                            id: doc.id,
+                            ...courseData,
+                            studentCount: 0 // Will be calculated separately
+                        } as any; // Type as any to include archived property
+                    })
+                    .filter(course => !course.archived); // Filter out archived courses after fetching
 
                 // Calculate student count for each course
                 for (const course of coursesList) {
@@ -309,9 +312,9 @@ export default function DashboardScreen() {
                 role: userData.role,
                 userData,
                 schoolInfo: getSchoolById(userData.schoolId),
-                studentCourses: userData.role === 'student' ? (userData.role === 'student' ? studentCourses : []) : [],
+                studentCourses: userData.role === 'student' ? studentCourses : [],
                 courses: coursesList,
-                teacherNames: userData.role === 'student' ? (userData.role === 'student' ? teacherNames : {}) : teacherNamesMap
+                teacherNames: userData.role === 'student' ? teacherNames : teacherNamesMap
             };
             cacheTimestamp = now;
 
@@ -677,7 +680,6 @@ export default function DashboardScreen() {
                                     course={course}
                                     role={role}
                                     teacherName={course.teacherId ? teacherNames[course.teacherId] : 'Unknown Teacher'}
-                                    isArchived={course.archived}
                                 />
                             ))
                         ) : (
@@ -743,7 +745,6 @@ const CourseCard: React.FC<CourseCardProps> = ({
     course,
     role,
     teacherName,
-    isArchived = false,
     actionIcon,
     actionColor,
     onAction,
@@ -753,7 +754,7 @@ const CourseCard: React.FC<CourseCardProps> = ({
 }) => {
     return (
         <TouchableOpacity
-            style={[styles.courseCard, isArchived && styles.archivedCard]}
+            style={styles.courseCard}
             onPress={() => router.push({
                 pathname: '/course-detail',
                 params: {
@@ -762,13 +763,13 @@ const CourseCard: React.FC<CourseCardProps> = ({
                     courseCode: course.code || 'N/A',
                     instructorName: teacherName,
                     role: role,
-                    isArchived: isArchived ? 'true' : 'false'
+                    isArchived: 'false'
                 }
             })}
         >
             <View style={styles.courseHeader}>
                 <View style={styles.courseInfo}>
-                    <Text style={[styles.courseName, isArchived && styles.archivedText]}>
+                    <Text style={styles.courseName}>
                         {course.name}
                     </Text>
                     <Text style={styles.courseCode}>{course.code || 'No Code'}</Text>
@@ -1089,10 +1090,6 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 3,
     },
-    archivedCard: {
-        opacity: 0.6,
-        backgroundColor: '#f7fafc',
-    },
     courseHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1107,9 +1104,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#1a202c',
         marginBottom: 4,
-    },
-    archivedText: {
-        color: '#718096',
     },
     courseCode: {
         fontSize: 14,

@@ -59,6 +59,8 @@ export default function DiscussionDetailScreen() {
     const [syncingDrafts, setSyncingDrafts] = useState(false);
     const [alertConfig, setAlertConfig] = useState<any>(null);
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+    const [commentActionMenuVisible, setCommentActionMenuVisible] = useState(false);
+    const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
 
     // Keyboard event listeners
     useEffect(() => {
@@ -623,11 +625,41 @@ export default function DiscussionDetailScreen() {
     };
 
     const handleReplyToComment = (comment: Comment) => {
-        setReplyingTo({
-            id: comment.id,
-            authorName: comment.authorName
-        });
+        setReplyingTo({ id: comment.id, authorName: comment.authorName });
         setNewComment('');
+        setNewCommentHtml('');
+        setEditingComment(null);
+    };
+
+    const handleCommentActionMenu = (comment: Comment) => {
+        setSelectedComment(comment);
+        setCommentActionMenuVisible(true);
+    };
+
+    const handleCloseCommentActionMenu = () => {
+        setCommentActionMenuVisible(false);
+        setSelectedComment(null);
+    };
+
+    const handleReplyFromMenu = () => {
+        if (selectedComment) {
+            handleCloseCommentActionMenu();
+            handleReplyToComment(selectedComment);
+        }
+    };
+
+    const handleEditFromMenu = () => {
+        if (selectedComment) {
+            handleCloseCommentActionMenu();
+            handleEditComment(selectedComment);
+        }
+    };
+
+    const handleDeleteFromMenu = () => {
+        if (selectedComment) {
+            handleCloseCommentActionMenu();
+            handleDeleteComment(selectedComment.id);
+        }
     };
 
     const renderComment = (comment: Comment, depth: number = 0) => {
@@ -684,31 +716,14 @@ export default function DiscussionDetailScreen() {
                     <View style={styles.commentActionsRow}>
                         <Text style={styles.commentDate}>{formatDate(comment.createdAt)}</Text>
                         <View style={styles.commentActions}>
-                            {/* Reply button - show for all comments if not archived */}
+                            {/* Show action menu for all users if not archived */}
                             {!courseIsArchived && (
                                 <TouchableOpacity
-                                    style={styles.replyButton}
-                                    onPress={() => handleReplyToComment(comment)}
+                                    style={styles.actionMenuButton}
+                                    onPress={() => handleCommentActionMenu(comment)}
                                 >
-                                    <Ionicons name="chatbubble-outline" size={14} color="#4f46e5" />
+                                    <Ionicons name="ellipsis-horizontal" size={16} color="#64748b" />
                                 </TouchableOpacity>
-                            )}
-                            {/* Show edit/delete only for comment author and if not archived */}
-                            {auth().currentUser?.uid === comment.authorId && !courseIsArchived && (
-                                <>
-                                    <TouchableOpacity
-                                        style={styles.editButton}
-                                        onPress={() => handleEditComment(comment)}
-                                    >
-                                        <Ionicons name="pencil" size={14} color="#666" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.deleteButton}
-                                        onPress={() => handleDeleteComment(comment.id)}
-                                    >
-                                        <Ionicons name="trash" size={14} color="#d32f2f" />
-                                    </TouchableOpacity>
-                                </>
                             )}
                         </View>
                     </View>
@@ -962,7 +977,7 @@ export default function DiscussionDetailScreen() {
                     <KeyboardAvoidingView
                         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                         style={styles.commentInputContainer}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
                     >
                         {/* Reply context banner */}
                         {replyingTo && (
@@ -1045,6 +1060,49 @@ export default function DiscussionDetailScreen() {
                 actions={alertConfig?.actions || []}
                 onDismiss={() => setAlertConfig(null)}
             />
+
+            {/* Comment Action Menu */}
+            {commentActionMenuVisible && selectedComment && (
+                <View style={styles.actionMenuOverlay}>
+                    <TouchableOpacity
+                        style={styles.actionMenuBackdrop}
+                        onPress={handleCloseCommentActionMenu}
+                    />
+                    <View style={styles.actionMenu}>
+                        <View style={styles.actionMenuHeader}>
+                            <Text style={styles.actionMenuTitle}>Comment Actions</Text>
+                            <TouchableOpacity onPress={handleCloseCommentActionMenu} style={styles.actionMenuClose}>
+                                <Ionicons name="close" size={20} color="#64748b" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Reply option - available for all users */}
+                        <TouchableOpacity style={styles.actionMenuItem} onPress={handleReplyFromMenu}>
+                            <Ionicons name="chatbubble-outline" size={20} color="#4f46e5" />
+                            <Text style={styles.actionMenuText}>Reply</Text>
+                            <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                        </TouchableOpacity>
+
+                        {/* Edit option - only for comment author */}
+                        {auth().currentUser?.uid === selectedComment.authorId && (
+                            <TouchableOpacity style={styles.actionMenuItem} onPress={handleEditFromMenu}>
+                                <Ionicons name="pencil" size={20} color="#4f46e5" />
+                                <Text style={styles.actionMenuText}>Edit</Text>
+                                <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Delete option - only for comment author */}
+                        {auth().currentUser?.uid === selectedComment.authorId && (
+                            <TouchableOpacity style={[styles.actionMenuItem, styles.actionMenuItemDanger]} onPress={handleDeleteFromMenu}>
+                                <Ionicons name="trash" size={20} color="#ef4444" />
+                                <Text style={[styles.actionMenuText, styles.actionMenuTextDanger]}>Delete</Text>
+                                <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            )}
         </SafeAreaView>
     );
 }
@@ -1092,7 +1150,7 @@ const styles = StyleSheet.create({
         paddingVertical: 20,
     },
     contentContainer: {
-        paddingBottom: 100, // Back to reasonable padding
+        paddingBottom: 150, // Increased padding for better keyboard handling
     },
     discussionCard: {
         backgroundColor: '#fff',
@@ -1137,7 +1195,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     teacherTag: {
-        backgroundColor: '#4f46e5',
+        backgroundColor: '#ff6b35',
     },
     adminTag: {
         backgroundColor: '#059669',
@@ -1648,5 +1706,77 @@ const styles = StyleSheet.create({
     },
     commentContentContainer: {
         marginBottom: 12,
+    },
+    actionMenuButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f8fafc',
+    },
+    actionMenuOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    actionMenuBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    actionMenu: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        width: '80%',
+        maxWidth: 350,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 5,
+        overflow: 'hidden',
+    },
+    actionMenuHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    actionMenuTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1e293b',
+    },
+    actionMenuClose: {
+        padding: 8,
+    },
+    actionMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    actionMenuItemDanger: {
+        borderBottomColor: '#fef2f2',
+    },
+    actionMenuText: {
+        fontSize: 16,
+        color: '#1e293b',
+        marginLeft: 12,
+        fontWeight: '500',
+    },
+    actionMenuTextDanger: {
+        color: '#ef4444',
     },
 }); 
