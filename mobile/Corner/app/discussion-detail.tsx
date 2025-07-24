@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar, Switch, Keyboard } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar, Switch, Keyboard, ActivityIndicator, Animated } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import firestore, { serverTimestamp, increment } from '@react-native-firebase/firestore';
@@ -155,6 +155,23 @@ export default function DiscussionDetailScreen() {
         }
     }, [courseId, discussionId, isOnline, hasReconnected]);
 
+    // Refresh data when screen comes back into focus
+    useFocusEffect(
+        React.useCallback(() => {
+            if (!courseId || !discussionId) return;
+
+            // Force refresh data when screen comes into focus
+            if (isOnline) {
+                setupFirebaseListeners();
+            } else {
+                loadCachedComments();
+            }
+
+            // Refresh drafts
+            loadDrafts();
+        }, [courseId, discussionId, isOnline])
+    );
+
     const loadDrafts = async () => {
         if (!discussionId) return;
         try {
@@ -288,6 +305,9 @@ export default function DiscussionDetailScreen() {
                                 replies: increment(-1)
                             });
 
+                            // Force refresh the data to ensure deleted comment is removed
+                            await refreshDiscussionData();
+
                             setAlertConfig({
                                 visible: true,
                                 title: 'Success',
@@ -361,6 +381,10 @@ export default function DiscussionDetailScreen() {
             setNewComment('');
             setEditingComment(null);
             setIsAnonymousComment(false);
+
+            // Force refresh the data to ensure updated comment appears
+            await refreshDiscussionData();
+
             setAlertConfig({
                 visible: true,
                 title: 'Success',
@@ -496,6 +520,10 @@ export default function DiscussionDetailScreen() {
             setNewCommentHtml('');
             setIsAnonymousComment(false);
             setReplyingTo(null);
+
+            // Force refresh the data to ensure new comment appears
+            await refreshDiscussionData();
+
             setAlertConfig({
                 visible: true,
                 title: 'Success',
@@ -719,6 +747,47 @@ export default function DiscussionDetailScreen() {
     };
 
     const totalComments = countAllComments(comments);
+
+    const refreshDiscussionData = async () => {
+        if (!courseId || !discussionId || !isOnline) return;
+
+        try {
+            // Fetch fresh discussion and comments data directly
+            const [discussionDoc, commentsSnapshot] = await Promise.all([
+                firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).get(),
+                firestore().collection('courses').doc(courseId as string).collection('discussions').doc(discussionId as string).collection('comments').orderBy('createdAt', 'desc').get()
+            ]);
+
+            if (discussionDoc.exists()) {
+                setDiscussion({
+                    id: discussionDoc.id,
+                    ...discussionDoc.data()
+                } as Discussion);
+            }
+
+            const allComments = commentsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Comment[];
+
+            // Build nested comment tree
+            const commentTree = buildCommentTree(allComments);
+            setComments(commentTree);
+
+            // Cache the comments
+            try {
+                await offlineCacheService.cacheComments(
+                    discussionId as string,
+                    courseId as string,
+                    allComments
+                );
+            } catch (error) {
+                console.error('Error caching refreshed comments:', error);
+            }
+        } catch (error) {
+            console.error('Error refreshing discussion data:', error);
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>

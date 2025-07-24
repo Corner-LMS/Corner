@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, Dimensions, StatusBar, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert, Dimensions, StatusBar } from 'react-native';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { router, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationBadge from '../../components/NotificationBadge';
@@ -85,6 +85,7 @@ export default function DashboardScreen() {
     const [userData, setUserData] = useState<any>(null);
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
+    const insets = useSafeAreaInsets();
 
     // Memoized helper functions
     const getUserInitials = useCallback((user: FirebaseAuthTypes.User, userData: any) => {
@@ -116,6 +117,16 @@ export default function DashboardScreen() {
         if (hour < 17) return 'afternoon';
         return 'evening';
     }, []);
+
+    const renderLogoSection = () => {
+        return (
+            <View style={styles.logoSection}>
+                <View style={styles.logoIconContainer}>
+                    <Text style={styles.logoIconText}>C</Text>
+                </View>
+            </View>
+        );
+    };
 
     const loadUserAndCourses = useCallback(async (user: FirebaseAuthTypes.User, forceRefresh = false) => {
         if (!user) {
@@ -199,20 +210,17 @@ export default function DashboardScreen() {
                             const studentCount = enrolledStudentsQuery.size;
 
                             studentCoursesList.push({
-                                ...courseData,
                                 id: courseId,
-                                joinedAt: userData.courseJoinDates?.[courseId] || new Date().toISOString(),
-                                studentCount: studentCount
+                                ...courseData,
+                                studentCount
                             });
 
-                            // Fetch teacher name if not already cached
-                            if (courseData.teacherId && !studentTeacherNamesMap[courseId]) {
-                                const teacherSnap = await firestore().collection('users').doc(courseData.teacherId).get();
-                                if (teacherSnap.exists()) {
-                                    const teacherData = teacherSnap.data();
-                                    if (teacherData) {
-                                        studentTeacherNamesMap[courseId] = teacherData.name || 'Unknown Teacher';
-                                    }
+                            // Get teacher name
+                            if (courseData.teacherId) {
+                                const teacherDoc = await firestore().collection('users').doc(courseData.teacherId).get();
+                                if (teacherDoc.exists()) {
+                                    const teacherData = teacherDoc.data();
+                                    studentTeacherNamesMap[courseId] = teacherData?.name || 'Unknown Teacher';
                                 }
                             }
                         }
@@ -221,110 +229,94 @@ export default function DashboardScreen() {
 
                 setStudentCourses(studentCoursesList);
                 setTeacherNames(studentTeacherNamesMap);
-                coursesList = studentCoursesList;
-                teacherNamesMap = studentTeacherNamesMap;
-            }
-
-            if (userData.role === 'teacher') {
-                // For teachers, fetch only their courses
-                const snapshot = await firestore()
+            } else if (userData.role === 'teacher') {
+                // For teachers, fetch their created courses
+                const teacherCoursesQuery = await firestore()
                     .collection('courses')
                     .where('teacherId', '==', user.uid)
+                    .orderBy('createdAt', 'desc')
                     .get();
-                const teacherCoursesList = snapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() as any }))
-                    .filter((course: any) => course.archived !== true);
 
-                // Get student counts for teacher's courses
-                const coursesWithStudentCounts = await Promise.all(
-                    teacherCoursesList.map(async (course: any) => {
-                        const enrolledStudentsQuery = await firestore()
-                            .collection('users')
-                            .where('role', '==', 'student')
-                            .where('courseIds', 'array-contains', course.id)
-                            .get();
+                coursesList = teacherCoursesQuery.docs.map(doc => {
+                    const courseData = doc.data();
+                    return {
+                        id: doc.id,
+                        ...courseData,
+                        studentCount: 0 // Will be calculated separately
+                    };
+                });
 
-                        return {
-                            ...course,
-                            studentCount: enrolledStudentsQuery.size
-                        };
-                    })
-                );
-
-                setCourses(coursesWithStudentCounts);
-                coursesList = coursesWithStudentCounts;
-            }
-
-            if (userData.role === 'admin') {
-                const adminSchoolId = userData.schoolId;
-
-                if (!adminSchoolId) {
-                    setCourses([]);
-                    setTeacherNames({});
-                } else {
-                    // For admins, fetch courses from their school only
-                    const snapshot = await firestore()
-                        .collection('courses')
-                        .where('schoolId', '==', adminSchoolId)
+                // Calculate student count for each course
+                for (const course of coursesList) {
+                    const enrolledStudentsQuery = await firestore()
+                        .collection('users')
+                        .where('role', '==', 'student')
+                        .where('courseIds', 'array-contains', course.id)
                         .get();
-                    const adminCoursesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
 
-                    // Get student counts for admin's courses
-                    const coursesWithStudentCounts = await Promise.all(
-                        adminCoursesList.map(async (course: any) => {
-                            const enrolledStudentsQuery = await firestore()
-                                .collection('users')
-                                .where('role', '==', 'student')
-                                .where('courseIds', 'array-contains', course.id)
-                                .get();
-
-                            return {
-                                ...course,
-                                studentCount: enrolledStudentsQuery.size
-                            };
-                        })
-                    );
-
-                    setCourses(coursesWithStudentCounts);
-
-                    // Batch fetch teacher names
-                    const teacherIds = [...new Set(coursesWithStudentCounts.map((course: any) => course.teacherId).filter(Boolean))];
-                    const adminTeacherNamesMap: Record<string, string> = {};
-
-                    const teacherPromises = teacherIds.map(async (teacherId: string) => {
-                        return firestore().collection('users').doc(teacherId).get();
-                    });
-
-                    const teacherSnaps = await Promise.all(teacherPromises);
-
-                    teacherSnaps.forEach((teacherSnap, index) => {
-                        if (teacherSnap.exists()) {
-                            const teacherData = teacherSnap.data();
-                            if (teacherData) {
-                                adminTeacherNamesMap[teacherIds[index]] = teacherData.name || 'Unknown Teacher';
-                            }
-                        }
-                    });
-
-                    setTeacherNames(adminTeacherNamesMap);
-                    coursesList = coursesWithStudentCounts;
-                    teacherNamesMap = adminTeacherNamesMap;
+                    course.studentCount = enrolledStudentsQuery.size;
                 }
+
+                setCourses(coursesList);
+            } else if (userData.role === 'admin') {
+                // For admins, fetch all courses in their school
+                const adminCoursesQuery = await firestore()
+                    .collection('courses')
+                    .where('schoolId', '==', userData.schoolId)
+                    .orderBy('createdAt', 'desc')
+                    .get();
+
+                coursesList = adminCoursesQuery.docs.map(doc => {
+                    const courseData = doc.data();
+                    return {
+                        id: doc.id,
+                        ...courseData,
+                        studentCount: 0 // Will be calculated separately
+                    };
+                });
+
+                // Calculate student count for each course
+                for (const course of coursesList) {
+                    const enrolledStudentsQuery = await firestore()
+                        .collection('users')
+                        .where('role', '==', 'student')
+                        .where('courseIds', 'array-contains', course.id)
+                        .get();
+
+                    course.studentCount = enrolledStudentsQuery.size;
+                }
+
+                // Get teacher names for admin view
+                const teacherIds = [...new Set(coursesList.map(course => course.teacherId).filter(Boolean))];
+                const teacherPromises = teacherIds.map(async (teacherId) => {
+                    const teacherDoc = await firestore().collection('users').doc(teacherId).get();
+                    if (teacherDoc.exists()) {
+                        const teacherData = teacherDoc.data();
+                        return { [teacherId]: teacherData?.name || 'Unknown Teacher' };
+                    }
+                    return { [teacherId]: 'Unknown Teacher' };
+                });
+
+                const teacherResults = await Promise.all(teacherPromises);
+                teacherNamesMap = teacherResults.reduce((acc, result) => ({ ...acc, ...result }), {});
+
+                setCourses(coursesList);
+                setTeacherNames(teacherNamesMap);
             }
 
             // Cache the results
             dashboardCache = {
-                role: userData.role || 'student',
+                role: userData.role,
                 userData,
-                schoolInfo: userData.schoolId ? getSchoolById(userData.schoolId) : null,
-                studentCourses: userData.role === 'student' ? coursesList : [],
-                courses: userData.role === 'teacher' || userData.role === 'admin' ? coursesList : [],
-                teacherNames: teacherNamesMap
+                schoolInfo: getSchoolById(userData.schoolId),
+                studentCourses: userData.role === 'student' ? (userData.role === 'student' ? studentCourses : []) : [],
+                courses: coursesList,
+                teacherNames: userData.role === 'student' ? (userData.role === 'student' ? teacherNames : {}) : teacherNamesMap
             };
             cacheTimestamp = now;
 
         } catch (error) {
-            console.error('Error in loadUserAndCourses:', error);
+            console.error('Error loading user and courses:', error);
         } finally {
             setLoading(false);
         }
@@ -445,16 +437,15 @@ export default function DashboardScreen() {
 
     const handleManageStudents = () => {
         if (selectedCourse) {
+            handleCloseActionMenu();
             router.push({
                 pathname: '/manage-students',
                 params: {
                     courseId: selectedCourse.id,
-                    courseName: selectedCourse.name,
-                    role: role
+                    courseName: selectedCourse.name
                 }
             });
         }
-        setActionMenuVisible(false);
     };
 
     const handleViewStudents = (courseId: string, courseName: string) => {
@@ -462,8 +453,7 @@ export default function DashboardScreen() {
             pathname: '/view-students',
             params: {
                 courseId: courseId,
-                courseName: courseName,
-                role: role
+                courseName: courseName
             }
         });
     };
@@ -481,10 +471,13 @@ export default function DashboardScreen() {
                         onPress: async () => {
                             try {
                                 await firestore().collection('courses').doc(selectedCourse.id).update({
-                                    archived: true,
-                                    archivedAt: new Date().toISOString()
+                                    archived: true
                                 });
-                                setCourses(prev => prev.filter(course => course.id !== selectedCourse.id));
+                                setCourses(prev => prev.map(course =>
+                                    course.id === selectedCourse.id
+                                        ? { ...course, archived: true }
+                                        : course
+                                ));
                                 Alert.alert('Success', `"${selectedCourse.name}" has been archived.`);
                             } catch (error) {
                                 console.error('Error archiving course:', error);
@@ -533,13 +526,7 @@ export default function DashboardScreen() {
                     style={styles.loadingGradient}
                 >
                     <View style={styles.loadingContent}>
-                        <View style={styles.loadingIcon}>
-                            <Image
-                                source={require('../../assets/images/corner-splash-logo.png')}
-                                style={styles.loadingLogo}
-                                resizeMode="contain"
-                            />
-                        </View>
+                        {renderLogoSection()}
                         <Text style={styles.loadingText}>Loading...</Text>
                     </View>
                 </LinearGradient>
@@ -556,17 +543,13 @@ export default function DashboardScreen() {
                     style={styles.welcomeGradient}
                 >
                     <View style={styles.welcomeContent}>
-                        <View style={styles.welcomeIcon}>
-                            <Image
-                                source={require('../../assets/images/corner-splash-logo.png')}
-                                style={styles.welcomeLogo}
-                                resizeMode="contain"
-                            />
+                        {renderLogoSection()}
+                        <View style={styles.welcomeTextSection}>
+                            <Text style={styles.welcomeTitle}>Welcome to Corner</Text>
+                            <Text style={styles.welcomeSubtitle}>
+                                Your learning journey starts here
+                            </Text>
                         </View>
-                        <Text style={styles.welcomeTitle}>Welcome to Corner</Text>
-                        <Text style={styles.welcomeSubtitle}>
-                            Your learning journey starts here
-                        </Text>
 
                         <View style={styles.welcomeButtons}>
                             <TouchableOpacity
@@ -604,7 +587,7 @@ export default function DashboardScreen() {
                                 {getUserInitials(user, userData)}
                             </Text>
                         </View>
-                        <View>
+                        <View style={styles.userDetails}>
                             <Text style={styles.schoolName}>{schoolInfo?.name || 'Your School'}</Text>
                             <Text style={styles.greeting}>Good {getTimeOfDay}</Text>
                             <Text style={styles.userName}>{getDisplayName(user, userData)}</Text>
@@ -636,115 +619,113 @@ export default function DashboardScreen() {
                 </View>
             </LinearGradient>
 
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Courses Section */}
-                <View style={styles.coursesSection}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>
-                            {role === 'student' ? 'My Courses' :
-                                role === 'teacher' ? 'Teaching' : 'School Courses'}
-                        </Text>
-                        {(role === 'teacher' || role === 'student') && (
-                            <TouchableOpacity
-                                style={styles.addCourseBtn}
-                                onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
-                            >
-                                <Ionicons name="add" size={20} color="#4f46e5" />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    {loading ? (
-                        <ActivityIndicator size="large" color="#4f46e5" style={styles.loadingIndicator} />
-                    ) : role === 'student' && studentCourses.length > 0 ? (
-                        studentCourses.map((course) => (
-                            <CourseCard
-                                key={course.id}
-                                course={course}
-                                role={role}
-                                teacherName={teacherNames[course.id] || 'Unknown Teacher'}
-                                onAction={() => handleUnjoinCourse(course.id, course.name)}
-                                actionIcon="exit-outline"
-                                actionColor="#ff6b6b"
-                                onViewStudents={() => handleViewStudents(course.id, course.name)}
-                            />
-                        ))
-                    ) : role === 'teacher' && courses.length > 0 ? (
-                        courses.map((course) => (
-                            <CourseCard
-                                key={course.id}
-                                course={course}
-                                role={role}
-                                teacherName={course.instructorName || 'You'}
-                                actionIcon="ellipsis-horizontal"
-                                actionColor="#4f46e5"
-                                onActionMenu={() => handleActionMenu(course)}
-                            />
-                        ))
-                    ) : role === 'admin' && courses.length > 0 ? (
-                        courses.map((course) => (
-                            <CourseCard
-                                key={course.id}
-                                course={course}
-                                role={role}
-                                teacherName={course.teacherId ? teacherNames[course.teacherId] : 'Unknown Teacher'}
-                                isArchived={course.archived}
-                            />
-                        ))
-                    ) : (
-                        <View style={styles.emptyState}>
-                            <View style={styles.emptyStateIcon}>
-                                <Ionicons
-                                    name={role === 'student' ? 'school' : role === 'teacher' ? 'library' : 'business'}
-                                    size={48}
-                                    color="#cbd5e0"
-                                />
-                            </View>
-                            <Text style={styles.emptyStateTitle}>
-                                {role === 'student' ? 'No Courses Yet' :
-                                    role === 'teacher' ? 'Start Teaching' :
-                                        'No Courses Available'}
+            {/* Course List Container */}
+            <View style={styles.courseListContainer}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Courses Section */}
+                    <View style={styles.coursesSection}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>
+                                {role === 'student' ? 'My Courses' :
+                                    role === 'teacher' ? 'Teaching' : 'School Courses'}
                             </Text>
-                            <Text style={styles.emptyStateText}>
-                                {role === 'student' ? 'Join a course to start learning and collaborating with your classmates.' :
-                                    role === 'teacher' ? 'Create your first course to begin teaching and sharing knowledge.' :
-                                        'Courses from your school will appear here once they are created.'}
-                            </Text>
-                            {(role === 'student' || role === 'teacher') && (
+                            {(role === 'teacher' || role === 'student') && (
                                 <TouchableOpacity
-                                    style={styles.emptyStateBtn}
+                                    style={styles.addCourseBtn}
                                     onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
                                 >
-                                    <Ionicons
-                                        name={role === 'student' ? 'add-circle' : 'create'}
-                                        size={20}
-                                        color="#fff"
-                                        style={{ marginRight: 8 }}
-                                    />
-                                    <Text style={styles.emptyStateBtnText}>
-                                        {role === 'student' ? 'Join Course' : 'Create Course'}
-                                    </Text>
+                                    <Ionicons name="add" size={20} color="#4f46e5" />
                                 </TouchableOpacity>
                             )}
                         </View>
-                    )}
-                </View>
 
-                {/* FAB */}
-                {(role === 'teacher' || role === 'student') && (
-                    <TouchableOpacity
-                        style={styles.fab}
-                        onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
+                        {loading ? (
+                            <ActivityIndicator size="large" color="#4f46e5" style={styles.loadingIndicator} />
+                        ) : role === 'student' && studentCourses.length > 0 ? (
+                            studentCourses.map((course) => (
+                                <CourseCard
+                                    key={course.id}
+                                    course={course}
+                                    role={role}
+                                    teacherName={teacherNames[course.id] || 'Unknown Teacher'}
+                                    onAction={() => handleUnjoinCourse(course.id, course.name)}
+                                    actionIcon="exit-outline"
+                                    actionColor="#ff6b6b"
+                                    onViewStudents={() => handleViewStudents(course.id, course.name)}
+                                />
+                            ))
+                        ) : role === 'teacher' && courses.length > 0 ? (
+                            courses.map((course) => (
+                                <CourseCard
+                                    key={course.id}
+                                    course={course}
+                                    role={role}
+                                    teacherName={course.instructorName || 'You'}
+                                    actionIcon="ellipsis-horizontal"
+                                    actionColor="#4f46e5"
+                                    onActionMenu={() => handleActionMenu(course)}
+                                />
+                            ))
+                        ) : role === 'admin' && courses.length > 0 ? (
+                            courses.map((course) => (
+                                <CourseCard
+                                    key={course.id}
+                                    course={course}
+                                    role={role}
+                                    teacherName={course.teacherId ? teacherNames[course.teacherId] : 'Unknown Teacher'}
+                                    isArchived={course.archived}
+                                />
+                            ))
+                        ) : (
+                            <View style={styles.emptyState}>
+                                <View style={styles.emptyIcon}>
+                                    <Ionicons name="book-outline" size={64} color="#cbd5e0" />
+                                </View>
+                                <Text style={styles.emptyTitle}>
+                                    {role === 'student' ? 'No Courses Yet' :
+                                        role === 'teacher' ? 'No Teaching Courses' : 'No School Courses'}
+                                </Text>
+                                <Text style={styles.emptySubtitle}>
+                                    {role === 'student' ? 'Join your first course to get started' :
+                                        role === 'teacher' ? 'Create your first course to begin teaching' :
+                                            'No courses have been created yet'}
+                                </Text>
+                                {(role === 'teacher' || role === 'student') && (
+                                    <TouchableOpacity
+                                        style={styles.emptyActionBtn}
+                                        onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
+                                    >
+                                        <Text style={styles.emptyActionBtnText}>
+                                            {role === 'student' ? 'Join Course' : 'Create Course'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                </ScrollView>
+            </View>
+
+            {/* FAB - Only show if not on inbox tab and user can create content */}
+            {(role === 'teacher' || role === 'admin') ||
+                (role === 'student') ? (
+                <TouchableOpacity
+                    style={[styles.fab, { bottom: Math.max(30, insets.bottom + 10) }]}
+                    onPress={() => router.push(role === 'student' ? '/join-course' : '/create-course')}
+                >
+                    <LinearGradient
+                        colors={['#4f46e5', '#3730a3']}
+                        style={styles.fabGradient}
                     >
-                        <LinearGradient
-                            colors={['#4f46e5', '#3730a3']}
-                            style={styles.fabGradient}
-                        >
-                            <Ionicons name="add" size={24} color="#fff" />
-                        </LinearGradient>
-                    </TouchableOpacity>
-                )}
-            </ScrollView>
+                        <Ionicons name="add" size={24} color="#fff" />
+                    </LinearGradient>
+                </TouchableOpacity>
+            ) : null}
+
             <ActionMenu
                 visible={actionMenuVisible}
                 onClose={handleCloseActionMenu}
@@ -872,10 +853,11 @@ const CourseCard: React.FC<CourseCardProps> = ({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     loadingContainer: {
         flex: 1,
+        backgroundColor: '#4f46e5',
     },
     loadingGradient: {
         flex: 1,
@@ -884,65 +866,45 @@ const styles = StyleSheet.create({
     },
     loadingContent: {
         alignItems: 'center',
-    },
-    loadingIcon: {
-        width: 80,
-        height: 80,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 20,
-    },
-    loadingLogo: {
-        width: 60,
-        height: 60,
-        borderRadius: 12,
     },
     loadingText: {
-        color: '#fff',
         fontSize: 18,
+        color: '#fff',
         fontWeight: '600',
+        marginTop: 16,
     },
     welcomeGradient: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 24,
+        paddingHorizontal: 24,
+        paddingBottom: 100, // Extend to bottom tabs
     },
     welcomeContent: {
         alignItems: 'center',
-        maxWidth: 300,
-    },
-    welcomeIcon: {
-        width: 120,
-        height: 120,
-        borderRadius: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 24,
+        width: '100%',
     },
-    welcomeLogo: {
-        width: 90,
-        height: 90,
-        borderRadius: 18,
+    welcomeTextSection: {
+        marginTop: 32,
+        marginBottom: 32,
+        alignItems: 'center',
     },
     welcomeTitle: {
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: '800',
         color: '#fff',
+        marginTop: 24,
         marginBottom: 12,
         textAlign: 'center',
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
     },
     welcomeSubtitle: {
-        fontSize: 18,
+        fontSize: 16,
         color: 'rgba(255, 255, 255, 0.8)',
         textAlign: 'center',
-        marginBottom: 40,
         lineHeight: 24,
-        fontWeight: '500',
     },
     welcomeButtons: {
         width: '100%',
@@ -950,80 +912,103 @@ const styles = StyleSheet.create({
     },
     primaryBtn: {
         backgroundColor: '#fff',
-        padding: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 32,
         borderRadius: 12,
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
     primaryBtnText: {
         color: '#4f46e5',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     secondaryBtn: {
-        backgroundColor: 'transparent',
-        padding: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        paddingVertical: 16,
+        paddingHorizontal: 32,
         borderRadius: 12,
         alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#fff',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     secondaryBtnText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+        letterSpacing: 0.3,
     },
     header: {
-        paddingTop: 0,
-        paddingBottom: 30,
+        height: 200, // Fixed height instead of padding
+        paddingTop: 16,
+        paddingBottom: 16, // Add bottom padding for spacing
         paddingHorizontal: 20,
+        justifyContent: 'space-between',
     },
     headerContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
-        marginTop: 10,
+        alignItems: 'flex-start',
+        marginBottom: 16,
+        gap: 16,
     },
     userInfo: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         flex: 1,
+        marginRight: 16,
     },
     avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#fff',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#ffffff',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 15,
+        marginRight: 12,
+        flexShrink: 0,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     avatarText: {
+        color: '#4f46e5',
         fontSize: 18,
         fontWeight: '700',
-        color: '#4f46e5',
+    },
+    userDetails: {
+        flex: 1,
+        minWidth: 0,
     },
     schoolName: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 12,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    greeting: {
-        color: 'rgba(255,255,255,0.8)',
         fontSize: 14,
+        color: 'rgba(255, 255, 255, 0.7)',
         fontWeight: '500',
         marginBottom: 2,
     },
-    userName: {
-        color: '#fff',
+    greeting: {
         fontSize: 16,
+        color: '#fff',
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    userName: {
+        fontSize: 18,
+        color: '#fff',
         fontWeight: '700',
     },
     headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 15,
+        gap: 12,
+        flexShrink: 0,
     },
     ratingBtn: {
         width: 36,
@@ -1034,53 +1019,60 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     settingsBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     roleContainer: {
         alignSelf: 'flex-start',
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
     },
     roleText: {
         color: '#fff',
         fontSize: 12,
         fontWeight: '700',
-        letterSpacing: 1,
+        letterSpacing: 0.5,
+    },
+    courseListContainer: {
+        flex: 1,
+        backgroundColor: '#f1f5f9',
     },
     scrollView: {
         flex: 1,
     },
+    scrollContent: {
+        paddingBottom: 100,
+    },
     coursesSection: {
         paddingHorizontal: 20,
         paddingTop: 20,
-        paddingBottom: 100,
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 16,
     },
     sectionTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#1a202c',
+        fontSize: 24,
+        fontWeight: '800',
+        color: '#1e293b',
+        letterSpacing: -0.3,
     },
     addCourseBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: '#fff',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
+        shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
@@ -1147,10 +1139,10 @@ const styles = StyleSheet.create({
     },
     emptyState: {
         alignItems: 'center',
-        paddingVertical: 60,
+        paddingVertical: 40,
         paddingHorizontal: 24,
     },
-    emptyStateIcon: {
+    emptyIcon: {
         width: 80,
         height: 80,
         borderRadius: 40,
@@ -1159,22 +1151,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 16,
     },
-    emptyStateTitle: {
+    emptyTitle: {
         fontSize: 20,
         fontWeight: '700',
         color: '#1a202c',
         marginBottom: 8,
         textAlign: 'center',
     },
-    emptyStateText: {
+    emptySubtitle: {
         fontSize: 16,
         color: '#718096',
         textAlign: 'center',
-        marginTop: 16,
         marginBottom: 24,
         lineHeight: 24,
     },
-    emptyStateBtn: {
+    emptyActionBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#4f46e5',
@@ -1182,14 +1173,13 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderRadius: 12,
     },
-    emptyStateBtnText: {
+    emptyActionBtnText: {
         color: '#fff',
         fontSize: 14,
         fontWeight: '600',
     },
     fab: {
         position: 'absolute',
-        bottom: 30,
         right: 20,
         width: 56,
         height: 56,
@@ -1199,6 +1189,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 6,
+        zIndex: 1000,
     },
     fabGradient: {
         width: 56,
@@ -1294,6 +1285,34 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#4f46e5',
         fontWeight: '600',
+    },
+    logoSection: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+        width: '100%',
+        backgroundColor: 'transparent',
+    },
+    logoIconContainer: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        backgroundColor: '#4f46e5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+        marginBottom: 24,
+    },
+    logoIconText: {
+        fontSize: 50,
+        fontWeight: '800',
+        color: '#ffffff',
+        fontFamily: 'Georgia',
+        letterSpacing: 4,
     },
 });
 

@@ -4,8 +4,8 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    Image,
     ScrollView,
+    StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -166,82 +166,85 @@ export default function EmailVerificationScreen() {
         }
     };
 
+    const renderLogoSection = () => {
+        return (
+            <View style={styles.logoSection}>
+                <View style={styles.logoIconContainer}>
+                    <Text style={styles.logoIconText}>C</Text>
+                </View>
+                <Text style={styles.tagline}>Connect, learn, and grow.</Text>
+            </View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={handleSignOut}
-                    >
-                        <Ionicons name="arrow-back" size={24} color="#4f46e5" />
-                        <Text style={styles.backButtonText}>Back to Login</Text>
-                    </TouchableOpacity>
+                {/* Logo Background Section */}
+                <View style={styles.logoBackgroundSection}>
+                    {renderLogoSection()}
                 </View>
 
                 {/* Main Content */}
                 <View style={styles.content}>
-                    <View style={styles.iconContainer}>
-                        <Image
-                            source={require('../../assets/images/corner-splash-logo.png')}
-                            style={styles.logo}
-                            resizeMode="contain"
-                        />
-                    </View>
-
                     <Text style={styles.title}>Check Your Email</Text>
                     <Text style={styles.email}>{userEmail}</Text>
 
                     <View style={styles.mainCard}>
                         <View style={styles.mainIcon}>
-                            <Ionicons name="mail" size={32} color="#4f46e5" />
+                            <Ionicons name="mail" size={48} color="#4f46e5" />
                         </View>
-                        <Text style={styles.mainText}>
-                            Click the verification link in your email to continue
+                        <Text style={styles.mainTitle}>Verify Your Email</Text>
+                        <Text style={styles.mainDescription}>
+                            We've sent a verification link to your email address. Click the link to verify your account and continue.
                         </Text>
                     </View>
 
-                    <View style={styles.quickTip}>
-                        <Ionicons name="bulb-outline" size={16} color="#f59e0b" />
-                        <Text style={styles.quickTipText}>Check spam folder if you don't see it</Text>
+                    <View style={styles.actionButtons}>
+                        <TouchableOpacity
+                            style={styles.primaryButton}
+                            onPress={handleCheckVerification}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <Text style={styles.primaryButtonText}>Checking...</Text>
+                            ) : (
+                                <>
+                                    <Text style={styles.primaryButtonText}>I've Verified My Email</Text>
+                                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.secondaryButton}
+                            onPress={handleResendVerification}
+                            disabled={resendLoading}
+                        >
+                            {resendLoading ? (
+                                <Text style={styles.secondaryButtonText}>Sending...</Text>
+                            ) : (
+                                <>
+                                    <Ionicons name="refresh" size={16} color="#4f46e5" />
+                                    <Text style={styles.secondaryButtonText}>Resend Email</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
                     </View>
-                </View>
 
-                {/* Action Buttons */}
-                <View style={styles.actions}>
-                    <TouchableOpacity
-                        style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                        onPress={handleCheckVerification}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <Text style={styles.primaryButtonText}>Checking...</Text>
-                        ) : (
-                            <>
-                                <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                                <Text style={styles.primaryButtonText}>I've Verified My Email</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.secondaryButton, resendLoading && styles.buttonDisabled]}
-                        onPress={handleResendVerification}
-                        disabled={resendLoading}
-                    >
-                        {resendLoading ? (
-                            <Text style={styles.secondaryButtonText}>Sending...</Text>
-                        ) : (
-                            <>
-                                <Ionicons name="refresh" size={20} color="#4f46e5" />
-                                <Text style={styles.secondaryButtonText}>Resend Email</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
+                    <View style={styles.footer}>
+                        <TouchableOpacity
+                            style={styles.backButton}
+                            onPress={handleSignOut}
+                        >
+                            <Ionicons name="arrow-back" size={16} color="#64748b" />
+                            <Text style={styles.backButtonText}>Back to Login</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </ScrollView>
 
@@ -260,182 +263,176 @@ export default function EmailVerificationScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
     scrollContent: {
         flexGrow: 1,
-        paddingHorizontal: 20,
     },
-    header: {
-        paddingTop: 10,
+    // Logo Background Section - matches welcome screen
+    logoBackgroundSection: {
+        width: '100%',
+        height: 280,
+        backgroundColor: '#4f46e5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 40,
         paddingBottom: 20,
     },
-    backButton: {
-        flexDirection: 'row',
+    logoSection: {
         alignItems: 'center',
-        alignSelf: 'flex-start',
-        padding: 12,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 12,
+        justifyContent: 'center',
+        flex: 1,
+        width: '100%',
+        backgroundColor: 'transparent',
+    },
+    logoIconContainer: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        backgroundColor: '#4f46e5',
+        alignItems: 'center',
+        justifyContent: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
         elevation: 4,
+        marginBottom: 24,
     },
-    backButtonText: {
-        color: '#4f46e5',
-        fontSize: 16,
-        fontWeight: '700',
-        marginLeft: 8,
-        letterSpacing: 0.3,
+    logoIconText: {
+        fontSize: 50,
+        fontWeight: '800',
+        color: '#ffffff',
+        fontFamily: 'Georgia',
+        letterSpacing: 4,
+    },
+    tagline: {
+        fontSize: 20,
+        color: '#e0e7ff',
+        fontWeight: '600',
+        letterSpacing: 0.5,
+        textAlign: 'center',
+        lineHeight: 24,
     },
     content: {
         flex: 1,
-        alignItems: 'center',
-        paddingTop: 20,
-    },
-    iconContainer: {
-        width: 100,
-        height: 100,
-        borderRadius: 20,
-        backgroundColor: '#f0f4ff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: '#e0e7ff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        elevation: 3,
-    },
-    logo: {
-        width: 80,
-        height: 80,
-        borderRadius: 16,
+        padding: 24,
     },
     title: {
         fontSize: 28,
         fontWeight: '800',
         color: '#1e293b',
-        marginBottom: 12,
         textAlign: 'center',
-        letterSpacing: -0.5,
+        marginBottom: 8,
+        letterSpacing: -0.3,
     },
     email: {
         fontSize: 16,
-        fontWeight: '700',
         color: '#4f46e5',
         textAlign: 'center',
         marginBottom: 32,
-        backgroundColor: '#f0f4ff',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#e0e7ff',
+        fontWeight: '600',
     },
     mainCard: {
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 16,
-        width: '100%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: '#f1f5f9',
+        borderRadius: 20,
+        padding: 32,
+        marginBottom: 32,
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
     },
     mainIcon: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#f1f5f9',
-        justifyContent: 'center',
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(79, 70, 229, 0.1)',
         alignItems: 'center',
-        marginBottom: 12,
+        justifyContent: 'center',
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
     },
-    mainText: {
+    mainTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#1e293b',
+        marginBottom: 16,
+        textAlign: 'center',
+        letterSpacing: -0.3,
+    },
+    mainDescription: {
         fontSize: 16,
         color: '#64748b',
         textAlign: 'center',
-        lineHeight: 22,
-    },
-    quickTip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fffbeb',
-        borderRadius: 12,
-        padding: 12,
-        marginTop: 16,
-        width: '100%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: '#fde68a',
-    },
-    quickTipText: {
-        fontSize: 14,
-        color: '#d97706',
-        marginLeft: 8,
+        lineHeight: 24,
         fontWeight: '500',
     },
-    actions: {
-        paddingVertical: 20,
+    actionButtons: {
         gap: 16,
+        marginBottom: 32,
     },
     primaryButton: {
-        backgroundColor: '#4f46e5',
-        borderRadius: 16,
-        padding: 18,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        backgroundColor: '#4f46e5',
+        paddingVertical: 18,
+        paddingHorizontal: 32,
+        borderRadius: 16,
+        elevation: 6,
         shadowColor: '#4f46e5',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
         shadowRadius: 16,
-        elevation: 6,
-    },
-    secondaryButton: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 18,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
         gap: 10,
-        borderWidth: 2,
-        borderColor: '#4f46e5',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    buttonDisabled: {
-        opacity: 0.6,
     },
     primaryButtonText: {
         color: '#fff',
-        fontSize: 17,
+        fontSize: 18,
         fontWeight: '700',
         letterSpacing: 0.3,
     },
+    secondaryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 12,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        borderWidth: 1,
+        borderColor: 'rgba(79, 70, 229, 0.2)',
+        gap: 8,
+    },
     secondaryButtonText: {
         color: '#4f46e5',
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '700',
         letterSpacing: 0.3,
+    },
+    footer: {
+        alignItems: 'center',
+        paddingTop: 24,
+        borderTopWidth: 1,
+        borderTopColor: '#e2e8f0',
+    },
+    backButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        gap: 8,
+    },
+    backButtonText: {
+        color: '#64748b',
+        fontSize: 16,
+        fontWeight: '600',
     },
 }); 

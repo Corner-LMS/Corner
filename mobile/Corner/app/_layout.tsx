@@ -180,7 +180,7 @@ export default function RootLayout() {
       // Add a delay to ensure the splash screen is visible
       setTimeout(() => {
         setShowSplash(false);
-      }, 3000); // 3 second delay to make splash screen clearly visible
+      }, 1000); // 1 second delay to make splash screen clearly visible
     }
   }, [appIsReady, loaded, authStateResolved]);
 

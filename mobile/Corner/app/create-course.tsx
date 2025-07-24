@@ -37,6 +37,16 @@ export default function CreateCourseScreen() {
         fetchTeacherName();
     }, []);
 
+    const renderLogoSection = () => {
+        return (
+            <View style={styles.logoSection}>
+                <View style={styles.logoIconContainer}>
+                    <Text style={styles.logoIconText}>C</Text>
+                </View>
+            </View>
+        );
+    };
+
     const handleCreate = async () => {
         // Dismiss keyboard when creating course
         Keyboard.dismiss();
@@ -84,9 +94,7 @@ export default function CreateCourseScreen() {
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </Pressable>
                 <View style={styles.headerContent}>
-                    <View style={styles.headerIcon}>
-                        <Ionicons name="school" size={32} color="#fff" />
-                    </View>
+                    {renderLogoSection()}
                     <Text style={styles.headerTitle}>Create Course</Text>
                     <Text style={styles.headerSubtitle}>Set up your new course</Text>
                 </View>
@@ -175,11 +183,30 @@ const styles = StyleSheet.create({
     headerContent: {
         alignItems: 'center',
     },
-    headerIcon: {
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        borderRadius: 16,
-        padding: 12,
-        marginBottom: 12,
+    logoSection: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    logoIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#4f46e5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    logoIconText: {
+        fontSize: 42,
+        fontWeight: '800',
+        color: '#ffffff',
+        fontFamily: 'Georgia',
+        letterSpacing: 4,
     },
     headerTitle: {
         fontSize: 24,

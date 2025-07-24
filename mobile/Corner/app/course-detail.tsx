@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, Switch, StatusBar, ActivityIndicator, Animated, PanResponder } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import firestore, { deleteField } from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import { RichEditor, RichToolbar, actions } from 'react-native-pell-rich-editor';
 import { notificationHelpers } from '../services/notificationHelpers';
 import { offlineCacheService, CachedAnnouncement, CachedDiscussion } from '../services/offlineCache';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
@@ -14,6 +15,69 @@ import ConnectivityIndicator from '../components/ConnectivityIndicator';
 import CustomAlert from '../components/CustomAlert';
 import RichTextEditor from '../components/RichTextEditor';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+
+// Custom Action Menu Component
+const ActionMenu = ({ visible, onClose, onEdit, onDelete, itemTitle }: {
+    visible: boolean;
+    onClose: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+    itemTitle: string;
+}) => {
+    if (!visible) return null;
+
+    return (
+        <View style={styles.actionMenuOverlay}>
+            <TouchableOpacity style={styles.actionMenuBackdrop} onPress={onClose} />
+            <View style={styles.actionMenu}>
+                <View style={styles.actionMenuHeader}>
+                    <Text style={styles.actionMenuTitle}>{itemTitle}</Text>
+                    <TouchableOpacity onPress={onClose} style={styles.actionMenuClose}>
+                        <Ionicons name="close" size={20} color="#64748b" />
+                    </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.actionMenuItem} onPress={onEdit}>
+                    <Ionicons name="pencil" size={20} color="#4f46e5" />
+                    <Text style={styles.actionMenuText}>Edit</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.actionMenuItem, styles.actionMenuItemDanger]} onPress={onDelete}>
+                    <Ionicons name="trash" size={20} color="#ef4444" />
+                    <Text style={[styles.actionMenuText, styles.actionMenuTextDanger]}>Delete</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#cbd5e0" />
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+};
+
+// Skeleton Loader Components
+const SkeletonCard = () => (
+    <View style={styles.skeletonCard}>
+        <View style={styles.skeletonHeader}>
+            <View style={styles.skeletonTitle} />
+            <View style={styles.skeletonTag} />
+        </View>
+        <View style={styles.skeletonContent}>
+            <View style={styles.skeletonLine} />
+            <View style={[styles.skeletonLine, { width: '80%' }]} />
+            <View style={[styles.skeletonLine, { width: '60%' }]} />
+        </View>
+        <View style={styles.skeletonFooter}>
+            <View style={styles.skeletonMeta} />
+            <View style={styles.skeletonMeta} />
+        </View>
+    </View>
+);
+
+const LoadingSpinner = () => (
+    <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4f46e5" />
+        <Text style={styles.loadingText}>Loading content...</Text>
+    </View>
+);
 
 interface Announcement {
     id: string;
@@ -53,6 +117,7 @@ export default function CourseDetailScreen() {
     const params = useLocalSearchParams();
     const { courseId, courseName, courseCode, instructorName, role, isArchived } = params;
     const { isOnline, hasReconnected } = useNetworkStatus();
+    const insets = useSafeAreaInsets();
 
     // Check if course is archived
     const courseIsArchived = isArchived === 'true';
@@ -75,6 +140,10 @@ export default function CourseDetailScreen() {
     const [courseConversations, setCourseConversations] = useState<CourseConversation[]>([]);
     const [loadingInbox, setLoadingInbox] = useState(false);
     const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
+    const [actionMenuVisible, setActionMenuVisible] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<{ id: string, type: 'announcement' | 'discussion', title: string } | null>(null);
+    const [isLoadingContent, setIsLoadingContent] = useState(true);
+    const fadeAnim = new Animated.Value(0);
 
     // Convert plain text to HTML for RichTextEditor
     const handleContentChange = (html: string) => {
@@ -115,12 +184,72 @@ export default function CourseDetailScreen() {
         }
     }, [courseId, isOnline, hasReconnected]);
 
+    // Refresh data when screen comes back into focus
+    useFocusEffect(
+        React.useCallback(() => {
+            refreshData();
+            if (!courseId) return;
+
+            // Force refresh data when screen comes into focus
+            if (isOnline) {
+                setupFirebaseListeners();
+            } else {
+                loadCachedData();
+            }
+
+            // Refresh drafts
+            loadDrafts();
+
+            // Refresh inbox if it's the active tab
+            if (activeTab === 'inbox') {
+                loadCourseConversations();
+            }
+        }, [courseId, isOnline, activeTab])
+    );
+
     // Load course conversations when inbox tab is active
     useEffect(() => {
         if (activeTab === 'inbox' && courseId) {
             loadCourseConversations();
         }
     }, [activeTab, courseId]);
+
+    // Animate content fade in when loading completes
+    useEffect(() => {
+        if (!isLoadingContent) {
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            }).start();
+        } else {
+            fadeAnim.setValue(0);
+        }
+    }, [isLoadingContent]);
+
+    // Animate content fade in when switching tabs (but not when closing modal)
+    useEffect(() => {
+        if (!isLoadingContent && !showCreateForm) {
+            // Only animate when switching tabs, not when closing modal
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [activeTab]);
+
+    // Animate content fade in when modal is closed
+    useEffect(() => {
+        if (!showCreateForm && !isLoadingContent) {
+            // Ensure content is visible when modal is closed
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [showCreateForm, isLoadingContent]);
 
     const loadCourseConversations = async () => {
         try {
@@ -303,6 +432,22 @@ export default function CourseDetailScreen() {
     const setupFirebaseListeners = () => {
         if (!courseId) return;
 
+        setIsLoadingContent(true);
+
+        let announcementsLoaded = false;
+        let discussionsLoaded = false;
+
+        const checkIfAllLoaded = () => {
+            if (announcementsLoaded && discussionsLoaded) {
+                setIsLoadingContent(false);
+            }
+        };
+
+        // Add a timeout fallback in case listeners don't fire
+        const loadingTimeout = setTimeout(() => {
+            setIsLoadingContent(false);
+        }, 10000); // 10 second timeout
+
         // Listen to announcements
         const announcementsQuery = firestore().collection('courses').doc(courseId as string).collection('announcements').orderBy('createdAt', 'desc');
 
@@ -324,6 +469,13 @@ export default function CourseDetailScreen() {
             } catch (error) {
                 console.error('Error caching announcements:', error);
             }
+
+            announcementsLoaded = true;
+            checkIfAllLoaded();
+        }, (error) => {
+            console.error('Error in announcements listener:', error);
+            announcementsLoaded = true;
+            checkIfAllLoaded();
         });
 
         // Listen to discussions and cache them
@@ -347,6 +499,13 @@ export default function CourseDetailScreen() {
             } catch (error) {
                 console.error('Error caching discussions:', error);
             }
+
+            discussionsLoaded = true;
+            checkIfAllLoaded();
+        }, (error) => {
+            console.error('Error in discussions listener:', error);
+            discussionsLoaded = true;
+            checkIfAllLoaded();
         });
 
         // Listen to unread messages for inbox badge count
@@ -363,6 +522,7 @@ export default function CourseDetailScreen() {
             });
 
             return () => {
+                clearTimeout(loadingTimeout);
                 unsubscribeAnnouncements();
                 unsubscribeDiscussions();
                 unsubscribeUnreadMessages();
@@ -370,6 +530,7 @@ export default function CourseDetailScreen() {
         }
 
         return () => {
+            clearTimeout(loadingTimeout);
             unsubscribeAnnouncements();
             unsubscribeDiscussions();
         };
@@ -379,6 +540,7 @@ export default function CourseDetailScreen() {
         if (!courseId) return;
 
         setIsLoadingFromCache(true);
+        setIsLoadingContent(true);
         try {
             const [cachedAnnouncements, cachedDiscussions] = await Promise.all([
                 offlineCacheService.getCachedAnnouncements(courseId as string),
@@ -391,6 +553,7 @@ export default function CourseDetailScreen() {
             console.error('Error loading cached data:', error);
         } finally {
             setIsLoadingFromCache(false);
+            setIsLoadingContent(false);
         }
     };
 
@@ -522,6 +685,10 @@ export default function CourseDetailScreen() {
             setNewContentHtml('');
             setIsAnonymous(false);
             setShowCreateForm(false);
+
+            // Force refresh the data to ensure new content appears
+            await refreshData();
+
             setAlertConfig({
                 visible: true,
                 title: 'Success',
@@ -530,7 +697,11 @@ export default function CourseDetailScreen() {
                 actions: [
                     {
                         text: 'OK',
-                        onPress: () => setAlertConfig(null),
+                        onPress: async () => {
+                            setAlertConfig(null);
+                            await refreshData();
+                            setShowCreateForm(false);
+                        },
                         style: 'primary',
                     },
                 ],
@@ -643,6 +814,10 @@ export default function CourseDetailScreen() {
                         setAlertConfig(null);
                         try {
                             await firestore().collection('courses').doc(courseId as string).collection(`${type}s`).doc(itemId).delete();
+
+                            // Force refresh the data to ensure deleted content is removed
+                            await refreshData();
+
                             setAlertConfig({
                                 visible: true,
                                 title: 'Success',
@@ -692,6 +867,40 @@ export default function CourseDetailScreen() {
         setShowCreateForm(true);
     };
 
+    const handleActionMenu = (item: any, type: 'announcement' | 'discussion') => {
+        setSelectedItem({
+            id: item.id,
+            type: type,
+            title: item.title
+        });
+        setActionMenuVisible(true);
+    };
+
+    const handleCloseActionMenu = () => {
+        setActionMenuVisible(false);
+        setSelectedItem(null);
+    };
+
+    const handleEditFromMenu = () => {
+        if (selectedItem) {
+            const item = selectedItem.type === 'announcement'
+                ? announcements.find(a => a.id === selectedItem.id)
+                : discussions.find(d => d.id === selectedItem.id);
+
+            if (item) {
+                handleCloseActionMenu();
+                handleEdit(item, selectedItem.type);
+            }
+        }
+    };
+
+    const handleDeleteFromMenu = () => {
+        if (selectedItem) {
+            handleCloseActionMenu();
+            handleDelete(selectedItem.id, selectedItem.type);
+        }
+    };
+
     const handleUpdate = async () => {
         if (!editingItem || !newTitle.trim() || !newContent.trim()) {
             setAlertConfig({
@@ -723,6 +932,10 @@ export default function CourseDetailScreen() {
             setNewContent('');
             setEditingItem(null);
             setShowCreateForm(false);
+
+            // Force refresh the data to ensure updated content appears
+            await refreshData();
+
             setAlertConfig({
                 visible: true,
                 title: 'Success',
@@ -876,299 +1089,318 @@ export default function CourseDetailScreen() {
                 </View>
             )}
 
-            {announcements.length === 0 ? (
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>
-                        {!isOnline ? "No cached announcements available" : "No announcements yet"}
-                    </Text>
+            {/* Loading State */}
+            {isLoadingContent ? (
+                <View>
+                    <LoadingSpinner />
+                    {/* Show skeleton cards while loading */}
+                    {[1, 2, 3].map((index) => (
+                        <SkeletonCard key={index} />
+                    ))}
                 </View>
+            ) : announcements.length === 0 ? (
+                <Animated.View style={{ opacity: fadeAnim }}>
+                    <View style={styles.emptyState}>
+                        <Ionicons name="megaphone-outline" size={64} color="#cbd5e0" />
+                        <Text style={styles.emptyText}>
+                            {!isOnline ? "No cached announcements available" : "No announcements yet"}
+                        </Text>
+                        <Text style={styles.emptySubtext}>
+                            {!isOnline ? "Check back when you're online" : "Be the first to create an announcement"}
+                        </Text>
+                    </View>
+                </Animated.View>
             ) : (
-                announcements.map((announcement) => (
-                    <TouchableOpacity
-                        key={announcement.id}
-                        style={styles.postCard}
-                        onPress={() => handleAnnouncementPress(announcement)}
-                    >
-                        <View style={styles.postHeader}>
-                            <Text style={styles.postTitle}>{announcement.title}</Text>
-                            <View style={styles.postHeaderRight}>
-                                <View style={[
-                                    styles.roleTag,
-                                    announcement.authorRole === 'teacher' ? styles.teacherTag :
-                                        announcement.authorRole === 'admin' ? styles.adminTag : styles.studentTag
-                                ]}>
-                                    <Text style={styles.roleTagText}>{announcement.authorRole}</Text>
-                                </View>
-                                {/* Show edit/delete only for author and if not archived and online */}
-                                {auth().currentUser?.uid === announcement.authorId && !courseIsArchived && isOnline && (
-                                    <View style={styles.actionButtons}>
-                                        <TouchableOpacity
-                                            style={styles.editButton}
-                                            onPress={() => handleEdit(announcement, 'announcement')}
-                                        >
-                                            <Ionicons name="pencil" size={16} color="#666" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.deleteButton}
-                                            onPress={() => handleDelete(announcement.id, 'announcement')}
-                                        >
-                                            <Ionicons name="trash" size={16} color="#d32f2f" />
-                                        </TouchableOpacity>
+                <Animated.View style={{ opacity: fadeAnim }}>
+                    {announcements.map((announcement) => (
+                        <TouchableOpacity
+                            key={announcement.id}
+                            style={styles.postCard}
+                            onPress={() => handleAnnouncementPress(announcement)}
+                        >
+                            <View style={styles.postHeader}>
+                                <Text style={styles.postTitle}>{announcement.title}</Text>
+                                <View style={styles.postHeaderRight}>
+                                    <View style={[
+                                        styles.roleTag,
+                                        announcement.authorRole === 'teacher' ? styles.teacherTag :
+                                            announcement.authorRole === 'admin' ? styles.adminTag : styles.studentTag
+                                    ]}>
+                                        <Text style={styles.roleTagText}>{announcement.authorRole}</Text>
                                     </View>
-                                )}
+                                    {/* Show edit/delete only for author and if not archived and online */}
+                                    {auth().currentUser?.uid === announcement.authorId && !courseIsArchived && isOnline && (
+                                        <TouchableOpacity
+                                            style={styles.actionMenuButton}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                handleActionMenu(announcement, 'announcement');
+                                            }}
+                                        >
+                                            <Ionicons name="ellipsis-horizontal" size={20} color="#64748b" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </View>
-                        </View>
-                        <View style={styles.postContentContainer}>
-                            <MarkdownRenderer
-                                content={
-                                    expandedAnnouncements.has(announcement.id)
-                                        ? announcement.content
-                                        : getAnnouncementPreview(announcement.content)
-                                }
-                            />
-                        </View>
-
-                        {/* Show "read more" indicator if content is truncated and not expanded */}
-                        {announcement.content.length > 100 && !expandedAnnouncements.has(announcement.id) && (
-                            <View style={styles.readMoreIndicator}>
-                                <Ionicons name="chevron-down" size={16} color="#4f46e5" />
-                                <Text style={styles.readMoreText}>Read more</Text>
+                            <View style={styles.postContentContainer}>
+                                <MarkdownRenderer
+                                    content={
+                                        expandedAnnouncements.has(announcement.id)
+                                            ? announcement.content
+                                            : getAnnouncementPreview(announcement.content)
+                                    }
+                                />
                             </View>
-                        )}
 
-                        {/* Show "read less" indicator if expanded */}
-                        {expandedAnnouncements.has(announcement.id) && (
-                            <View style={styles.readMoreIndicator}>
-                                <Ionicons name="chevron-up" size={16} color="#4f46e5" />
-                                <Text style={styles.readMoreText}>Read less</Text>
-                            </View>
-                        )}
-
-                        {/* Unread indicator - only show for students, not for the author */}
-                        {!announcement.views?.[auth().currentUser?.uid || ''] &&
-                            auth().currentUser?.uid !== announcement.authorId && (
-                                <View style={styles.unreadIndicator}>
-                                    <View style={styles.unreadDot} />
-                                    <Text style={styles.unreadText}>New</Text>
+                            {/* Show "read more" indicator if content is truncated and not expanded */}
+                            {announcement.content.length > 100 && !expandedAnnouncements.has(announcement.id) && (
+                                <View style={styles.readMoreIndicator}>
+                                    <Ionicons name="chevron-down" size={16} color="#4f46e5" />
+                                    <Text style={styles.readMoreText}>Read more</Text>
                                 </View>
                             )}
 
-                        <View style={styles.postMeta}>
-                            <Text style={styles.postAuthor}>By {announcement.authorName}</Text>
-                            <Text style={styles.postDate}>{formatDate(announcement.createdAt)}</Text>
-                        </View>
-                        <View style={styles.viewCount}>
-                            <Ionicons name="eye-outline" size={16} color="#64748b" />
-                            <Text style={styles.viewCountText}>
-                                {announcement.views ? Object.keys(announcement.views).length : 0} views
-                            </Text>
-                        </View>
-                        {courseIsArchived && (
-                            <View style={styles.archivedNotice}>
-                                <Ionicons name="archive" size={14} color="#666" />
-                                <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
-                            </View>
-                        )}
-                        {!isOnline && (
-                            <View style={styles.cachedIndicator}>
-                                <Ionicons name="download" size={12} color="#4f46e5" />
-                                <Text style={styles.cachedText}>Cached content</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                ))
-            )}
-        </ScrollView>
-    );
-
-    const renderDiscussions = () => (
-        <ScrollView style={styles.contentContainer}>
-            {/* Offline/Cache Status Indicator */}
-            {(!isOnline || isLoadingFromCache) && (
-                <View style={styles.offlineIndicator}>
-                    <Ionicons
-                        name={!isOnline ? "cloud-offline" : "refresh"}
-                        size={16}
-                        color={!isOnline ? "#f59e0b" : "#4f46e5"}
-                    />
-                    <Text style={styles.offlineText}>
-                        {!isOnline ? "Offline - Showing cached discussions" : "Loading cached discussions..."}
-                    </Text>
-                </View>
-            )}
-
-            {/* Draft Sync Status */}
-            {syncingDrafts && (
-                <View style={styles.syncIndicator}>
-                    <Ionicons name="sync" size={16} color="#4f46e5" />
-                    <Text style={styles.syncText}>Syncing drafts...</Text>
-                </View>
-            )}
-
-            {/* Manual Sync Button */}
-            {isOnline && drafts.filter(d => d.type === 'discussion' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
-                <TouchableOpacity
-                    style={styles.manualSyncButton}
-                    onPress={syncDrafts}
-                    disabled={syncingDrafts}
-                >
-                    <Ionicons
-                        name={syncingDrafts ? "sync" : "cloud-upload"}
-                        size={16}
-                        color="#4f46e5"
-                    />
-                    <Text style={styles.manualSyncText}>
-                        {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
-                    </Text>
-                </TouchableOpacity>
-            )}
-
-            {/* Draft Posts (Pending/Failed) */}
-            {drafts.filter(draft => draft.type === 'discussion' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
-                <View key={draft.id} style={[styles.postCard, styles.draftCard]}>
-                    <View style={styles.postHeader}>
-                        <Text style={styles.postTitle}>{draft.title}</Text>
-                        <View style={styles.postHeaderRight}>
-                            <View style={[styles.statusBadge,
-                            draft.status === 'pending' ? styles.pendingBadge :
-                                draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
-                            ]}>
-                                <Ionicons
-                                    name={
-                                        draft.status === 'pending' ? "sync" :
-                                            draft.status === 'failed' ? "alert-circle" : "document-text"
-                                    }
-                                    size={12}
-                                    color="#fff"
-                                />
-                                <Text style={styles.statusBadgeText}>
-                                    {draft.status === 'pending' ? 'Syncing' :
-                                        draft.status === 'failed' ? 'Failed' : 'Draft'}
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-                    <Text style={styles.postContent}>{draft.content}</Text>
-                    <View style={styles.postMeta}>
-                        <Text style={styles.postAuthor}>
-                            {draft.isAnonymous ? 'Anonymous Student' : `By ${draft.authorRole}`}
-                        </Text>
-                        <Text style={styles.postDate}>
-                            {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                    </View>
-                    {draft.status === 'failed' && (
-                        <View style={styles.errorNotice}>
-                            <Ionicons name="warning" size={14} color="#ef4444" />
-                            <Text style={styles.errorNoticeText}>
-                                Failed to sync. Will retry when online.
-                            </Text>
-                        </View>
-                    )}
-                </View>
-            ))}
-
-            {/* Regular Discussions */}
-            {discussions.length === 0 && drafts.filter(d => d.type === 'discussion').length === 0 ? (
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>
-                        {!isOnline ? "No cached discussions available" : "No discussions yet"}
-                    </Text>
-                </View>
-            ) : (
-                discussions.map((discussion) => (
-                    <TouchableOpacity
-                        key={discussion.id}
-                        style={styles.postCard}
-                        onPress={() => !courseIsArchived && handleDiscussionPress(discussion)}
-                        disabled={courseIsArchived}
-                    >
-                        <View style={styles.postHeader}>
-                            <Text style={styles.postTitle}>{discussion.title}</Text>
-                            <View style={styles.postHeaderRight}>
-                                <View style={[
-                                    styles.roleTag,
-                                    discussion.isAnonymous ? styles.studentTag :
-                                        discussion.authorRole === 'teacher' ? styles.teacherTag :
-                                            discussion.authorRole === 'admin' ? styles.adminTag : styles.studentTag
-                                ]}>
-                                    <Text style={styles.roleTagText}>
-                                        {discussion.authorRole}
-                                    </Text>
+                            {/* Show "read less" indicator if expanded */}
+                            {expandedAnnouncements.has(announcement.id) && (
+                                <View style={styles.readMoreIndicator}>
+                                    <Ionicons name="chevron-up" size={16} color="#4f46e5" />
+                                    <Text style={styles.readMoreText}>Read less</Text>
                                 </View>
-                                {/* Show edit/delete only for author and if not archived and online */}
-                                {auth().currentUser?.uid === discussion.authorId && !courseIsArchived && isOnline && (
-                                    <View style={styles.actionButtons}>
-                                        <TouchableOpacity
-                                            style={styles.editButton}
-                                            onPress={(e) => {
-                                                e.stopPropagation();
-                                                handleEdit(discussion, 'discussion');
-                                            }}
-                                        >
-                                            <Ionicons name="pencil" size={16} color="#666" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.deleteButton}
-                                            onPress={(e) => {
-                                                e.stopPropagation();
-                                                handleDelete(discussion.id, 'discussion');
-                                            }}
-                                        >
-                                            <Ionicons name="trash" size={16} color="#d32f2f" />
-                                        </TouchableOpacity>
+                            )}
+
+                            {/* Unread indicator - only show for students, not for the author */}
+                            {!announcement.views?.[auth().currentUser?.uid || ''] &&
+                                auth().currentUser?.uid !== announcement.authorId && (
+                                    <View style={styles.unreadIndicator}>
+                                        <View style={styles.unreadDot} />
+                                        <Text style={styles.unreadText}>New</Text>
                                     </View>
                                 )}
+
+                            <View style={styles.postMeta}>
+                                <Text style={styles.postAuthor}>By {announcement.authorName}</Text>
+                                <Text style={styles.postDate}>{formatDate(announcement.createdAt)}</Text>
                             </View>
-                        </View>
-                        <View style={styles.postContentContainer}>
-                            <MarkdownRenderer content={discussion.content} />
-                        </View>
-                        <View style={styles.postMeta}>
-                            <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
-                            <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
-                        </View>
-                        <View style={styles.discussionFooter}>
-                            <View style={styles.discussionStats}>
-                                <TouchableOpacity
-                                    style={styles.likeButton}
-                                    onPress={(e) => {
-                                        e.stopPropagation();
-                                        handleLikeDiscussion(discussion.id);
-                                    }}
-                                >
-                                    <Ionicons
-                                        name={discussion.likes?.[auth().currentUser?.uid || ''] ? "thumbs-up" : "thumbs-up-outline"}
-                                        size={16}
-                                        color={discussion.likes?.[auth().currentUser?.uid || ''] ? "#4f46e5" : "#64748b"}
-                                    />
-                                    <Text style={styles.likeCount}>
-                                        {discussion.likes ? Object.keys(discussion.likes).length : 0}
-                                    </Text>
-                                </TouchableOpacity>
-                                <Text style={styles.repliesCount}>
-                                    <Ionicons name="chatbubble-outline" size={14} color="#666" /> {discussion.replies} replies
+                            <View style={styles.viewCount}>
+                                <Ionicons name="eye-outline" size={16} color="#64748b" />
+                                <Text style={styles.viewCountText}>
+                                    {announcement.views ? Object.keys(announcement.views).length : 0} views
                                 </Text>
                             </View>
-                            {!courseIsArchived && <Ionicons name="chevron-forward" size={16} color="#666" />}
-                        </View>
-                        {courseIsArchived && (
-                            <View style={styles.archivedNotice}>
-                                <Ionicons name="archive" size={14} color="#666" />
-                                <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
-                            </View>
-                        )}
-                        {!isOnline && (
-                            <View style={styles.cachedIndicator}>
-                                <Ionicons name="download" size={12} color="#4f46e5" />
-                                <Text style={styles.cachedText}>Cached content</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                ))
+                            {courseIsArchived && (
+                                <View style={styles.archivedNotice}>
+                                    <Ionicons name="archive" size={14} color="#666" />
+                                    <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
+                                </View>
+                            )}
+                            {!isOnline && (
+                                <View style={styles.cachedIndicator}>
+                                    <Ionicons name="download" size={12} color="#4f46e5" />
+                                    <Text style={styles.cachedText}>Cached content</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    ))}
+                </Animated.View>
             )}
         </ScrollView>
     );
+
+    const renderDiscussions = () => {
+        return (
+            <ScrollView style={styles.contentContainer}>
+                {/* Offline/Cache Status Indicator */}
+                {(!isOnline || isLoadingFromCache) && (
+                    <View style={styles.offlineIndicator}>
+                        <Ionicons
+                            name={!isOnline ? "cloud-offline" : "refresh"}
+                            size={16}
+                            color={!isOnline ? "#f59e0b" : "#4f46e5"}
+                        />
+                        <Text style={styles.offlineText}>
+                            {!isOnline ? "Offline - Showing cached discussions" : "Loading cached discussions..."}
+                        </Text>
+                    </View>
+                )}
+
+                {/* Draft Sync Status */}
+                {syncingDrafts && (
+                    <View style={styles.syncIndicator}>
+                        <Ionicons name="sync" size={16} color="#4f46e5" />
+                        <Text style={styles.syncText}>Syncing drafts...</Text>
+                    </View>
+                )}
+
+                {/* Manual Sync Button */}
+                {isOnline && drafts.filter(d => d.type === 'discussion' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
+                    <TouchableOpacity
+                        style={styles.manualSyncButton}
+                        onPress={syncDrafts}
+                        disabled={syncingDrafts}
+                    >
+                        <Ionicons
+                            name={syncingDrafts ? "sync" : "cloud-upload"}
+                            size={16}
+                            color="#4f46e5"
+                        />
+                        <Text style={styles.manualSyncText}>
+                            {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {/* Draft Posts (Pending/Failed) */}
+                {drafts.filter(draft => draft.type === 'discussion' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
+                    <View key={draft.id} style={[styles.postCard, styles.draftCard]}>
+                        <View style={styles.postHeader}>
+                            <Text style={styles.postTitle}>{draft.title}</Text>
+                            <View style={styles.postHeaderRight}>
+                                <View style={[styles.statusBadge,
+                                draft.status === 'pending' ? styles.pendingBadge :
+                                    draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
+                                ]}>
+                                    <Ionicons
+                                        name={
+                                            draft.status === 'pending' ? "sync" :
+                                                draft.status === 'failed' ? "alert-circle" : "document-text"
+                                        }
+                                        size={12}
+                                        color="#fff"
+                                    />
+                                    <Text style={styles.statusBadgeText}>
+                                        {draft.status === 'pending' ? 'Syncing' :
+                                            draft.status === 'failed' ? 'Failed' : 'Draft'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                        <Text style={styles.postContent}>{draft.content}</Text>
+                        <View style={styles.postMeta}>
+                            <Text style={styles.postAuthor}>
+                                {draft.isAnonymous ? 'Anonymous Student' : `By ${draft.authorRole}`}
+                            </Text>
+                            <Text style={styles.postDate}>
+                                {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                        </View>
+                        {draft.status === 'failed' && (
+                            <View style={styles.errorNotice}>
+                                <Ionicons name="warning" size={14} color="#ef4444" />
+                                <Text style={styles.errorNoticeText}>
+                                    Failed to sync. Will retry when online.
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                ))}
+
+                {/* Loading State */}
+                {isLoadingContent ? (
+                    <View>
+                        <LoadingSpinner />
+                        {/* Show skeleton cards while loading */}
+                        {[1, 2, 3].map((index) => (
+                            <SkeletonCard key={index} />
+                        ))}
+                    </View>
+                ) : discussions.length === 0 && drafts.filter(d => d.type === 'discussion').length === 0 ? (
+                    <Animated.View style={{ opacity: fadeAnim }}>
+                        <View style={styles.emptyState}>
+                            <Ionicons name="chatbubbles-outline" size={64} color="#cbd5e0" />
+                            <Text style={styles.emptyText}>
+                                {!isOnline ? "No cached discussions available" : "No discussions yet"}
+                            </Text>
+                            <Text style={styles.emptySubtext}>
+                                {!isOnline ? "Check back when you're online" : "Start the first discussion"}
+                            </Text>
+                        </View>
+                    </Animated.View>
+                ) : (
+                    <Animated.View style={{ opacity: fadeAnim }}>
+                        {discussions.map((discussion) => (
+                            <TouchableOpacity
+                                key={discussion.id}
+                                style={styles.postCard}
+                                onPress={() => !courseIsArchived && handleDiscussionPress(discussion)}
+                                disabled={courseIsArchived}
+                            >
+                                <View style={styles.postHeader}>
+                                    <Text style={styles.postTitle}>{discussion.title}</Text>
+                                    <View style={styles.postHeaderRight}>
+                                        <View style={[
+                                            styles.roleTag,
+                                            discussion.isAnonymous ? styles.studentTag :
+                                                discussion.authorRole === 'teacher' ? styles.teacherTag :
+                                                    discussion.authorRole === 'admin' ? styles.adminTag : styles.studentTag
+                                        ]}>
+                                            <Text style={styles.roleTagText}>
+                                                {discussion.authorRole}
+                                            </Text>
+                                        </View>
+                                        {/* Show edit/delete only for author and if not archived and online */}
+                                        {auth().currentUser?.uid === discussion.authorId && !courseIsArchived && isOnline && (
+                                            <TouchableOpacity
+                                                style={styles.actionMenuButton}
+                                                onPress={(e) => {
+                                                    e.stopPropagation();
+                                                    handleActionMenu(discussion, 'discussion');
+                                                }}
+                                            >
+                                                <Ionicons name="ellipsis-horizontal" size={20} color="#64748b" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                </View>
+                                <View style={styles.postContentContainer}>
+                                    <MarkdownRenderer content={discussion.content} />
+                                </View>
+                                <View style={styles.postMeta}>
+                                    <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
+                                    <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
+                                </View>
+                                <View style={styles.discussionFooter}>
+                                    <View style={styles.discussionStats}>
+                                        <TouchableOpacity
+                                            style={styles.likeButton}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                handleLikeDiscussion(discussion.id);
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name={discussion.likes?.[auth().currentUser?.uid || ''] ? "thumbs-up" : "thumbs-up-outline"}
+                                                size={16}
+                                                color={discussion.likes?.[auth().currentUser?.uid || ''] ? "#4f46e5" : "#64748b"}
+                                            />
+                                            <Text style={styles.likeCount}>
+                                                {discussion.likes ? Object.keys(discussion.likes).length : 0}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <Text style={styles.repliesCount}>
+                                            <Ionicons name="chatbubble-outline" size={14} color="#666" /> {discussion.replies} replies
+                                        </Text>
+                                    </View>
+                                    {!courseIsArchived && <Ionicons name="chevron-forward" size={16} color="#666" />}
+                                </View>
+                                {courseIsArchived && (
+                                    <View style={styles.archivedNotice}>
+                                        <Ionicons name="archive" size={14} color="#666" />
+                                        <Text style={styles.archivedNoticeText}>This course is archived - read only</Text>
+                                    </View>
+                                )}
+                                {!isOnline && (
+                                    <View style={styles.cachedIndicator}>
+                                        <Ionicons name="download" size={12} color="#4f46e5" />
+                                        <Text style={styles.cachedText}>Cached content</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </Animated.View>
+                )}
+            </ScrollView>
+        );
+    };
 
     const renderCreateForm = () => {
         return (
@@ -1176,12 +1408,17 @@ export default function CourseDetailScreen() {
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     style={styles.keyboardAvoidingView}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
                 >
                     <ScrollView
                         style={styles.scrollView}
-                        contentContainerStyle={styles.scrollContent}
+                        contentContainerStyle={[
+                            styles.scrollContent,
+                            { paddingBottom: Math.max(100, insets.bottom + 20) }
+                        ]}
                         keyboardShouldPersistTaps="handled"
                         showsVerticalScrollIndicator={false}
+                        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
                     >
                         <View style={styles.formHeader}>
                             <Text style={styles.formTitle}>
@@ -1371,6 +1608,43 @@ export default function CourseDetailScreen() {
         );
     };
 
+    const refreshData = async () => {
+        if (!courseId || !isOnline) return;
+
+        try {
+            // Fetch fresh data directly without setting up new listeners
+            const [announcementsSnapshot, discussionsSnapshot] = await Promise.all([
+                firestore().collection('courses').doc(courseId as string).collection('announcements').orderBy('createdAt', 'desc').get(),
+                firestore().collection('courses').doc(courseId as string).collection('discussions').orderBy('createdAt', 'desc').get()
+            ]);
+
+            const announcementsList = announcementsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Announcement[];
+
+            const discussionsList = discussionsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Discussion[];
+
+            setAnnouncements(announcementsList);
+            setDiscussions(discussionsList);
+
+            // Cache the data
+            try {
+                await Promise.all([
+                    offlineCacheService.cacheAnnouncements(courseId as string, announcementsList, courseName as string),
+                    offlineCacheService.cacheDiscussions(courseId as string, discussionsList, courseName as string)
+                ]);
+            } catch (error) {
+                console.error('Error caching refreshed data:', error);
+            }
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#4f46e5" />
@@ -1378,52 +1652,39 @@ export default function CourseDetailScreen() {
                 colors={['#4f46e5', '#3730a3']}
                 style={styles.header}
             >
-                <Pressable style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
-                </Pressable>
-                <View style={styles.headerInfo}>
-                    <View style={styles.headerTitleRow}>
+                <View style={styles.headerContent}>
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => router.back()}
+                    >
+                        <Ionicons name="arrow-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <View style={styles.headerInfo}>
                         <Text style={styles.headerTitle}>{courseName}</Text>
-                        {courseIsArchived && (
-                            <View style={styles.archivedBadge}>
-                                <Ionicons name="archive" size={16} color="#fff" />
-                            </View>
-                        )}
+                        <Text style={styles.headerSubtitle}>{courseCode}</Text>
                     </View>
-                    <Text style={styles.headerSubtitle}>{courseCode} • {instructorName}</Text>
-                </View>
-                <View style={styles.headerActions}>
-                    <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
-                    {role === 'teacher' && (
+                    <View style={styles.headerActions}>
+                        {role === 'teacher' && (
+                            <TouchableOpacity
+                                style={styles.aiAssistantButton}
+                                onPress={() => router.push({
+                                    pathname: '/ai-assistant',
+                                    params: { courseId, courseName, role }
+                                })}
+                            >
+                                <Ionicons name="sparkles" size={20} color="#fff" />
+                            </TouchableOpacity>
+                        )}
                         <TouchableOpacity
                             style={styles.resourcesButton}
                             onPress={() => router.push({
                                 pathname: '/course-resources',
-                                params: {
-                                    courseId: courseId,
-                                    courseName: courseName,
-                                    role: role
-                                }
+                                params: { courseId, courseName, role }
                             })}
                         >
                             <Ionicons name="folder" size={20} color="#fff" />
                         </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                        style={styles.aiAssistantButton}
-                        onPress={() => router.push({
-                            pathname: '/ai-assistant',
-                            params: {
-                                courseId: courseId,
-                                courseName: courseName,
-                                courseCode: courseCode,
-                                instructorName: instructorName,
-                                role: role
-                            }
-                        })}
-                    >
-                        <Ionicons name="sparkles" size={20} color="#fff" />
-                    </TouchableOpacity>
+                    </View>
                 </View>
             </LinearGradient>
 
@@ -1473,14 +1734,17 @@ export default function CourseDetailScreen() {
                             activeTab === 'inbox' ? renderInbox() : null}
 
                     {/* Only show FAB if not archived and user can create content, but not on inbox tab */}
-                    {!courseIsArchived && activeTab !== 'inbox' && (activeTab === 'discussions' || role === 'teacher' || role === 'admin') && (
-                        <TouchableOpacity
-                            style={styles.fab}
-                            onPress={() => setShowCreateForm(true)}
-                        >
-                            <Ionicons name="add" size={30} color="#fff" />
-                        </TouchableOpacity>
-                    )}
+                    {!courseIsArchived && activeTab !== 'inbox' && (
+                        (role === 'teacher' || role === 'admin') ||
+                        (role === 'student' && activeTab === 'discussions')
+                    ) && (
+                            <TouchableOpacity
+                                style={[styles.fab, { bottom: Math.max(24, insets.bottom + 8) }]}
+                                onPress={() => setShowCreateForm(true)}
+                            >
+                                <Ionicons name="add" size={30} color="#fff" />
+                            </TouchableOpacity>
+                        )}
                 </>
             )}
 
@@ -1491,6 +1755,14 @@ export default function CourseDetailScreen() {
                 type={alertConfig?.type || 'info'}
                 actions={alertConfig?.actions || []}
                 onDismiss={() => setAlertConfig(null)}
+            />
+
+            <ActionMenu
+                visible={actionMenuVisible}
+                onClose={handleCloseActionMenu}
+                onEdit={handleEditFromMenu}
+                onDelete={handleDeleteFromMenu}
+                itemTitle={selectedItem?.title || ''}
             />
         </SafeAreaView>
     );
@@ -1504,6 +1776,13 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+    },
+    headerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 16,
     },
@@ -1588,6 +1867,7 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: 16,
         paddingVertical: 20,
+        paddingBottom: 100, // Add extra padding for FAB
     },
     emptyState: {
         flex: 1,
@@ -1599,6 +1879,15 @@ const styles = StyleSheet.create({
         fontSize: 18,
         color: '#64748b',
         fontWeight: '500',
+        marginTop: 16,
+        textAlign: 'center',
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: '#94a3b8',
+        marginTop: 8,
+        textAlign: 'center',
+        lineHeight: 20,
     },
     postCard: {
         backgroundColor: '#fff',
@@ -1675,7 +1964,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     teacherTag: {
-        backgroundColor: '#4f46e5',
+        backgroundColor: '#d44500',
     },
     adminTag: {
         backgroundColor: '#059669',
@@ -1718,26 +2007,28 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
         paddingBottom: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#f1f5f9',
         paddingHorizontal: 16,
     },
     formTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1e293b',
         letterSpacing: -0.3,
+        flex: 1,
     },
     formContent: {
         paddingHorizontal: 16,
+        paddingBottom: 20,
     },
     titleInput: {
         backgroundColor: '#fff',
         padding: 16,
         borderRadius: 12,
-        fontSize: 17,
+        fontSize: 16,
         marginBottom: 16,
         borderWidth: 1,
         borderColor: '#e2e8f0',
@@ -1748,9 +2039,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.04,
         shadowRadius: 8,
         elevation: 2,
+        minHeight: 50,
     },
     contentInput: {
         marginBottom: 20,
+        minHeight: 120,
     },
     createButton: {
         backgroundColor: '#4f46e5',
@@ -1763,8 +2056,9 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
         alignSelf: 'center',
-        width: '80%',
+        width: '100%',
         maxWidth: 300,
+        minHeight: 50,
     },
     buttonDisabled: {
         opacity: 0.6,
@@ -1772,7 +2066,7 @@ const styles = StyleSheet.create({
     },
     createButtonText: {
         color: '#fff',
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '700',
         letterSpacing: 0.5,
     },
@@ -1788,13 +2082,13 @@ const styles = StyleSheet.create({
         borderColor: '#e2e8f0',
     },
     anonymityLabel: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#1e293b',
         fontWeight: '600',
+        flex: 1,
     },
     fab: {
         position: 'absolute',
-        bottom: 24,
         right: 24,
         width: 68,
         height: 68,
@@ -1810,6 +2104,10 @@ const styles = StyleSheet.create({
         },
         shadowOpacity: 0.4,
         shadowRadius: 16,
+        zIndex: 1000,
+        // Ensure FAB is always visible
+        minWidth: 68,
+        minHeight: 68,
     },
     formScrollView: {
         flex: 1,
@@ -1818,21 +2116,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-    },
-    actionButtons: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    editButton: {
-        padding: 8,
-        borderRadius: 8,
-        backgroundColor: '#f8fafc',
-    },
-    deleteButton: {
-        padding: 8,
-        borderRadius: 8,
-        backgroundColor: '#fef2f2',
     },
     archivedNotice: {
         flexDirection: 'row',
@@ -2032,6 +2315,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
+        paddingTop: 10,
     },
     closeButton: {
         padding: 8,
@@ -2145,12 +2429,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginLeft: 8,
     },
-    emptySubtext: {
-        fontSize: 14,
-        color: '#64748b',
-        marginTop: 8,
-        textAlign: 'center',
-    },
     tabContent: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2172,5 +2450,146 @@ const styles = StyleSheet.create({
     },
     activeTabBadgeText: {
         color: '#ef4444',
+    },
+    actionMenuOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        zIndex: 1000,
+    },
+    actionMenuBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    actionMenu: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 20,
+        width: '80%',
+        maxWidth: 350,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    actionMenuHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    actionMenuTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        flex: 1,
+        letterSpacing: -0.3,
+    },
+    actionMenuClose: {
+        padding: 8,
+    },
+    actionMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    actionMenuItemDanger: {
+        borderBottomColor: '#fef2f2',
+    },
+    actionMenuText: {
+        fontSize: 16,
+        color: '#1e293b',
+        fontWeight: '600',
+        marginLeft: 12,
+    },
+    actionMenuTextDanger: {
+        color: '#ef4444',
+    },
+    actionMenuButton: {
+        padding: 8,
+    },
+    skeletonCard: {
+        backgroundColor: '#fff',
+        padding: 24,
+        borderRadius: 20,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(241, 245, 249, 0.8)',
+    },
+    skeletonHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    skeletonTitle: {
+        width: '70%',
+        height: 24,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 8,
+    },
+    skeletonTag: {
+        width: 60,
+        height: 20,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 8,
+    },
+    skeletonContent: {
+        marginBottom: 20,
+        paddingVertical: 4,
+    },
+    skeletonLine: {
+        height: 18,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    skeletonFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
+    },
+    skeletonMeta: {
+        width: 40,
+        height: 16,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 8,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingTop: 120,
+    },
+    loadingText: {
+        fontSize: 18,
+        color: '#64748b',
+        marginTop: 10,
     },
 }); 

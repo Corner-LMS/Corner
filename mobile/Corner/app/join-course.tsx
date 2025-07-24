@@ -10,6 +10,16 @@ export default function JoinCourseScreen() {
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
 
+    const renderLogoSection = () => {
+        return (
+            <View style={styles.logoSection}>
+                <View style={styles.logoIconContainer}>
+                    <Text style={styles.logoIconText}>C</Text>
+                </View>
+            </View>
+        );
+    };
+
     const handleJoin = async () => {
         setLoading(true);
         try {
@@ -144,9 +154,7 @@ export default function JoinCourseScreen() {
                 </Pressable>
 
                 <View style={styles.headerContent}>
-                    <View style={styles.headerIcon}>
-                        <Ionicons name="school" size={32} color="#fff" />
-                    </View>
+                    {renderLogoSection()}
                     <Text style={styles.headerTitle}>Join Course</Text>
                     <Text style={styles.headerSubtitle}>Enter your course code</Text>
                 </View>
@@ -212,26 +220,41 @@ const styles = StyleSheet.create({
     headerContent: {
         alignItems: 'center',
     },
-    headerIcon: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
+    logoSection: {
         alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 16,
     },
+    logoIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#4f46e5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    logoIconText: {
+        fontSize: 42,
+        fontWeight: '800',
+        color: '#ffffff',
+        fontFamily: 'Georgia',
+        letterSpacing: 4,
+    },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: '700',
         color: '#fff',
-        marginBottom: 8,
-        textAlign: 'center',
+        marginBottom: 4,
+        letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 16,
+        fontSize: 14,
         color: 'rgba(255, 255, 255, 0.8)',
-        textAlign: 'center',
         fontWeight: '500',
     },
     formContainer: {

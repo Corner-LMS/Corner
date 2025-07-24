@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function WelcomeScreen() {
@@ -29,6 +29,9 @@ export default function WelcomeScreen() {
                     {/* Welcome Message */}
                     <View style={styles.welcomeSection}>
                         <Text style={styles.welcomeTitle}>Welcome to Corner</Text>
+                        <Link href="/sitemap">
+                            <Text>Sitemap</Text>
+                        </Link>
                         <Text style={styles.welcomeDescription}>
                             Join us in transforming how students and teachers connect, learn, and grow together.
                         </Text>
