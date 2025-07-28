@@ -263,6 +263,9 @@ export default function Signup() {
                                     onFocus={() => setEmailFocused(true)}
                                     onBlur={() => setEmailFocused(false)}
                                     contextMenuHidden={true}
+                                    selectionColor="rgba(255, 255, 255, 0.3)"
+                                    cursorColor="rgba(255, 255, 255, 0.8)"
+                                    autoCorrect={false}
                                 />
                             </View>
                         </View>
@@ -294,6 +297,8 @@ export default function Signup() {
                                     onFocus={() => setPasswordFocused(true)}
                                     onBlur={() => setPasswordFocused(false)}
                                     contextMenuHidden={true}
+                                    selectionColor="rgba(255, 255, 255, 0.3)"
+                                    cursorColor="rgba(255, 255, 255, 0.8)"
                                 />
                             </View>
                         </View>
@@ -325,6 +330,8 @@ export default function Signup() {
                                     onFocus={() => setConfirmPasswordFocused(true)}
                                     onBlur={() => setConfirmPasswordFocused(false)}
                                     contextMenuHidden={true}
+                                    selectionColor="rgba(255, 255, 255, 0.3)"
+                                    cursorColor="rgba(255, 255, 255, 0.8)"
                                 />
                             </View>
                         </View>
@@ -373,7 +380,7 @@ export default function Signup() {
                         </View>
 
                         <TouchableOpacity
-                            style={styles.googleButton}
+                            style={styles.Button}
                             onPress={handleGoogleSignIn}
                             disabled={loading}
                         >
@@ -413,7 +420,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+        paddingBottom: Platform.OS === 'ios' ? 60 : 40, // Increased padding for better spacing
     },
     header: {
         paddingTop: Platform.OS === 'ios' ? 60 : 40,
@@ -430,10 +437,9 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: 'transparent', // Remove circle background
+        backgroundColor: 'rgba(255, 255, 255, 0.1)', // Subtle background
         alignItems: 'center',
         justifyContent: 'center',
-        // Removed shadow and elevation
     },
     content: {
         flex: 1,
@@ -449,28 +455,28 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent', // Remove any background
     },
     logoIconContainer: {
-        width: 96, // w-24 = 96px
-        height: 96, // h-24 = 96px
-        borderRadius: 48, // Perfect circle
+        width: Platform.OS === 'ios' ? 96 : 80, // Responsive size
+        height: Platform.OS === 'ios' ? 96 : 80,
+        borderRadius: Platform.OS === 'ios' ? 48 : 40, // Perfect circle
         backgroundColor: '#4f46e5', // bg-indigo-600
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 4,
-        marginBottom: 50, // Add space between logo and text
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        elevation: 8,
+        marginBottom: 40, // Reduced space for better proportions
     },
     logoIconText: {
-        fontSize: 50, // text-5xl equivalent
+        fontSize: Platform.OS === 'ios' ? 50 : 42, // Responsive font size
         fontWeight: '800', // font-extrabold
         color: '#ffffff', // text-white
         fontFamily: 'Georgia',
         letterSpacing: 4, // tracking-widest equivalent
     },
     title: {
-        fontSize: 32,
+        fontSize: Platform.OS === 'ios' ? 32 : 28, // Responsive font size
         fontWeight: '700',
         color: '#ffffff', // White text on indigo
         marginBottom: 12,
@@ -478,27 +484,29 @@ const styles = StyleSheet.create({
         letterSpacing: -0.5,
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: Platform.OS === 'ios' ? 16 : 14, // Responsive font size
         color: '#e0e7ff', // Light blue text on indigo
         textAlign: 'center',
-        lineHeight: 22,
+        lineHeight: Platform.OS === 'ios' ? 22 : 20,
         fontWeight: '400',
         maxWidth: 280,
     },
     formSection: {
         width: '100%',
+        paddingTop: 20, // Add some spacing from logo section
     },
     inputGroup: {
-        marginBottom: 12,
+        marginBottom: 16, // Increased spacing
     },
     inputLabel: {
         fontSize: 14,
         fontWeight: '600',
         color: '#ffffff', // White labels
-        marginBottom: 4,
+        marginBottom: 8, // Increased spacing
         letterSpacing: 0.3,
     },
     inputContainer: {
+        
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.1)', // Semi-transparent white
@@ -507,25 +515,19 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderWidth: 2,
         borderColor: 'rgba(255, 255, 255, 0.2)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 2,
+        
     },
     inputContainerFocused: {
-        borderColor: '#ffffff',
-        shadowColor: '#ffffff',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-        elevation: 4,
+        backgroundColor: 'rgba(255, 255, 255, 0.18)',
+        borderColor: 'white',
+        
     },
     inputIcon: {
         marginRight: 16,
-        opacity: 0.8,
+        opacity: 0.9,
     },
     input: {
+       
         flex: 1,
         fontSize: 16,
         color: '#ffffff', // White text
@@ -535,31 +537,36 @@ const styles = StyleSheet.create({
     errorContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)', // Semi-transparent red
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
+        backgroundColor: 'rgba(239, 68, 68, 0.15)', // Slightly more opaque
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12, // More rounded
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: 'rgba(239, 68, 68, 0.3)',
+        borderColor: 'rgba(239, 68, 68, 0.4)',
     },
     errorContent: {
         flex: 1,
-        marginLeft: 6,
+        marginLeft: 8, // Increased spacing
     },
     errorText: {
         color: '#fecaca', // Light red text
         fontSize: 14,
         fontWeight: '500',
         flex: 1,
-        marginBottom: 4,
+        marginBottom: 6, // Increased spacing
     },
     errorActionButton: {
         alignSelf: 'flex-start',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8, // More rounded
         backgroundColor: '#ffffff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     errorActionText: {
         color: '#4f46e5', // Indigo text on white button
@@ -575,14 +582,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         borderRadius: 12,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-        elevation: 4,
     },
     primaryButtonDisabled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.5)', // Semi-transparent white
+        backgroundColor: 'rgba(255, 255, 255, 0.4)', // Less opaque when disabled
         shadowOpacity: 0.1,
     },
     primaryButtonText: {
@@ -599,29 +601,34 @@ const styles = StyleSheet.create({
     dividerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 20, // Increased spacing
     },
     divider: {
         flex: 1,
         height: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)', // Semi-transparent white
+        backgroundColor: 'rgba(255, 255, 255, 0.25)', // Slightly more opaque
     },
     dividerText: {
         color: '#e0e7ff', // Light blue text
         fontSize: 14,
         fontWeight: '600',
-        marginHorizontal: 12,
+        marginHorizontal: 16, // Increased spacing
     },
-    googleButton: {
+    Button: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.1)', // Semi-transparent white
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.12)', // Slightly more opaque
+        paddingVertical: 18, // Increased padding
+        paddingHorizontal: 28, // Increased padding
+        borderRadius: 16, // More rounded
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        marginBottom: 12,
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+        marginBottom: 16, // Increased spacing
+        // shadowColor: '#000',
+        // shadowOffset: { width: 0, height: 4 },
+        // shadowOpacity: 0.15,
+        // shadowRadius: 12,
+        // elevation: 4,
     },
     googleIcon: {
         width: 20,
@@ -637,8 +644,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 16,
-        paddingBottom: Platform.OS === 'ios' ? 20 : 16,
+        paddingVertical: 20, // Increased padding
+        paddingBottom: Platform.OS === 'ios' ? 40 : 30, // Increased bottom padding
+        marginTop: 20, // Add top margin for separation
     },
     footerText: {
         color: '#e0e7ff', // Light blue text
@@ -652,7 +660,7 @@ const styles = StyleSheet.create({
     },
     logoBackgroundSection: {
         width: '100%',
-        height: 380, // Significantly increased height for more space
+        height: Platform.OS === 'ios' ? 320 : 280, // Responsive height
         backgroundColor: '#4f46e5',
         alignItems: 'center',
         justifyContent: 'center',
@@ -662,7 +670,7 @@ const styles = StyleSheet.create({
     },
     textSection: {
         position: 'absolute',
-        bottom: 60, // Significantly increased from 40 to 60 for more space
+        bottom: 40, // Reduced for better proportions
         left: 0,
         right: 0,
         paddingHorizontal: 24,
