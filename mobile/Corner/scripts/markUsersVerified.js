@@ -5,14 +5,13 @@ import firestore from '@react-native-firebase/firestore';
 
 async function markAllUsersVerified() {
     try {
-        console.log('Starting to mark all users as verified...');
+        
 
         // Get all users from Firestore
         const usersCollection = firestore().collection('users');
         const usersSnapshot = await usersCollection.get();
 
-        console.log(`Found ${usersSnapshot.size} users to process`);
-
+        
         let updatedCount = 0;
         let alreadyVerifiedCount = 0;
 

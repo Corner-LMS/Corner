@@ -1005,6 +1005,9 @@ export default function CourseDetailScreen() {
     };
 
     const handleAnnouncementPress = async (announcement: Announcement) => {
+        // Record view when announcement is pressed
+        await recordAnnouncementView(announcement.id);
+
         // Toggle expansion using proper state update
         const wasExpanded = expandedAnnouncements[announcement.id];
 
@@ -1023,7 +1026,10 @@ export default function CourseDetailScreen() {
         }
     };
 
-    const handleAnnouncementReadMore = (announcement: Announcement) => {
+    const handleAnnouncementReadMore = async (announcement: Announcement) => {
+        // Record view when read more is clicked
+        await recordAnnouncementView(announcement.id);
+
         setExpandedAnnouncements(prev => {
             const newSet = { ...prev };
             newSet[announcement.id] = true;
@@ -1192,7 +1198,12 @@ export default function CourseDetailScreen() {
             ) : (
                 <Animated.View style={{ opacity: fadeAnim }}>
                     {announcements.map((announcement) => (
-                        <View key={announcement.id} style={styles.postCard}>
+                        <TouchableOpacity
+                            key={announcement.id}
+                            style={styles.postCard}
+                            onPress={() => handleAnnouncementPress(announcement)}
+                            activeOpacity={0.95}
+                        >
                             <View style={styles.postHeader}>
                                 <Text style={styles.postTitle}>{announcement.title}</Text>
                                 <View style={styles.postHeaderRight}>
@@ -1217,6 +1228,7 @@ export default function CourseDetailScreen() {
                                     )}
                                 </View>
                             </View>
+
                             <View style={styles.postContentContainer}>
                                 <MarkdownRenderer
                                     content={
@@ -1230,24 +1242,24 @@ export default function CourseDetailScreen() {
                             {/* Show "read more" button if content is truncated and not expanded */}
                             {announcement.content.length > 100 && !expandedAnnouncements[announcement.id] && (
                                 <TouchableOpacity
-                                    style={styles.readMoreIndicator}
+                                    style={styles.readMoreButton}
                                     onPress={() => handleAnnouncementReadMore(announcement)}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="chevron-down" size={16} color="#4f46e5" />
                                     <Text style={styles.readMoreText}>Read more</Text>
+                                    <Ionicons name="chevron-down" size={16} color="#4f46e5" />
                                 </TouchableOpacity>
                             )}
 
                             {/* Show "read less" button if expanded */}
                             {expandedAnnouncements[announcement.id] && (
                                 <TouchableOpacity
-                                    style={styles.readMoreIndicator}
+                                    style={styles.readMoreButton}
                                     onPress={() => handleAnnouncementReadLess(announcement)}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="chevron-up" size={16} color="#4f46e5" />
                                     <Text style={styles.readMoreText}>Read less</Text>
+                                    <Ionicons name="chevron-up" size={16} color="#4f46e5" />
                                 </TouchableOpacity>
                             )}
 
@@ -1282,7 +1294,7 @@ export default function CourseDetailScreen() {
                                     <Text style={styles.cachedText}>Cached content</Text>
                                 </View>
                             )}
-                        </View>
+                        </TouchableOpacity>
                     ))}
                 </Animated.View>
             )}
@@ -1401,7 +1413,12 @@ export default function CourseDetailScreen() {
                 ) : (
                     <Animated.View style={{ opacity: fadeAnim }}>
                         {discussions.map((discussion) => (
-                            <View key={discussion.id} style={styles.postCard}>
+                            <TouchableOpacity
+                                key={discussion.id}
+                                style={styles.postCard}
+                                onPress={() => handleDiscussionNavigation(discussion)}
+                                activeOpacity={0.95}
+                            >
                                 <View style={styles.postHeader}>
                                     <Text style={styles.postTitle}>{discussion.title}</Text>
                                     <View style={styles.postHeaderRight}>
@@ -1443,7 +1460,10 @@ export default function CourseDetailScreen() {
                                 {discussion.content.length > 100 && !expandedDiscussions[discussion.id] && (
                                     <TouchableOpacity
                                         style={styles.readMoreIndicator}
-                                        onPress={() => handleDiscussionReadMore(discussion)}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            handleDiscussionReadMore(discussion);
+                                        }}
                                         activeOpacity={0.7}
                                     >
                                         <Ionicons name="chevron-down" size={16} color="#4f46e5" />
@@ -1455,7 +1475,10 @@ export default function CourseDetailScreen() {
                                 {expandedDiscussions[discussion.id] && (
                                     <TouchableOpacity
                                         style={styles.readMoreIndicator}
-                                        onPress={() => handleDiscussionReadLess(discussion)}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            handleDiscussionReadLess(discussion);
+                                        }}
                                         activeOpacity={0.7}
                                     >
                                         <Ionicons name="chevron-up" size={16} color="#4f46e5" />
@@ -1489,18 +1512,6 @@ export default function CourseDetailScreen() {
                                             <Ionicons name="chatbubble-outline" size={14} color="#666" /> {discussion.replies} replies
                                         </Text>
                                     </View>
-                                    {!courseIsArchived && (
-                                        <TouchableOpacity
-                                            style={styles.viewDiscussionButton}
-                                            onPress={(e) => {
-                                                e.stopPropagation();
-                                                handleDiscussionNavigation(discussion);
-                                            }}
-                                        >
-                                            <Text style={styles.viewDiscussionText}>View Discussion</Text>
-                                            <Ionicons name="chevron-forward" size={16} color="#4f46e5" />
-                                        </TouchableOpacity>
-                                    )}
                                 </View>
                                 {courseIsArchived && (
                                     <View style={styles.archivedNotice}>
@@ -1514,7 +1525,7 @@ export default function CourseDetailScreen() {
                                         <Text style={styles.cachedText}>Cached content</Text>
                                     </View>
                                 )}
-                            </View>
+                            </TouchableOpacity>
                         ))}
                     </Animated.View>
                 )}
@@ -2745,4 +2756,25 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         letterSpacing: 0.3,
     },
+    readMoreButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 16,
+        marginBottom: 4,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        backgroundColor: '#f8fafc',
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        alignSelf: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+        minWidth: 120,
+    },
+
 }); 

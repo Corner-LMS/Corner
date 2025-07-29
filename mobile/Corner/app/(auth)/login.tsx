@@ -299,12 +299,12 @@ export default function Login() {
             setError(null);
             setErrorGuidance(null);
 
-            console.log('🔐 Starting Google Sign-In from login screen');
+            
             const result = await googleSignIn();
 
             // Check if user needs setup
             if (result.needsSetup) {
-                console.log('📝 User needs setup, redirecting to role selection');
+                
                 router.replace('/role');
                 return;
             }
@@ -315,11 +315,11 @@ export default function Login() {
 
             if (authResult.hasCompleteProfile) {
                 // User has role and school, redirect to main app
-                console.log('✅ User has complete profile, redirecting to main app');
+                
                 router.replace('/(tabs)');
             } else {
                 // User needs to set role and school
-                console.log('📝 User needs role selection, redirecting to role screen');
+                
                 router.replace('/role');
             }
         } catch (error: any) {

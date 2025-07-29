@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import CustomAlert from '../components/CustomAlert';
 
 interface Message {
     id: string;
@@ -16,6 +17,8 @@ interface Message {
     content: string;
     timestamp: string;
     read: boolean;
+    edited?: boolean;
+    editedAt?: string;
 }
 
 export default function ConversationScreen() {
@@ -31,6 +34,14 @@ export default function ConversationScreen() {
     const [sending, setSending] = useState(false);
     const [userData, setUserData] = useState<any>(null);
     const scrollViewRef = useRef<ScrollView>(null);
+
+    // Edit and delete functionality
+    const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+    const [editText, setEditText] = useState('');
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showActionSheet, setShowActionSheet] = useState(false);
+    const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+    const [alertConfig, setAlertConfig] = useState<any>(null);
 
     useEffect(() => {
         loadUserAndMessages();
@@ -68,11 +79,11 @@ export default function ConversationScreen() {
 
             for (const messageDoc of messagesQuery.docs) {
                 const messageData = messageDoc.data();
-                
+
                 // Only include messages between these two users
                 if ((messageData.senderId === userId && messageData.receiverId === otherUserId) ||
                     (messageData.senderId === otherUserId && messageData.receiverId === userId)) {
-                    
+
                     messagesList.push({
                         id: messageDoc.id,
                         senderId: messageData.senderId,
@@ -81,7 +92,9 @@ export default function ConversationScreen() {
                         receiverName: messageData.receiverName,
                         content: messageData.content,
                         timestamp: messageData.timestamp,
-                        read: messageData.read || false
+                        read: messageData.read || false,
+                        edited: messageData.edited || false,
+                        editedAt: messageData.editedAt || undefined
                     });
 
                     // Mark received messages as read
@@ -98,7 +111,7 @@ export default function ConversationScreen() {
             }
 
             setMessages(messagesList);
-            
+
             // Scroll to bottom after messages load
             setTimeout(() => {
                 scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -143,6 +156,19 @@ export default function ConversationScreen() {
             }, 100);
         } catch (error) {
             console.error('Error sending message:', error);
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to send message. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         } finally {
             setSending(false);
         }
@@ -157,13 +183,104 @@ export default function ConversationScreen() {
         });
     };
 
-    const getInitials = (name: string) => {
-        const nameParts = name.trim().split(' ');
-        if (nameParts.length >= 2) {
-            return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
-        } else {
-            return name.substring(0, 2).toUpperCase();
+    // Edit and delete functionality
+    const handleLongPress = (message: Message) => {
+        const currentUser = auth().currentUser;
+        if (!currentUser || message.senderId !== currentUser.uid) return;
+
+        setSelectedMessage(message);
+        setShowActionSheet(true);
+    };
+
+    const handleEditMessage = () => {
+        if (!selectedMessage) return;
+
+        setEditingMessage(selectedMessage);
+        setEditText(selectedMessage.content);
+        setShowEditModal(true);
+        setShowActionSheet(false);
+    };
+
+    const handleDeleteMessage = () => {
+        if (!selectedMessage) return;
+
+        setAlertConfig({
+            visible: true,
+            title: 'Delete Message',
+            message: 'Are you sure you want to delete this message?',
+            type: 'confirm',
+            actions: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig(null),
+                    style: 'cancel',
+                },
+                {
+                    text: 'Delete',
+                    onPress: async () => {
+                        try {
+                            await firestore().collection('messages').doc(selectedMessage.id).delete();
+                            setShowActionSheet(false);
+                            setSelectedMessage(null);
+                            setAlertConfig(null);
+                        } catch (error) {
+                            console.error('Error deleting message:', error);
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: 'Failed to delete message. Please try again.',
+                                type: 'error',
+                                actions: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertConfig(null),
+                                        style: 'primary',
+                                    },
+                                ],
+                            });
+                        }
+                    },
+                    style: 'destructive',
+                },
+            ],
+        });
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingMessage || !editText.trim()) return;
+
+        try {
+            await firestore().collection('messages').doc(editingMessage.id).update({
+                content: editText.trim(),
+                edited: true,
+                editedAt: new Date().toISOString()
+            });
+
+            setShowEditModal(false);
+            setEditingMessage(null);
+            setEditText('');
+        } catch (error) {
+            console.error('Error editing message:', error);
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to edit message. Please try again.',
+                type: 'error',
+                actions: [
+                    {
+                        text: 'OK',
+                        onPress: () => setAlertConfig(null),
+                        style: 'primary',
+                    },
+                ],
+            });
         }
+    };
+
+    const handleCancelEdit = () => {
+        setShowEditModal(false);
+        setEditingMessage(null);
+        setEditText('');
     };
 
     if (loading) {
@@ -209,14 +326,13 @@ export default function ConversationScreen() {
                         <Text style={styles.headerTitle}>{otherUserName}</Text>
                         <Text style={styles.headerSubtitle}>
                             {otherUserRole === 'teacher' ? 'Teacher' : 'Student'}
-                            {courseName && ` • ${courseName}`}
                         </Text>
                     </View>
                     <View style={styles.headerSpacer} />
                 </View>
             </LinearGradient>
 
-            <KeyboardAvoidingView 
+            <KeyboardAvoidingView
                 style={styles.keyboardAvoidingView}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
@@ -229,12 +345,14 @@ export default function ConversationScreen() {
                     {messages.map((message) => {
                         const isOwnMessage = message.senderId === auth().currentUser?.uid;
                         return (
-                            <View
+                            <TouchableOpacity
                                 key={message.id}
                                 style={[
                                     styles.messageContainer,
                                     isOwnMessage ? styles.ownMessage : styles.otherMessage
                                 ]}
+                                onLongPress={() => handleLongPress(message)}
+                                activeOpacity={0.8}
                             >
                                 <View
                                     style={[
@@ -250,16 +368,23 @@ export default function ConversationScreen() {
                                     >
                                         {message.content}
                                     </Text>
-                                    <Text
-                                        style={[
-                                            styles.messageTime,
-                                            isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime
-                                        ]}
-                                    >
-                                        {formatTimestamp(message.timestamp)}
-                                    </Text>
+                                    <View style={styles.messageFooter}>
+                                        <Text
+                                            style={[
+                                                styles.messageTime,
+                                                isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime
+                                            ]}
+                                        >
+                                            {formatTimestamp(message.timestamp)}
+                                        </Text>
+                                        {message.edited && (
+                                            <Text style={styles.editedIndicator}>
+                                                (edited)
+                                            </Text>
+                                        )}
+                                    </View>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         );
                     })}
                 </ScrollView>
@@ -290,6 +415,86 @@ export default function ConversationScreen() {
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* Action Sheet for Edit/Delete */}
+            {showActionSheet && selectedMessage && (
+                <View style={styles.actionSheetOverlay}>
+                    <TouchableOpacity
+                        style={styles.actionSheetBackground}
+                        onPress={() => setShowActionSheet(false)}
+                    />
+                    <View style={styles.actionSheet}>
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={handleEditMessage}
+                        >
+                            <Ionicons name="create-outline" size={20} color="#4f46e5" />
+                            <Text style={styles.actionButtonText}>Edit Message</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.actionButton, styles.deleteButton]}
+                            onPress={handleDeleteMessage}
+                        >
+                            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Message</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => setShowActionSheet(false)}
+                        >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
+            {/* Edit Modal */}
+            <Modal
+                visible={showEditModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={handleCancelEdit}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Edit Message</Text>
+                        <TextInput
+                            style={styles.editTextInput}
+                            value={editText}
+                            onChangeText={setEditText}
+                            placeholder="Edit your message..."
+                            placeholderTextColor="#94a3b8"
+                            multiline
+                            maxLength={1000}
+                            autoFocus
+                        />
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelModalButton]}
+                                onPress={handleCancelEdit}
+                            >
+                                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.saveModalButton]}
+                                onPress={handleSaveEdit}
+                                disabled={!editText.trim()}
+                            >
+                                <Text style={styles.saveModalButtonText}>Save</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <CustomAlert
+                visible={alertConfig?.visible || false}
+                title={alertConfig?.title || ''}
+                message={alertConfig?.message || ''}
+                type={alertConfig?.type || 'info'}
+                actions={alertConfig?.actions || []}
+                onDismiss={() => setAlertConfig(null)}
+            />
         </SafeAreaView>
     );
 }
@@ -399,6 +604,16 @@ const styles = StyleSheet.create({
     otherMessageTime: {
         color: '#94a3b8',
     },
+    editedIndicator: {
+        fontSize: 12,
+        color: '#94a3b8',
+        marginLeft: 4,
+    },
+    messageFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+    },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -429,5 +644,120 @@ const styles = StyleSheet.create({
     },
     sendButtonDisabled: {
         backgroundColor: '#cbd5e0',
+    },
+    actionSheetOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    actionSheetBackground: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    actionSheet: {
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        padding: 15,
+        width: '80%',
+        alignItems: 'center',
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 15,
+        borderRadius: 8,
+        marginBottom: 8,
+    },
+    actionButtonText: {
+        marginLeft: 10,
+        fontSize: 16,
+        color: '#333',
+    },
+    deleteButton: {
+        backgroundColor: '#fef3f2',
+        borderColor: '#fca5a5',
+        borderWidth: 1,
+    },
+    deleteButtonText: {
+        color: '#ef4444',
+    },
+    cancelButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 15,
+        borderRadius: 8,
+        backgroundColor: '#f1f5f9',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        color: '#4f46e5',
+    },
+    modalOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        padding: 20,
+        width: '80%',
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#333',
+        marginBottom: 15,
+    },
+    editTextInput: {
+        backgroundColor: '#f1f5f9',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        minHeight: 100,
+        maxHeight: 200,
+        textAlignVertical: 'top',
+        color: '#1a202c',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        width: '100%',
+        marginTop: 20,
+    },
+    modalButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+    },
+    cancelModalButton: {
+        backgroundColor: '#f1f5f9',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    cancelModalButtonText: {
+        fontSize: 16,
+        color: '#4f46e5',
+    },
+    saveModalButton: {
+        backgroundColor: '#4f46e5',
+    },
+    saveModalButtonText: {
+        fontSize: 16,
+        color: '#fff',
     },
 }); 

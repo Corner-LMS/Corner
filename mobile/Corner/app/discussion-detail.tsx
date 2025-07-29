@@ -821,236 +821,241 @@ export default function DiscussionDetailScreen() {
                 <ConnectivityIndicator size="small" style={styles.connectivityIndicator} />
             </LinearGradient>
 
-            <View style={styles.mainContainer}>
-                <ScrollView
-                    style={styles.content}
-                    keyboardShouldPersistTaps="always"
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.contentContainer}
-                    keyboardDismissMode="interactive"
-                    automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-                >
-                    {discussion && (
-                        <View style={styles.discussionCard}>
-                            <View style={styles.postHeader}>
-                                <Text style={styles.discussionTitle}>{discussion.title}</Text>
-                                <View style={[
-                                    styles.roleTag,
-                                    discussion.isAnonymous ? styles.studentTag :
-                                        discussion.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
-                                ]}>
-                                    <Text style={styles.roleTagText}>
-                                        {discussion.authorRole}
-                                    </Text>
-                                </View>
-                            </View>
-                            <View style={styles.discussionContentContainer}>
-                                <MarkdownRenderer content={discussion.content} />
-                            </View>
-                            <View style={styles.postMeta}>
-                                <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
-                                <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
-                            </View>
-                        </View>
-                    )}
-
-                    <View style={styles.commentsSection}>
-                        {/* Offline/Cache Status Indicator */}
-                        {(!isOnline || isLoadingFromCache) && (
-                            <View style={styles.offlineIndicator}>
-                                <Ionicons
-                                    name={!isOnline ? "cloud-offline" : "refresh"}
-                                    size={16}
-                                    color={!isOnline ? "#f59e0b" : "#4f46e5"}
-                                />
-                                <Text style={styles.offlineText}>
-                                    {!isOnline ? "Offline - Showing cached comments" : "Loading cached comments..."}
-                                </Text>
-                            </View>
-                        )}
-
-                        {/* Draft Sync Status */}
-                        {syncingDrafts && (
-                            <View style={styles.syncIndicator}>
-                                <Ionicons name="sync" size={16} color="#4f46e5" />
-                                <Text style={styles.syncText}>Syncing drafts...</Text>
-                            </View>
-                        )}
-
-                        {/* Manual Sync Button */}
-                        {isOnline && drafts.filter(d => d.type === 'comment' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
-                            <TouchableOpacity
-                                style={styles.manualSyncButton}
-                                onPress={syncDrafts}
-                                disabled={syncingDrafts}
-                            >
-                                <Ionicons
-                                    name={syncingDrafts ? "sync" : "cloud-upload"}
-                                    size={16}
-                                    color="#4f46e5"
-                                />
-                                <Text style={styles.manualSyncText}>
-                                    {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
-
-                        <View style={styles.commentsSeparator}>
-                            <View style={styles.separatorLine} />
-                            <Text style={styles.commentsTitle}>
-                                Comments ({totalComments + drafts.filter(d => d.type === 'comment').length})
-                            </Text>
-                            <View style={styles.separatorLine} />
-                        </View>
-
-                        {/* Draft Comments */}
-                        {drafts.filter(draft => draft.type === 'comment' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
-                            <View key={draft.id} style={[styles.commentCard, styles.draftCommentCard]}>
-                                <View style={styles.commentHeader}>
-                                    <View style={styles.commentAuthorSection}>
-                                        <Text style={styles.commentAuthor}>
-                                            {draft.isAnonymous ? 'Anonymous Student' : `${draft.authorRole}`}
-                                        </Text>
-                                        <View style={[styles.statusBadge,
-                                        draft.status === 'pending' ? styles.pendingBadge :
-                                            draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
-                                        ]}>
-                                            <Ionicons
-                                                name={
-                                                    draft.status === 'pending' ? "sync" :
-                                                        draft.status === 'failed' ? "alert-circle" : "document-text"
-                                                }
-                                                size={12}
-                                                color="#fff"
-                                            />
-                                            <Text style={styles.statusBadgeText}>
-                                                {draft.status === 'pending' ? 'Syncing' :
-                                                    draft.status === 'failed' ? 'Failed' : 'Draft'}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </View>
-                                <View style={styles.commentContent}>
-                                    <Text style={styles.commentText}>{draft.content}</Text>
-                                </View>
-                                <View style={styles.commentActionsRow}>
-                                    <Text style={styles.commentDate}>
-                                        {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </Text>
-                                </View>
-                                {draft.status === 'failed' && (
-                                    <View style={styles.errorNotice}>
-                                        <Ionicons name="warning" size={14} color="#ef4444" />
-                                        <Text style={styles.errorNoticeText}>
-                                            Failed to sync. Will retry when online.
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        ))}
-
-                        {comments.length === 0 && drafts.filter(d => d.type === 'comment').length === 0 ? (
-                            <View style={styles.emptyComments}>
-                                <Text style={styles.emptyText}>
-                                    {!isOnline ? "No cached comments available" : "No comments yet. Be the first to comment!"}
-                                </Text>
-                            </View>
-                        ) : (
-                            <View style={styles.commentsContainer}>
-                                {comments.map((comment) => (
-                                    <View key={comment.id}>
-                                        {renderComment(comment)}
-                                        {!isOnline && (
-                                            <View style={styles.cachedIndicator}>
-                                                <Ionicons name="download" size={12} color="#4f46e5" />
-                                                <Text style={styles.cachedText}>Cached content</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-                    </View>
-                </ScrollView>
-
-                {!courseIsArchived && (
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        style={styles.commentInputContainer}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoidingView}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+            >
+                <View style={styles.mainContainer}>
+                    <ScrollView
+                        style={styles.content}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.contentContainer}
+                        keyboardDismissMode="interactive"
+                        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
                     >
-                        {/* Reply context banner */}
-                        {replyingTo && (
-                            <View style={styles.replyContext}>
-                                <Ionicons name="chatbubble-outline" size={16} color="#4f46e5" />
-                                <Text style={styles.replyContextText}>
-                                    Replying to {replyingTo.authorName}
-                                </Text>
-                                <TouchableOpacity
-                                    style={styles.cancelReplyButton}
-                                    onPress={() => setReplyingTo(null)}
-                                >
-                                    <Ionicons name="close" size={16} color="#666" />
-                                </TouchableOpacity>
+                        {discussion && (
+                            <View style={styles.discussionCard}>
+                                <View style={styles.postHeader}>
+                                    <Text style={styles.discussionTitle}>{discussion.title}</Text>
+                                    <View style={[
+                                        styles.roleTag,
+                                        discussion.isAnonymous ? styles.studentTag :
+                                            discussion.authorRole === 'teacher' ? styles.teacherTag : styles.studentTag
+                                    ]}>
+                                        <Text style={styles.roleTagText}>
+                                            {discussion.authorRole}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={styles.discussionContentContainer}>
+                                    <MarkdownRenderer content={discussion.content} />
+                                </View>
+                                <View style={styles.postMeta}>
+                                    <Text style={styles.postAuthor}>By {discussion.authorName}</Text>
+                                    <Text style={styles.postDate}>{formatDate(discussion.createdAt)}</Text>
+                                </View>
                             </View>
                         )}
 
-                        <View style={styles.commentInputContent}>
-                            {/* Anonymity option for students */}
-                            {role === 'student' && (
-                                <View style={styles.anonymityOption}>
-                                    <Text style={styles.anonymityLabel}>Comment anonymously</Text>
-                                    <Switch
-                                        value={isAnonymousComment}
-                                        onValueChange={setIsAnonymousComment}
-                                        trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
-                                        thumbColor={isAnonymousComment ? '#fff' : '#f4f3f4'}
+                        <View style={styles.commentsSection}>
+                            {/* Offline/Cache Status Indicator */}
+                            {(!isOnline || isLoadingFromCache) && (
+                                <View style={styles.offlineIndicator}>
+                                    <Ionicons
+                                        name={!isOnline ? "cloud-offline" : "refresh"}
+                                        size={16}
+                                        color={!isOnline ? "#f59e0b" : "#4f46e5"}
                                     />
+                                    <Text style={styles.offlineText}>
+                                        {!isOnline ? "Offline - Showing cached comments" : "Loading cached comments..."}
+                                    </Text>
                                 </View>
                             )}
 
-                            <View style={styles.commentInputRow}>
-                                <RichTextEditor
-                                    value={newCommentHtml}
-                                    onChange={handleCommentChange}
-                                    placeholder={
-                                        editingComment ? "Edit your comment..." :
-                                            replyingTo ? `Reply to ${replyingTo.authorName}...` :
-                                                "Add a comment..."
-                                    }
-                                    style={styles.commentInput}
-                                />
-                                {(editingComment || replyingTo) && (
-                                    <TouchableOpacity
-                                        style={styles.cancelButton}
-                                        onPress={resetCommentForm}
-                                    >
-                                        <Ionicons name="close" size={20} color="#666" />
-                                    </TouchableOpacity>
-                                )}
-                                <TouchableOpacity
-                                    style={[styles.sendButton, loading && styles.buttonDisabled]}
-                                    onPress={handleAddComment}
-                                    disabled={loading || !newComment.trim()}
-                                >
-                                    {editingComment ? (
-                                        <Ionicons name="checkmark" size={20} color="#fff" />
-                                    ) : (
-                                        <Ionicons name="send" size={20} color="#fff" />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                )}
+                            {/* Draft Sync Status */}
+                            {syncingDrafts && (
+                                <View style={styles.syncIndicator}>
+                                    <Ionicons name="sync" size={16} color="#4f46e5" />
+                                    <Text style={styles.syncText}>Syncing drafts...</Text>
+                                </View>
+                            )}
 
-                {courseIsArchived && (
-                    <View style={styles.archivedBanner}>
-                        <Ionicons name="archive" size={20} color="#666" />
-                        <Text style={styles.archivedBannerText}>This course is archived - Comments are disabled</Text>
-                    </View>
-                )}
-            </View>
+                            {/* Manual Sync Button */}
+                            {isOnline && drafts.filter(d => d.type === 'comment' && (d.status === 'draft' || d.status === 'failed')).length > 0 && (
+                                <TouchableOpacity
+                                    style={styles.manualSyncButton}
+                                    onPress={syncDrafts}
+                                    disabled={syncingDrafts}
+                                >
+                                    <Ionicons
+                                        name={syncingDrafts ? "sync" : "cloud-upload"}
+                                        size={16}
+                                        color="#4f46e5"
+                                    />
+                                    <Text style={styles.manualSyncText}>
+                                        {syncingDrafts ? 'Syncing...' : 'Sync Drafts'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+
+                            <View style={styles.commentsSeparator}>
+                                <View style={styles.separatorLine} />
+                                <Text style={styles.commentsTitle}>
+                                    Comments ({totalComments + drafts.filter(d => d.type === 'comment').length})
+                                </Text>
+                                <View style={styles.separatorLine} />
+                            </View>
+
+                            {/* Draft Comments */}
+                            {drafts.filter(draft => draft.type === 'comment' && (draft.status === 'draft' || draft.status === 'failed' || draft.status === 'pending')).map((draft) => (
+                                <View key={draft.id} style={[styles.commentCard, styles.draftCommentCard]}>
+                                    <View style={styles.commentHeader}>
+                                        <View style={styles.commentAuthorSection}>
+                                            <Text style={styles.commentAuthor}>
+                                                {draft.isAnonymous ? 'Anonymous Student' : `${draft.authorRole}`}
+                                            </Text>
+                                            <View style={[styles.statusBadge,
+                                            draft.status === 'pending' ? styles.pendingBadge :
+                                                draft.status === 'failed' ? styles.failedBadge : styles.draftBadge
+                                            ]}>
+                                                <Ionicons
+                                                    name={
+                                                        draft.status === 'pending' ? "sync" :
+                                                            draft.status === 'failed' ? "alert-circle" : "document-text"
+                                                    }
+                                                    size={12}
+                                                    color="#fff"
+                                                />
+                                                <Text style={styles.statusBadgeText}>
+                                                    {draft.status === 'pending' ? 'Syncing' :
+                                                        draft.status === 'failed' ? 'Failed' : 'Draft'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                    <View style={styles.commentContent}>
+                                        <Text style={styles.commentText}>{draft.content}</Text>
+                                    </View>
+                                    <View style={styles.commentActionsRow}>
+                                        <Text style={styles.commentDate}>
+                                            {new Date(draft.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                    </View>
+                                    {draft.status === 'failed' && (
+                                        <View style={styles.errorNotice}>
+                                            <Ionicons name="warning" size={14} color="#ef4444" />
+                                            <Text style={styles.errorNoticeText}>
+                                                Failed to sync. Will retry when online.
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            ))}
+
+                            {comments.length === 0 && drafts.filter(d => d.type === 'comment').length === 0 ? (
+                                <View style={styles.emptyComments}>
+                                    <Text style={styles.emptyText}>
+                                        {!isOnline ? "No cached comments available" : "No comments yet. Be the first to comment!"}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={styles.commentsContainer}>
+                                    {comments.map((comment) => (
+                                        <View key={comment.id}>
+                                            {renderComment(comment)}
+                                            {!isOnline && (
+                                                <View style={styles.cachedIndicator}>
+                                                    <Ionicons name="download" size={12} color="#4f46e5" />
+                                                    <Text style={styles.cachedText}>Cached content</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+                    </ScrollView>
+
+                    {!courseIsArchived && (
+                        <Pressable
+                            style={styles.commentInputContainer}
+                            onPress={() => Keyboard.dismiss()}
+                        >
+                            {/* Reply context banner */}
+                            {replyingTo && (
+                                <View style={styles.replyContext}>
+                                    <Ionicons name="chatbubble-outline" size={16} color="#4f46e5" />
+                                    <Text style={styles.replyContextText}>
+                                        Replying to {replyingTo.authorName}
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={styles.cancelReplyButton}
+                                        onPress={() => setReplyingTo(null)}
+                                    >
+                                        <Ionicons name="close" size={16} color="#666" />
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            <View style={styles.commentInputContent}>
+                                {/* Anonymity option for students */}
+                                {role === 'student' && (
+                                    <View style={styles.anonymityOption}>
+                                        <Text style={styles.anonymityLabel}>Comment anonymously</Text>
+                                        <Switch
+                                            value={isAnonymousComment}
+                                            onValueChange={setIsAnonymousComment}
+                                            trackColor={{ false: '#e0e0e0', true: '#4f46e5' }}
+                                            thumbColor={isAnonymousComment ? '#fff' : '#f4f3f4'}
+                                        />
+                                    </View>
+                                )}
+
+                                <View style={styles.commentInputRow}>
+                                    <RichTextEditor
+                                        value={newCommentHtml}
+                                        onChange={handleCommentChange}
+                                        placeholder={
+                                            editingComment ? "Edit your comment..." :
+                                                replyingTo ? `Reply to ${replyingTo.authorName}...` :
+                                                    "Add a comment..."
+                                        }
+                                        style={styles.commentInput}
+                                    />
+                                    {(editingComment || replyingTo) && (
+                                        <TouchableOpacity
+                                            style={styles.cancelButton}
+                                            onPress={resetCommentForm}
+                                        >
+                                            <Ionicons name="close" size={20} color="#666" />
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity
+                                        style={[styles.sendButton, loading && styles.buttonDisabled]}
+                                        onPress={handleAddComment}
+                                        disabled={loading || !newComment.trim()}
+                                    >
+                                        {editingComment ? (
+                                            <Ionicons name="checkmark" size={20} color="#fff" />
+                                        ) : (
+                                            <Ionicons name="send" size={20} color="#fff" />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </Pressable>
+                    )}
+
+                    {courseIsArchived && (
+                        <View style={styles.archivedBanner}>
+                            <Ionicons name="archive" size={20} color="#666" />
+                            <Text style={styles.archivedBannerText}>This course is archived - Comments are disabled</Text>
+                        </View>
+                    )}
+                </View>
+            </KeyboardAvoidingView>
 
             <CustomAlert
                 visible={alertConfig?.visible || false}
@@ -1150,7 +1155,7 @@ const styles = StyleSheet.create({
         paddingVertical: 20,
     },
     contentContainer: {
-        paddingBottom: 150, // Increased padding for better keyboard handling
+        paddingBottom: 200, // Increased padding for better keyboard handling and scrolling
     },
     discussionCard: {
         backgroundColor: '#fff',
@@ -1778,5 +1783,8 @@ const styles = StyleSheet.create({
     },
     actionMenuTextDanger: {
         color: '#ef4444',
+    },
+    keyboardAvoidingView: {
+        flex: 1,
     },
 }); 
