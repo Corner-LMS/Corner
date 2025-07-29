@@ -1795,17 +1795,15 @@ export default function CourseDetailScreen() {
                         <Text style={styles.headerSubtitle}>{courseCode}</Text>
                     </View>
                     <View style={styles.headerActions}>
-                        {role === 'teacher' && (
-                            <TouchableOpacity
-                                style={styles.aiAssistantButton}
-                                onPress={() => router.push({
-                                    pathname: '/ai-assistant',
-                                    params: { courseId, courseName, role }
-                                })}
-                            >
-                                <Ionicons name="sparkles" size={20} color="#fff" />
-                            </TouchableOpacity>
-                        )}
+                        <TouchableOpacity
+                            style={styles.aiAssistantButton}
+                            onPress={() => router.push({
+                                pathname: '/ai-assistant',
+                                params: { courseId, courseName, role }
+                            })}
+                        >
+                            <Ionicons name="sparkles" size={20} color="#fff" />
+                        </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.resourcesButton}
                             onPress={() => router.push({

@@ -47,20 +47,29 @@ export default function AIAssistantScreen() {
     // Auto-scroll to bottom when messages change
     useEffect(() => {
         if (messages.length > 0) {
+            // Use a longer delay to ensure content is rendered
             setTimeout(() => {
                 scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 100);
+            }, 300);
         }
     }, [messages]);
 
     // Auto-scroll when loading state changes (when AI response arrives)
     useEffect(() => {
         if (!isLoading && messages.length > 0) {
+            // Use a longer delay to ensure AI response is fully rendered
             setTimeout(() => {
                 scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 200);
+            }, 500);
         }
     }, [isLoading, messages.length]);
+
+    // Additional auto-scroll when new messages are added
+    const scrollToBottom = () => {
+        setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+    };
 
     useEffect(() => {
         if (!courseId) return;
@@ -98,6 +107,10 @@ export default function AIAssistantScreen() {
                 timestamp: new Date(),
                 followUpQuestions: welcomeFollowUps
             }]);
+            // Scroll to bottom after welcome message is added
+            setTimeout(() => {
+                scrollToBottom();
+            }, 100);
         }
     }, [courseId, role]);
 
@@ -147,6 +160,10 @@ export default function AIAssistantScreen() {
                         const filtered = prev.filter(msg => msg.id !== 'welcome');
                         return [...filtered, ...chatMessages];
                     });
+                    // Scroll to bottom after chat history is loaded
+                    setTimeout(() => {
+                        scrollToBottom();
+                    }, 200);
                 }
             });
 
@@ -304,10 +321,11 @@ export default function AIAssistantScreen() {
             timestamp: new Date()
         };
 
-        // Add user message
+        // Add user message and scroll to bottom
         setMessages(prev => [...prev, userMessage]);
         setInputText('');
         setIsLoading(true);
+        scrollToBottom(); // Scroll after user message
 
         try {
             // Save user message to Firestore
@@ -320,8 +338,9 @@ export default function AIAssistantScreen() {
             // Generate AI response using OpenAI
             const aiResponse = await generateAIResponse(userMessage.content);
 
-            // Add AI response
+            // Add AI response and scroll to bottom
             setMessages(prev => [...prev, aiResponse]);
+            scrollToBottom(); // Scroll after AI response
 
             // Save AI response to Firestore
             await firestore().collection('courses').doc(courseId as string).collection('aiChats').doc(user.uid).collection('messages').add({
@@ -337,6 +356,10 @@ export default function AIAssistantScreen() {
             Alert.alert('Error', 'Failed to send message. Please try again.');
         } finally {
             setIsLoading(false);
+            // Scroll to bottom after loading finishes
+            setTimeout(() => {
+                scrollToBottom();
+            }, 100);
         }
     };
 
@@ -379,6 +402,10 @@ export default function AIAssistantScreen() {
 
     const handleFollowUpPress = (question: string) => {
         setInputText(question);
+        // Scroll to bottom when follow-up question is selected
+        setTimeout(() => {
+            scrollToBottom();
+        }, 100);
     };
 
     const formatTime = (timestamp: any) => {
