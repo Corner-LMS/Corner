@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, Image, ScrollView, Alert, StatusBar } from 'react-native';
 import { login, googleSignIn } from '../../services/authService';
 import { router } from 'expo-router';
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getErrorGuidance } from '../../utils/errorHelpers';
 import CustomAlert from '../../components/CustomAlert';
 import { LinearGradient } from 'expo-linear-gradient';
+import { completeAuthFlow } from '../../utils/authUtils';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -19,17 +20,36 @@ export default function Login() {
     const [passwordFocused, setPasswordFocused] = useState(false);
     const [alertConfig, setAlertConfig] = useState<any>(null);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [isFormValid, setIsFormValid] = useState(false);
 
-    // Check if email is super admin
+    // Optimize form validation with useCallback
+    const validateForm = useCallback(() => {
+        const valid = email.length > 0 && password.length >= 6;
+        setIsFormValid(valid);
+        return valid;
+    }, [email, password]);
+
+    // Debounced form validation
     useEffect(() => {
-        if (email === 'corner.e.learning@gmail.com') {
-            setIsSuperAdmin(true);
+        const timeoutId = setTimeout(() => {
+            validateForm();
+        }, 100);
+        return () => clearTimeout(timeoutId);
+    }, [email, password, validateForm]);
+
+    // Check if email is super admin - optimized with useCallback
+    const checkSuperAdmin = useCallback((email: string) => {
+        return email === 'corner.e.learning@gmail.com';
+    }, []);
+
+    useEffect(() => {
+        const isAdmin = checkSuperAdmin(email);
+        setIsSuperAdmin(isAdmin);
+        if (isAdmin) {
             setError(null);
             setErrorGuidance(null);
-        } else {
-            setIsSuperAdmin(false);
         }
-    }, [email]);
+    }, [email, checkSuperAdmin]);
 
     const renderLogoSection = () => {
         return (
@@ -57,13 +77,19 @@ export default function Login() {
         );
     };
 
-    const handleSuperAdminLogin = async () => {
+    const handleSuperAdminLogin = useCallback(async () => {
+        if (!isFormValid) return;
+
         try {
             setLoading(true);
             setError(null);
             setErrorGuidance(null);
 
-            // For super admin, we'll use normal login but with special privileges
+            // Pre-validate credentials
+            if (!email || !password) {
+                throw new Error('Please enter both email and password');
+            }
+
             setAlertConfig({
                 visible: true,
                 title: 'Super Admin Access',
@@ -85,15 +111,15 @@ export default function Login() {
                                     throw new Error('Please verify your email before signing in.');
                                 }
 
-                                // Create or update super admin user document
+                                // Create or update super admin user document with optimized write
                                 await firestore().collection('users').doc(user.uid).set({
                                     email: 'corner.e.learning@gmail.com',
                                     role: 'superadmin',
                                     name: 'Super Admin',
                                     createdAt: new Date(),
                                     isSuperAdmin: true,
-                                    // Skip school assignment for super admin
-                                    schoolId: null
+                                    schoolId: null,
+                                    lastLogin: new Date(),
                                 }, { merge: true });
 
                                 // Navigate to super admin dashboard
@@ -119,13 +145,21 @@ export default function Login() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [email, password, isFormValid]);
 
-    const handleLogin = async () => {
+    const handleLogin = useCallback(async () => {
+        if (!isFormValid) return;
+
         try {
             setLoading(true);
-            setError(null); // Clear previous errors
+            setError(null);
             setErrorGuidance(null);
+
+            // Pre-validate credentials
+            if (!email || !password) {
+                throw new Error('Please enter both email and password');
+            }
+
             await login(email, password);
             await handleSuccessfulLogin();
         } catch (err: any) {
@@ -165,15 +199,15 @@ export default function Login() {
             else if (errorMessage.includes('not properly configured') || errorMessage.includes('assign your role')) {
                 setAlertConfig({
                     visible: true,
-                    title: 'Account Not Configured',
-                    message: 'Your account needs to be configured with a role. Please contact support.',
-                    type: 'error',
+                    title: 'Complete Your Account Setup',
+                    message: 'Your account needs to be configured with a role and school. We\'ll redirect you to the setup screen to complete this process.',
+                    type: 'info',
                     actions: [
                         {
-                            text: 'Contact Support',
+                            text: 'Complete Setup',
                             onPress: () => {
                                 setAlertConfig(null);
-                                // You can add navigation to support page here
+                                router.replace('/role');
                             },
                             style: 'primary',
                         },
@@ -189,15 +223,15 @@ export default function Login() {
             else if (errorMessage.includes('not associated with any school')) {
                 setAlertConfig({
                     visible: true,
-                    title: 'No School Assigned',
-                    message: 'Your account is not associated with any school. Please contact support.',
-                    type: 'error',
+                    title: 'Complete Your Account Setup',
+                    message: 'Your account needs to be associated with a school. We\'ll redirect you to the setup screen to complete this process.',
+                    type: 'info',
                     actions: [
                         {
-                            text: 'Contact Support',
+                            text: 'Complete Setup',
                             onPress: () => {
                                 setAlertConfig(null);
-                                // You can add navigation to support page here
+                                router.replace('/role');
                             },
                             style: 'primary',
                         },
@@ -213,15 +247,15 @@ export default function Login() {
             else if (errorMessage.includes('User profile not found')) {
                 setAlertConfig({
                     visible: true,
-                    title: 'Profile Not Found',
-                    message: 'Your user profile could not be found. Please contact support.',
-                    type: 'error',
+                    title: 'Complete Your Account Setup',
+                    message: 'Your user profile needs to be set up. We\'ll redirect you to the setup screen to complete this process.',
+                    type: 'info',
                     actions: [
                         {
-                            text: 'Contact Support',
+                            text: 'Complete Setup',
                             onPress: () => {
                                 setAlertConfig(null);
-                                // You can add navigation to support page here
+                                router.replace('/role');
                             },
                             style: 'primary',
                         },
@@ -257,167 +291,57 @@ export default function Login() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [email, password, isFormValid]);
 
-    const handleGoogleSignIn = async () => {
+    const handleGoogleSignIn = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             setErrorGuidance(null);
-            await googleSignIn();
 
-            // Wait a bit for auth state to settle, then check and navigate
-            setTimeout(async () => {
-                const user = auth().currentUser;
-                if (user) {
-                    const userDoc = await firestore().collection('users').doc(user.uid).get();
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        if (userData?.role && userData?.schoolId) {
-                            // User has role and school, redirect to main app
-                            router.replace('/(tabs)');
-                        } else {
-                            // User needs to set role and school
-                            router.replace('/role');
-                        }
-                    } else {
-                        // User document doesn't exist (shouldn't happen with Google Sign-In)
-                        router.replace('/role');
-                    }
-                } else {
-                    // No user (shouldn't happen after successful Google Sign-In)
-                    router.replace('/role');
-                }
-            }, 1000); // 1 second delay to let auth state settle
-        } catch (err: any) {
-            const errorMessage = err instanceof Error ? err.message : 'Google Sign-In failed';
+            console.log('🔐 Starting Google Sign-In from login screen');
+            const result = await googleSignIn();
 
-            // Handle unverified email specifically
-            if (errorMessage.includes('verify your email') || errorMessage.includes('email not verified')) {
-                setAlertConfig({
-                    visible: true,
-                    title: 'Email Not Verified',
-                    message: 'Please check your email and click the verification link before signing in.',
-                    type: 'warning',
-                    actions: [
-                        {
-                            text: 'Go to Verification',
-                            onPress: () => {
-                                setAlertConfig(null);
-                                // For Google Sign-In, we need to handle this differently
-                                // since the user is already signed in
-                                router.replace('/(auth)/email-verification');
-                            },
-                            style: 'primary',
-                        },
-                        {
-                            text: 'Cancel',
-                            onPress: () => setAlertConfig(null),
-                            style: 'cancel',
-                        },
-                    ],
-                });
+            // Check if user needs setup
+            if (result.needsSetup) {
+                console.log('📝 User needs setup, redirecting to role selection');
+                router.replace('/role');
+                return;
             }
-            // Handle missing role assignment
-            else if (errorMessage.includes('not properly configured') || errorMessage.includes('assign your role')) {
-                setAlertConfig({
-                    visible: true,
-                    title: 'Account Not Configured',
-                    message: 'Your account needs to be configured with a role. Please contact support.',
-                    type: 'error',
-                    actions: [
-                        {
-                            text: 'Contact Support',
-                            onPress: () => {
-                                setAlertConfig(null);
-                                // You can add navigation to support page here
-                            },
-                            style: 'primary',
-                        },
-                        {
-                            text: 'Cancel',
-                            onPress: () => setAlertConfig(null),
-                            style: 'cancel',
-                        },
-                    ],
-                });
+
+            // Use the new auth flow utility for users with complete profiles
+            const authResult = await completeAuthFlow();
+            console.log('✅ Auth flow completed successfully');
+
+            if (authResult.hasCompleteProfile) {
+                // User has role and school, redirect to main app
+                console.log('✅ User has complete profile, redirecting to main app');
+                router.replace('/(tabs)');
+            } else {
+                // User needs to set role and school
+                console.log('📝 User needs role selection, redirecting to role screen');
+                router.replace('/role');
             }
-            // Handle missing school assignment
-            else if (errorMessage.includes('not associated with any school')) {
-                setAlertConfig({
-                    visible: true,
-                    title: 'No School Assigned',
-                    message: 'Your account is not associated with any school. Please contact support.',
-                    type: 'error',
-                    actions: [
-                        {
-                            text: 'Contact Support',
-                            onPress: () => {
-                                setAlertConfig(null);
-                                // You can add navigation to support page here
-                            },
-                            style: 'primary',
-                        },
-                        {
-                            text: 'Cancel',
-                            onPress: () => setAlertConfig(null),
-                            style: 'cancel',
-                        },
-                    ],
-                });
-            }
-            // Handle missing user profile
-            else if (errorMessage.includes('User profile not found')) {
-                setAlertConfig({
-                    visible: true,
-                    title: 'Profile Not Found',
-                    message: 'Your user profile could not be found. Please contact support.',
-                    type: 'error',
-                    actions: [
-                        {
-                            text: 'Contact Support',
-                            onPress: () => {
-                                setAlertConfig(null);
-                                // You can add navigation to support page here
-                            },
-                            style: 'primary',
-                        },
-                        {
-                            text: 'Cancel',
-                            onPress: () => setAlertConfig(null),
-                            style: 'cancel',
-                        },
-                    ],
-                });
-            }
-            // Use CustomAlert for Google Sign-In errors
-            else {
-                setAlertConfig({
-                    visible: true,
-                    title: 'Google Sign-In Failed',
-                    message: 'Unable to sign in with Google. Please try again or use email and password.',
-                    type: 'error',
-                    actions: [
-                        {
-                            text: 'Try Again',
-                            onPress: () => {
-                                setAlertConfig(null);
-                                handleGoogleSignIn();
-                            },
-                            style: 'primary',
-                        },
-                        {
-                            text: 'Cancel',
-                            onPress: () => setAlertConfig(null),
-                            style: 'cancel',
-                        },
-                    ],
-                });
-            }
-        } finally {
+        } catch (error: any) {
+            console.error('❌ Google Sign-In error:', error);
             setLoading(false);
+
+            // Handle specific error cases
+            if (error.message === 'Auth state timeout') {
+                setError('Sign-in is taking longer than expected. Please try again.');
+                setErrorGuidance('This might be due to a slow network connection.');
+            } else if (error.message === 'No user found') {
+                setError('Google Sign-In completed but authentication failed. Please try again.');
+                setErrorGuidance('This might be due to a network issue or Firebase configuration problem.');
+            } else if (error.message === 'Authentication lost during token refresh') {
+                setError('Your authentication session was lost. Please try signing in again.');
+                setErrorGuidance('This might be due to a network interruption during sign-in.');
+            } else {
+                setError('Google Sign-In failed. Please try again.');
+                setErrorGuidance('Check your internet connection and try again.');
+            }
         }
-    };
+    }, []);
 
     const handleErrorAction = (action: string) => {
         switch (action) {
@@ -435,7 +359,7 @@ export default function Login() {
         }
     };
 
-    const handleSuccessfulLogin = async () => {
+    const handleSuccessfulLogin = useCallback(async () => {
         try {
             const user = auth().currentUser;
             if (!user) return;
@@ -457,7 +381,8 @@ export default function Login() {
                         role: 'superadmin',
                         name: 'Super Admin',
                         createdAt: new Date(),
-                        isSuperAdmin: true
+                        isSuperAdmin: true,
+                        lastLogin: new Date(),
                     });
                     router.replace('/super-admin-dashboard');
                     return;
@@ -485,9 +410,10 @@ export default function Login() {
             // Route based on role for normal users
             router.replace('/(tabs)');
         } catch (error) {
+            console.error('Error in successful login:', error);
             router.replace('/role');
         }
-    };
+    }, []);
 
     return (
         <KeyboardAvoidingView
@@ -931,12 +857,12 @@ const styles = StyleSheet.create({
         paddingVertical: 16, // Increased padding
         borderWidth: 2,
         borderColor: 'rgba(255, 255, 255, 0.15)',
-        
+
     },
     inputContainerFocused: {
         borderColor: '#ffffff',
         backgroundColor: 'rgba(255, 255, 255, 0.18)', // More opaque when focused
-        
+
     },
     superAdminInput: {
         borderColor: '#ffffff',
@@ -1015,7 +941,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 28, // Increased padding
         borderRadius: 16, // More rounded
         marginBottom: 20, // Increased spacing
-        
+
     },
     primaryButtonDisabled: {
         backgroundColor: 'rgba(255, 255, 255, 0.4)', // Less opaque when disabled
@@ -1041,7 +967,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 28, // Increased padding
         borderRadius: 16, // More rounded
         marginBottom: 20, // Increased spacing
-        
+
     },
     superAdminButtonText: {
         color: '#4f46e5',
@@ -1111,7 +1037,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.25)',
         marginBottom: 16, // Increased spacing
-        
+
     },
     googleIcon: {
         width: 20,

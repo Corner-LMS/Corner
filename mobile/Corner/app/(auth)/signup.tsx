@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView, Alert, StatusBar } from 'react-native';
 import { signUp, googleSignIn } from '../../services/authService';
 import { router } from 'expo-router';
@@ -7,6 +7,7 @@ import firestore from '@react-native-firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { getErrorGuidance } from '../../utils/errorHelpers';
 import CustomAlert from '../../components/CustomAlert';
+import { completeAuthFlow } from '../../utils/authUtils';
 
 export default function Signup() {
     const [email, setEmail] = useState('');
@@ -19,8 +20,25 @@ export default function Signup() {
     const [passwordFocused, setPasswordFocused] = useState(false);
     const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
     const [alertConfig, setAlertConfig] = useState<any>(null);
+    const [isFormValid, setIsFormValid] = useState(false);
 
-    const isFormValid = email.length > 0 && password.length >= 6 && password === confirmPassword;
+    // Optimize form validation with useCallback
+    const validateForm = useCallback(() => {
+        const valid = email.length > 0 &&
+            password.length >= 6 &&
+            password === confirmPassword &&
+            email.includes('@');
+        setIsFormValid(valid);
+        return valid;
+    }, [email, password, confirmPassword]);
+
+    // Debounced form validation
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            validateForm();
+        }, 100);
+        return () => clearTimeout(timeoutId);
+    }, [email, password, confirmPassword, validateForm]);
 
     const renderLogoSection = () => {
         return (
@@ -41,11 +59,18 @@ export default function Signup() {
         );
     };
 
-    const handleSignup = async () => {
+    const handleSignup = useCallback(async () => {
+        if (!isFormValid) return;
+
         try {
             setLoading(true);
             setError(null);
             setErrorGuidance(null);
+
+            // Pre-validate form
+            if (!email || !password || !confirmPassword) {
+                throw new Error('Please fill in all fields');
+            }
 
             // Validate passwords match
             if (password !== confirmPassword) {
@@ -56,6 +81,12 @@ export default function Signup() {
             // Validate password length
             if (password.length < 6) {
                 setError('Password must be at least 6 characters long');
+                return;
+            }
+
+            // Validate email format
+            if (!email.includes('@')) {
+                setError('Please enter a valid email address');
                 return;
             }
 
@@ -100,7 +131,7 @@ export default function Signup() {
                 setAlertConfig({
                     visible: true,
                     title: 'Account Already Exists',
-                    message: 'An account with this email already exists. Please try signing in instead.',
+                    message: 'An account with this email already exists. Would you like to sign in instead?',
                     type: 'warning',
                     actions: [
                         {
@@ -108,6 +139,82 @@ export default function Signup() {
                             onPress: () => {
                                 setAlertConfig(null);
                                 router.replace('/(auth)/login');
+                            },
+                            style: 'primary',
+                        },
+                        {
+                            text: 'Try Different Email',
+                            onPress: () => {
+                                setAlertConfig(null);
+                                setEmail('');
+                                setPassword('');
+                                setConfirmPassword('');
+                            },
+                            style: 'secondary',
+                        },
+                        {
+                            text: 'Cancel',
+                            onPress: () => setAlertConfig(null),
+                            style: 'cancel',
+                        },
+                    ],
+                });
+            } else if (errorMessage.includes('not properly configured') || errorMessage.includes('assign your role')) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Complete Your Account Setup',
+                    message: 'Your account needs to be configured with a role and school. We\'ll redirect you to the setup screen to complete this process.',
+                    type: 'info',
+                    actions: [
+                        {
+                            text: 'Complete Setup',
+                            onPress: () => {
+                                setAlertConfig(null);
+                                router.replace('/role');
+                            },
+                            style: 'primary',
+                        },
+                        {
+                            text: 'Cancel',
+                            onPress: () => setAlertConfig(null),
+                            style: 'cancel',
+                        },
+                    ],
+                });
+            } else if (errorMessage.includes('not associated with any school')) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Complete Your Account Setup',
+                    message: 'Your account needs to be associated with a school. We\'ll redirect you to the setup screen to complete this process.',
+                    type: 'info',
+                    actions: [
+                        {
+                            text: 'Complete Setup',
+                            onPress: () => {
+                                setAlertConfig(null);
+                                router.replace('/role');
+                            },
+                            style: 'primary',
+                        },
+                        {
+                            text: 'Cancel',
+                            onPress: () => setAlertConfig(null),
+                            style: 'cancel',
+                        },
+                    ],
+                });
+            } else if (errorMessage.includes('User profile not found')) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Complete Your Account Setup',
+                    message: 'Your user profile needs to be set up. We\'ll redirect you to the setup screen to complete this process.',
+                    type: 'info',
+                    actions: [
+                        {
+                            text: 'Complete Setup',
+                            onPress: () => {
+                                setAlertConfig(null);
+                                router.replace('/role');
                             },
                             style: 'primary',
                         },
@@ -127,67 +234,57 @@ export default function Signup() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [email, password, confirmPassword, isFormValid]);
 
-    const handleGoogleSignIn = async () => {
+    const handleGoogleSignIn = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             setErrorGuidance(null);
-            await googleSignIn();
 
-            // Wait a bit for auth state to settle, then check and navigate
-            setTimeout(async () => {
-                const user = auth().currentUser;
-                if (user) {
-                    const userDoc = await firestore().collection('users').doc(user.uid).get();
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        if (userData?.role && userData?.schoolId) {
-                            // User has role and school, redirect to main app
-                            router.replace('/(tabs)');
-                        } else {
-                            // User needs to set role and school
-                            router.replace('/role');
-                        }
-                    } else {
-                        // User document doesn't exist (shouldn't happen with Google Sign-In)
-                        router.replace('/role');
-                    }
-                } else {
-                    // No user (shouldn't happen after successful Google Sign-In)
-                    router.replace('/role');
-                }
-            }, 1000); // 1 second delay to let auth state settle
-        } catch (err: any) {
-            const errorMessage = err instanceof Error ? err.message : 'Google Sign-In failed';
+            console.log('🔐 Starting Google Sign-In from signup screen');
+            const result = await googleSignIn();
 
-            // Use CustomAlert for Google Sign-In errors
-            setAlertConfig({
-                visible: true,
-                title: 'Google Sign-In Failed',
-                message: 'Unable to sign in with Google. Please try again or create an account with email and password.',
-                type: 'error',
-                actions: [
-                    {
-                        text: 'Try Again',
-                        onPress: () => {
-                            setAlertConfig(null);
-                            handleGoogleSignIn();
-                        },
-                        style: 'primary',
-                    },
-                    {
-                        text: 'Cancel',
-                        onPress: () => setAlertConfig(null),
-                        style: 'cancel',
-                    },
-                ],
-            });
-        } finally {
+            // Check if user needs setup
+            if (result.needsSetup) {
+                console.log('📝 User needs setup, redirecting to role selection');
+                router.replace('/role');
+                return;
+            }
+
+            // Use the new auth flow utility for users with complete profiles
+            const authResult = await completeAuthFlow();
+            console.log('✅ Auth flow completed successfully');
+
+            if (authResult.hasCompleteProfile) {
+                // User has role and school, redirect to main app
+                console.log('✅ User has complete profile, redirecting to main app');
+                router.replace('/(tabs)');
+            } else {
+                // User needs to set role and school
+                console.log('📝 User needs role selection, redirecting to role screen');
+                router.replace('/role');
+            }
+        } catch (error: any) {
+            console.error('❌ Google Sign-In error:', error);
             setLoading(false);
+
+            // Handle specific error cases
+            if (error.message === 'Auth state timeout') {
+                setError('Sign-in is taking longer than expected. Please try again.');
+                setErrorGuidance('This might be due to a slow network connection.');
+            } else if (error.message === 'No user found') {
+                setError('Google Sign-In completed but authentication failed. Please try again.');
+                setErrorGuidance('This might be due to a network issue or Firebase configuration problem.');
+            } else if (error.message === 'Authentication lost during token refresh') {
+                setError('Your authentication session was lost. Please try signing in again.');
+                setErrorGuidance('This might be due to a network interruption during sign-in.');
+            } else {
+                setError('Google Sign-In failed. Please try again.');
+                setErrorGuidance('Check your internet connection and try again.');
+            }
         }
-    };
+    }, []);
 
     const handleErrorAction = (action: string) => {
         switch (action) {
@@ -506,7 +603,7 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
     inputContainer: {
-        
+
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.1)', // Semi-transparent white
@@ -515,19 +612,19 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderWidth: 2,
         borderColor: 'rgba(255, 255, 255, 0.2)',
-        
+
     },
     inputContainerFocused: {
         backgroundColor: 'rgba(255, 255, 255, 0.18)',
         borderColor: 'white',
-        
+
     },
     inputIcon: {
         marginRight: 16,
         opacity: 0.9,
     },
     input: {
-       
+
         flex: 1,
         fontSize: 16,
         color: '#ffffff', // White text

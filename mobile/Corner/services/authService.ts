@@ -153,15 +153,50 @@ export async function sendVerificationEmail() {
 
 export async function saveUserField(field: string, value: string) {
     const user = auth().currentUser;
-    if (!user) throw new Error('No user logged in');
-    return firestore().collection('users').doc(user.uid).set(
-        {
-            [field]: value,
-            email: user.email,
-            emailVerified: user.emailVerified,
-        },
-        { merge: true }
-    );
+    if (!user) {
+        console.error('❌ saveUserField: No user logged in');
+        throw new Error('No user logged in');
+    }
+
+    try {
+        // Force token refresh to ensure we have a valid token
+        await user.getIdToken(true);
+
+        // Verify user is still authenticated
+        const currentUser = auth().currentUser;
+        if (!currentUser) {
+            console.error('❌ saveUserField: User lost during token refresh');
+            throw new Error('No user logged in');
+        }
+
+        
+
+        const result = await firestore().collection('users').doc(currentUser.uid).set(
+            {
+                [field]: value,
+                email: currentUser.email,
+                emailVerified: currentUser.emailVerified,
+                lastUpdated: new Date().toISOString(),
+            },
+            { merge: true }
+        );
+
+       
+        return result;
+    } catch (error: any) {
+        console.error(`❌ Error saving ${field}:`, error);
+
+        // Check if it's an authentication error
+        if (error.code === 'auth/user-token-expired' ||
+            error.code === 'auth/user-not-found' ||
+            error.message?.includes('permission-denied') ||
+            error.message?.includes('unauthenticated')) {
+            throw new Error('No user logged in');
+        }
+
+        // Re-throw other errors
+        throw error;
+    }
 }
 
 export const saveUserRole = (role: string) => saveUserField('role', role);
@@ -192,25 +227,25 @@ export const googleSignIn = async () => {
             // Check if user has role and school assigned
             const userDoc = await firestore().collection('users').doc(user.uid).get();
             if (!userDoc.exists()) {
-                crashlyticsUtils.log(`❌ Google Sign-In failed - user document not found: ${user.email}`);
-                await auth().signOut(); // Sign out the user immediately
-                throw new Error('User profile not found. Please contact support.');
+                crashlyticsUtils.log(`📝 User document not found, redirecting to role selection: ${user.email}`);
+                // Don't throw error, let the calling function handle navigation
+                return { user: result.user, needsSetup: true };
             }
 
             const userData = userDoc.data();
 
             // Check if user has a role assigned
             if (!userData?.role) {
-                crashlyticsUtils.log(`❌ Google Sign-In failed - no role assigned: ${user.email}`);
-                await auth().signOut(); // Sign out the user immediately
-                throw new Error('Your account is not properly configured. Please contact support to assign your role.');
+                crashlyticsUtils.log(`📝 User needs role assignment, redirecting to role selection: ${user.email}`);
+                // Don't throw error, let the calling function handle navigation
+                return { user: result.user, needsSetup: true };
             }
 
             // Check if user has a school assigned
             if (!userData?.schoolId) {
-                crashlyticsUtils.log(`❌ Google Sign-In failed - no school assigned: ${user.email}`);
-                await auth().signOut(); // Sign out the user immediately
-                throw new Error('Your account is not associated with any school. Please contact support.');
+                crashlyticsUtils.log(`📝 User needs school assignment, redirecting to role selection: ${user.email}`);
+                // Don't throw error, let the calling function handle navigation
+                return { user: result.user, needsSetup: true };
             }
 
             // All checks passed - update last login time
@@ -220,7 +255,7 @@ export const googleSignIn = async () => {
             });
 
             crashlyticsUtils.log('✅ Google Sign-In successful from authService');
-            return result.user;
+            return { user: result.user, needsSetup: false };
         } else {
             crashlyticsUtils.log(`❌ Google Sign-In failed: ${result.error}`);
             throw new Error(result.error || 'Google Sign-In failed');
@@ -230,9 +265,6 @@ export const googleSignIn = async () => {
 
         // If it's our custom error messages, preserve them
         if (error.message === 'Please verify your email before signing in.' ||
-            error.message === 'User profile not found. Please contact support.' ||
-            error.message === 'Your account is not properly configured. Please contact support to assign your role.' ||
-            error.message === 'Your account is not associated with any school. Please contact support.' ||
             error.message === 'Google Sign-In failed - no user returned') {
             throw error;
         }

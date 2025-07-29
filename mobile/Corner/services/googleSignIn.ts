@@ -64,30 +64,39 @@ export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
 
         crashlyticsUtils.log(`✅ Google Sign-In successful for: ${user.email}`);
 
+        // Force token refresh to ensure we have a valid token
+        await user.getIdToken(true);
+
+        // Verify user is still authenticated after token refresh
+        const currentUser = auth().currentUser;
+        if (!currentUser) {
+            throw new Error('Authentication failed after Google Sign-In');
+        }
+
         // Check if user exists in Firestore
-        const userDoc = await firestore().collection('users').doc(user.uid).get();
+        const userDoc = await firestore().collection('users').doc(currentUser.uid).get();
 
         if (!userDoc.exists()) {
             // Create new user document
-            await firestore().collection('users').doc(user.uid).set({
-                email: user.email,
-                name: user.displayName,
-                emailVerified: user.emailVerified,
+            await firestore().collection('users').doc(currentUser.uid).set({
+                email: currentUser.email,
+                name: currentUser.displayName,
+                emailVerified: currentUser.emailVerified,
                 createdAt: new Date().toISOString(),
                 lastLoginAt: new Date().toISOString(),
                 authProvider: 'google',
-                photoURL: user.photoURL,
+                photoURL: currentUser.photoURL,
                 // Don't set role or schoolId - user needs to choose these
             }, { merge: true });
 
             crashlyticsUtils.log('📝 Created new user document for Google Sign-In - needs role selection');
         } else {
             // Update existing user document
-            await firestore().collection('users').doc(user.uid).update({
+            await firestore().collection('users').doc(currentUser.uid).update({
                 lastLoginAt: new Date().toISOString(),
                 authProvider: 'google',
-                emailVerified: user.emailVerified,
-                photoURL: user.photoURL,
+                emailVerified: currentUser.emailVerified,
+                photoURL: currentUser.photoURL,
             });
 
             crashlyticsUtils.log('📝 Updated existing user document for Google Sign-In');
@@ -95,30 +104,33 @@ export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
 
         return {
             success: true,
-            user: userCredential
+            user: userCredential.user
         };
 
     } catch (error: any) {
-        let errorMessage = 'Google Sign-In failed';
+        crashlyticsUtils.recordError(error, 'Google Sign-In error');
 
         if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-            errorMessage = 'Sign-in was cancelled';
-            crashlyticsUtils.log('❌ Google Sign-In cancelled by user');
+            return {
+                success: false,
+                error: 'Sign-in was cancelled by the user.'
+            };
         } else if (error.code === statusCodes.IN_PROGRESS) {
-            errorMessage = 'Sign-in is already in progress';
-            crashlyticsUtils.log('⚠️ Google Sign-In already in progress');
+            return {
+                success: false,
+                error: 'Sign-in is already in progress.'
+            };
         } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-            errorMessage = 'Google Play Services not available';
-            crashlyticsUtils.log('❌ Google Play Services not available');
+            return {
+                success: false,
+                error: 'Google Play Services is not available on this device.'
+            };
         } else {
-            errorMessage = 'Google Sign-In failed. Please try again.';
-            crashlyticsUtils.recordError(error, 'Google Sign-In failed');
+            return {
+                success: false,
+                error: error.message || 'An unexpected error occurred during Google Sign-In.'
+            };
         }
-
-        return {
-            success: false,
-            error: errorMessage
-        };
     }
 };
 
@@ -236,7 +248,7 @@ export const signInWithSpecificAccount = async (accountName?: string): Promise<G
 
         return {
             success: true,
-            user: userCredential
+            user: userCredential.user
         };
 
     } catch (error: any) {

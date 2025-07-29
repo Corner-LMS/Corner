@@ -5,6 +5,9 @@ import { saveUserRole, saveUserName, saveUserSchool } from '../services/authServ
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SCHOOLS, School } from '../constants/Schools';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { waitForAuthState, ensureValidToken, ensureUserDocument } from '../utils/authUtils';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -13,6 +16,42 @@ export default function RoleSelectionScreen() {
     const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState<'school' | 'name' | 'role'>('school');
+    const [authReady, setAuthReady] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+
+    // Wait for auth state to be ready
+    useEffect(() => {
+        const initializeAuth = async () => {
+            try {
+                console.log('🔐 Initializing auth state for role selection');
+
+                // Wait for auth state
+                const user = await waitForAuthState();
+               
+
+                // Ensure valid token
+                const validatedUser = await ensureValidToken(user);
+                
+
+                // Ensure user document exists
+                await ensureUserDocument(validatedUser);
+               
+
+                setCurrentUser(validatedUser);
+                setAuthReady(true);
+
+            } catch (error: any) {
+                console.error('❌ Auth initialization failed:', error);
+                setAuthReady(false);
+                setCurrentUser(null);
+
+                // Redirect to login if auth fails
+                router.replace('/(auth)/login');
+            }
+        };
+
+        initializeAuth();
+    }, []);
 
     const selectSchool = (school: School) => {
         setSelectedSchool(school);
@@ -24,6 +63,7 @@ export default function RoleSelectionScreen() {
             Alert.alert('Name Required', 'Please enter your name before proceeding.');
             return;
         }
+
         setStep('role');
     };
 
@@ -38,20 +78,133 @@ export default function RoleSelectionScreen() {
             return;
         }
 
+        // Wait for auth to be ready
+        if (!authReady || !currentUser) {
+            Alert.alert(
+                'Authentication Required',
+                'Please wait while we verify your authentication. If this persists, please try logging in again.',
+                [
+                    {
+                        text: 'Try Again',
+                        onPress: () => setLoading(false),
+                        style: 'cancel',
+                    },
+                    {
+                        text: 'Go to Login',
+                        onPress: () => router.replace('/(auth)/login'),
+                        style: 'default',
+                    }
+                ]
+            );
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
-            await saveUserSchool(selectedSchool.id);
-            await saveUserName(name.trim());
-            await saveUserRole(role);
-
-            if (role === 'teacher' || role === 'admin') {
-                router.replace('/(tabs)');
-            } else {
-                router.replace('/(tabs)');
+            // Double-check authentication state
+            const user = auth().currentUser;
+            if (!user) {
+                throw new Error('No user logged in');
             }
-        } catch (err) {
-            console.error(err);
-            Alert.alert('Error', 'Failed to set up your account. Please try again.');
+
+            // Ensure user document exists
+            const userDocRef = firestore().collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
+
+            if (!userDoc.exists()) {
+                // Create user document if it doesn't exist
+                await userDocRef.set({
+                    email: user.email,
+                    emailVerified: user.emailVerified,
+                    createdAt: new Date(),
+                    authProvider: 'google',
+                    photoURL: user.photoURL,
+                }, { merge: true });
+            }
+
+            // Save user data with better error handling and retry logic
+            const saveWithRetry = async (saveFunction: () => Promise<any>, fieldName: string) => {
+                let retries = 3;
+                while (retries > 0) {
+                    try {
+                        await saveFunction();
+                        return;
+                    } catch (error: any) {
+                        retries--;
+                        console.error(`Error saving ${fieldName}, retries left: ${retries}`, error);
+
+                        if (error.message === 'No user logged in') {
+                            // Check if user is still authenticated
+                            const currentUser = auth().currentUser;
+                            if (!currentUser) {
+                                throw new Error('Authentication lost during save');
+                            }
+                        }
+
+                        if (retries === 0) {
+                            throw error;
+                        }
+
+                        // Wait a bit before retrying
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+            };
+
+            // Save school
+            await saveWithRetry(
+                () => saveUserSchool(selectedSchool.id),
+                'school'
+            );
+
+            // Save name
+            await saveWithRetry(
+                () => saveUserName(name.trim()),
+                'name'
+            );
+
+            // Save role
+            await saveWithRetry(
+                () => saveUserRole(role),
+                'role'
+            );
+
+           
+
+            // Navigate to main app
+            router.replace('/(tabs)');
+
+        } catch (err: any) {
+            console.error('Error in selectRole:', err);
+
+            if (err.message === 'No user logged in' || err.message === 'Authentication lost during save') {
+                Alert.alert(
+                    'Authentication Error',
+                    'Your session has expired. Please log in again to continue.',
+                    [
+                        {
+                            text: 'Go to Login',
+                            onPress: () => router.replace('/(auth)/login'),
+                        }
+                    ]
+                );
+            } else {
+                Alert.alert(
+                    'Setup Error',
+                    'Failed to set up your account. Please try again or contact support if the issue persists.',
+                    [
+                        {
+                            text: 'Try Again',
+                            onPress: () => setLoading(false),
+                        },
+                        {
+                            text: 'Go to Login',
+                            onPress: () => router.replace('/(auth)/login'),
+                        }
+                    ]
+                );
+            }
         } finally {
             setLoading(false);
         }
