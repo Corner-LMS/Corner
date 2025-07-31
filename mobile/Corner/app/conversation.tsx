@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Modal, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +34,7 @@ export default function ConversationScreen() {
     const [sending, setSending] = useState(false);
     const [userData, setUserData] = useState<any>(null);
     const scrollViewRef = useRef<ScrollView>(null);
+    const textInputRef = useRef<TextInput>(null);
 
     // Edit and delete functionality
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -42,6 +43,28 @@ export default function ConversationScreen() {
     const [showActionSheet, setShowActionSheet] = useState(false);
     const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
     const [alertConfig, setAlertConfig] = useState<any>(null);
+
+    // Handle keyboard show/hide
+    useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+            // Scroll to bottom when keyboard appears
+            setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+        });
+
+        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+            // Scroll to bottom when keyboard hides
+            setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+        });
+
+        return () => {
+            keyboardDidShowListener?.remove();
+            keyboardDidHideListener?.remove();
+        };
+    }, []);
 
     useEffect(() => {
         loadUserAndMessages();
@@ -335,12 +358,15 @@ export default function ConversationScreen() {
             <KeyboardAvoidingView
                 style={styles.keyboardAvoidingView}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <ScrollView
                     ref={scrollViewRef}
                     style={styles.messagesContainer}
                     contentContainerStyle={styles.messagesContent}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
                 >
                     {messages.map((message) => {
                         const isOwnMessage = message.senderId === auth().currentUser?.uid;
@@ -391,6 +417,7 @@ export default function ConversationScreen() {
 
                 <View style={styles.inputContainer}>
                     <TextInput
+                        ref={textInputRef}
                         style={styles.textInput}
                         value={newMessage}
                         onChangeText={setNewMessage}
@@ -398,6 +425,12 @@ export default function ConversationScreen() {
                         placeholderTextColor="#94a3b8"
                         multiline
                         maxLength={1000}
+                        onFocus={() => {
+                            setTimeout(() => {
+                                scrollViewRef.current?.scrollToEnd({ animated: true });
+                            }, 100);
+                        }}
+                        blurOnSubmit={false}
                     />
                     <TouchableOpacity
                         style={[

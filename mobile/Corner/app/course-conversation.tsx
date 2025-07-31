@@ -37,6 +37,7 @@ export default function CourseConversationScreen() {
     const [sending, setSending] = useState(false);
     const [userData, setUserData] = useState<any>(null);
     const scrollViewRef = useRef<ScrollView>(null);
+    const textInputRef = useRef<TextInput>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -68,6 +69,10 @@ export default function CourseConversationScreen() {
             'keyboardDidHide',
             () => {
                 setKeyboardHeight(0);
+                // Scroll to bottom when keyboard hides
+                setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 100);
             }
         );
 
@@ -378,7 +383,7 @@ export default function CourseConversationScreen() {
             <KeyboardAvoidingView
                 style={styles.keyboardAvoidingView}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <ScrollView
                     ref={scrollViewRef}
@@ -386,6 +391,7 @@ export default function CourseConversationScreen() {
                     contentContainerStyle={styles.messagesContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
+                    automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
                     onScrollBeginDrag={() => Keyboard.dismiss()}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
@@ -440,6 +446,7 @@ export default function CourseConversationScreen() {
 
                 <View style={styles.inputContainer}>
                     <TextInput
+                        ref={textInputRef}
                         style={styles.textInput}
                         value={newMessage}
                         onChangeText={setNewMessage}

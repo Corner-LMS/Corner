@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { OPENAI_CONFIG, validateOpenAIConfig } from '../config/openai.config';
+import Constants from 'expo-constants';
 
 interface CourseContext {
     discussions: any[];
@@ -20,6 +20,11 @@ interface ResourceRecommendation {
 
 type UserRole = 'teacher' | 'student';
 
+interface AIResponse {
+    content: string;
+    followUpQuestions: string[];
+}
+
 class OpenAIService {
     private openai: OpenAI | null = null;
     private isConfigured: boolean = false;
@@ -30,12 +35,16 @@ class OpenAIService {
 
     private initializeOpenAI() {
         try {
-            this.isConfigured = validateOpenAIConfig();
-
-            if (this.isConfigured) {
+            const apiKey = Constants.expoConfig?.extra?.openaiKey;
+            console.log('apiKey', apiKey);
+            if (apiKey) {
                 this.openai = new OpenAI({
-                    apiKey: OPENAI_CONFIG.apiKey
+                    apiKey: apiKey
                 });
+                this.isConfigured = true;
+            } else {
+                console.warn('OpenAI API key not found in environment variables');
+                this.isConfigured = false;
             }
         } catch (error) {
             console.error('Failed to initialize OpenAI:', error);
@@ -48,7 +57,7 @@ class OpenAIService {
         courseContext: CourseContext,
         resources: ResourceRecommendation[],
         userRole: UserRole = 'student'
-    ): Promise<{ content: string; followUpQuestions: string[] }> {
+    ): Promise<AIResponse> {
 
         // Check if OpenAI is configured
         if (!this.isConfigured || !this.openai) {
@@ -60,7 +69,7 @@ class OpenAIService {
             const userPrompt = this.buildUserPrompt(userMessage, resources, userRole);
 
             const completion = await this.openai.chat.completions.create({
-                model: OPENAI_CONFIG.model,
+                model: 'gpt-3.5-turbo',
                 messages: [
                     {
                         role: "system",
@@ -71,8 +80,8 @@ class OpenAIService {
                         content: userPrompt
                     }
                 ],
-                max_tokens: OPENAI_CONFIG.maxTokens,
-                temperature: OPENAI_CONFIG.temperature,
+                max_tokens: 500,
+                temperature: 0.7,
             });
 
             const response = completion.choices[0]?.message?.content ||
@@ -97,7 +106,7 @@ class OpenAIService {
         courseContext: CourseContext,
         resources: ResourceRecommendation[],
         userRole: UserRole
-    ): { content: string; followUpQuestions: string[] } {
+    ): AIResponse {
 
         const queryLower = userMessage.toLowerCase();
         let content = "";
@@ -186,7 +195,7 @@ class OpenAIService {
 
         // Add note about AI configuration if not set up
         if (!this.isConfigured) {
-            content += "\n\n(Note: For more detailed AI responses, please configure the OpenAI API key.)";
+            content += "\n\n(Note: For more detailed AI responses, please set the EXPO_PUBLIC_OPENAI_API_KEY environment variable.)";
         }
 
         return { content, followUpQuestions };
@@ -306,7 +315,7 @@ ${resources.map((r, i) => `${i + 1}. [${r.type.toUpperCase()}] "${r.title}" - ${
                 : "You are helping generate follow-up questions for a student. Focus on learning, understanding concepts, and academic growth.";
 
             const completion = await this.openai.chat.completions.create({
-                model: OPENAI_CONFIG.model,
+                model: 'gpt-3.5-turbo',
                 messages: [
                     {
                         role: "system",

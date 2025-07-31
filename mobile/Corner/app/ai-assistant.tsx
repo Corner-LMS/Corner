@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +43,7 @@ export default function AIAssistantScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [courseContext, setCourseContext] = useState<CourseContext | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
+    const textInputRef = useRef<TextInput>(null);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
@@ -70,6 +71,28 @@ export default function AIAssistantScreen() {
             scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
     };
+
+    // Handle keyboard show/hide
+    useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+            // Scroll to bottom when keyboard appears
+            setTimeout(() => {
+                scrollToBottom();
+            }, 100);
+        });
+
+        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+            // Scroll to bottom when keyboard hides
+            setTimeout(() => {
+                scrollToBottom();
+            }, 100);
+        });
+
+        return () => {
+            keyboardDidShowListener?.remove();
+            keyboardDidHideListener?.remove();
+        };
+    }, []);
 
     useEffect(() => {
         if (!courseId) return;
@@ -502,45 +525,55 @@ export default function AIAssistantScreen() {
                 </View>
             </LinearGradient>
 
-            <ScrollView
-                ref={scrollViewRef}
-                style={styles.messagesContainer}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-            >
-                {messages.map(renderMessage)}
-                {isLoading && (
-                    <View style={styles.loadingContainer}>
-                        <View style={styles.loadingBubble}>
-                            <Text style={styles.loadingText}>AI is thinking...</Text>
-                        </View>
-                    </View>
-                )}
-            </ScrollView>
-
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.inputContainer}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                style={styles.keyboardAvoidingContainer}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
-                <View style={styles.inputRow}>
-                    <TextInput
-                        style={styles.textInput}
-                        placeholder="Ask me anything about this course..."
-                        value={inputText}
-                        onChangeText={setInputText}
-                        multiline
-                        maxLength={500}
-                        placeholderTextColor="#666"
-                    />
-                    <TouchableOpacity
-                        style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
-                        onPress={handleSendMessage}
-                        disabled={!inputText.trim() || isLoading}
-                    >
-                        <Ionicons name="send" size={20} color="#fff" />
-                    </TouchableOpacity>
+                <ScrollView
+                    ref={scrollViewRef}
+                    style={styles.messagesContainer}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+                    contentContainerStyle={styles.messagesContentContainer}
+                >
+                    {messages.map(renderMessage)}
+                    {isLoading && (
+                        <View style={styles.loadingContainer}>
+                            <View style={styles.loadingBubble}>
+                                <Text style={styles.loadingText}>AI is thinking...</Text>
+                            </View>
+                        </View>
+                    )}
+                </ScrollView>
+
+                <View style={styles.inputContainer}>
+                    <View style={styles.inputRow}>
+                        <TextInput
+                            ref={textInputRef}
+                            style={styles.textInput}
+                            placeholder="Ask me anything about this course..."
+                            value={inputText}
+                            onChangeText={setInputText}
+                            multiline
+                            maxLength={500}
+                            placeholderTextColor="#666"
+                            onFocus={() => {
+                                setTimeout(() => {
+                                    scrollToBottom();
+                                }, 100);
+                            }}
+                            blurOnSubmit={false}
+                        />
+                        <TouchableOpacity
+                            style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+                            onPress={handleSendMessage}
+                            disabled={!inputText.trim() || isLoading}
+                        >
+                            <Ionicons name="send" size={20} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -551,6 +584,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f1f5f9',
+    },
+    keyboardAvoidingContainer: {
+        flex: 1,
     },
     header: {
         flexDirection: 'row',
@@ -587,6 +623,9 @@ const styles = StyleSheet.create({
     messagesContainer: {
         flex: 1,
         padding: 20,
+    },
+    messagesContentContainer: {
+        paddingBottom: 20,
     },
     messageContainer: {
         marginBottom: 20,

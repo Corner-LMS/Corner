@@ -202,6 +202,14 @@ export default function EmailVerificationScreen() {
                         <Text style={styles.mainDescription}>
                             We've sent a verification link to your email address. Click the link to verify your account and continue.
                         </Text>
+
+                        {/* Spam folder notice */}
+                        <View style={styles.spamNotice}>
+                            <Ionicons name="warning" size={16} color="#f59e0b" />
+                            <Text style={styles.spamNoticeText}>
+                                Can't find the email? Check your spam/junk folder - verification emails are sometimes flagged as spam during testing.
+                            </Text>
+                        </View>
                     </View>
 
                     <View style={styles.actionButtons}>
@@ -372,6 +380,22 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 24,
         fontWeight: '500',
+    },
+    spamNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        marginTop: 24,
+        gap: 8,
+    },
+    spamNoticeText: {
+        fontSize: 14,
+        color: '#f59e0b',
+        fontWeight: '600',
+        lineHeight: 20,
     },
     actionButtons: {
         gap: 16,

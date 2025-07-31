@@ -14,5 +14,9 @@ export default ({ config }) => ({
         ...config.ios,
         googleServicesFile: process.env.GOOGLE_SERVICES_INFO_PLIST ?? './GoogleService-Info.plist',
         icon: './assets/images/icon.png'
+    },
+    extra: {
+        ...config.extra,
+        openaiKey: process.env.OPENAI_API_KEY,
     }
 });
