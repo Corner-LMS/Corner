@@ -73,6 +73,12 @@ export const SCHOOLS: School[] = [
         code: 'UTB'
     },
     {
+        id:'ines',
+        name:'INES',
+        shortName:'INES',
+        code:'INES'
+    },
+    {
         id: 'akilah',
         name: 'Akilah Institute (now part of Davis College)',
         shortName: 'Akilah',
@@ -89,7 +95,8 @@ export const SCHOOLS: School[] = [
         name: 'Kibogora Polytechnic',
         shortName: 'KP',
         code: 'KP'
-    }
+    },
+    
 ];
 
 export const getSchoolById = (id: string): School | undefined => {
