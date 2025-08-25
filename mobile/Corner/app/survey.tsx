@@ -34,6 +34,12 @@ const surveyQuestions: Question[] = [
         type: 'single'
     },
     {
+        id:'adoption',
+        text:'If your school adopts Corner, would you personally use it?',
+        options: ['Definitely', 'Probably', 'Not Sure', 'Probably Not', 'Definitely Not'],
+        type: 'single'
+    },
+    {
         id: 'recommend',
         text: 'How likely are you to recommend Corner to others?',
         options: ['Very Likely', 'Likely', 'Neutral', 'Unlikely', 'Very Unlikely'],

@@ -14,6 +14,7 @@ import ConnectivityIndicator from '../components/ConnectivityIndicator';
 import CustomAlert from '../components/CustomAlert';
 import RichTextEditor from '../components/RichTextEditor';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import analytics from '@react-native-firebase/analytics';
 
 interface Comment {
     id: string;
@@ -539,6 +540,11 @@ export default function DiscussionDetailScreen() {
                     },
                 ],
             });
+
+            await analytics().logEvent('comment_created', {
+                role,
+                courseId,
+            });
         } catch (error) {
             console.error('Error adding comment:', error);
             setAlertConfig({
@@ -803,6 +809,8 @@ export default function DiscussionDetailScreen() {
             console.error('Error refreshing discussion data:', error);
         }
     };
+
+   
 
     return (
         <SafeAreaView style={styles.container}>
@@ -1787,4 +1795,4 @@ const styles = StyleSheet.create({
     keyboardAvoidingView: {
         flex: 1,
     },
-}); 
+});

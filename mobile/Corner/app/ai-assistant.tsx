@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import { openaiService } from '../services/openaiService';
+import analytics from '@react-native-firebase/analytics';
 
 interface Message {
     id: string;
@@ -332,25 +333,27 @@ export default function AIAssistantScreen() {
         if (!inputText.trim() || isLoading) return;
 
         const user = auth().currentUser;
-        if (!user) {
-            Alert.alert('Error', 'You must be logged in to use the AI assistant.');
-            return;
-        }
+        if (!user) return;
 
         const userMessage: Message = {
             id: Date.now().toString(),
             content: inputText.trim(),
             isUser: true,
-            timestamp: new Date()
+            timestamp: new Date(),
         };
 
         // Add user message and scroll to bottom
-        setMessages(prev => [...prev, userMessage]);
+        setMessages((prev) => [...prev, userMessage]);
         setInputText('');
         setIsLoading(true);
         scrollToBottom(); // Scroll after user message
 
         try {
+            await analytics().logEvent('ai_query', {
+                role,
+                courseId,
+            });
+
             // Save user message to Firestore
             await firestore().collection('courses').doc(courseId as string).collection('aiChats').doc(user.uid).collection('messages').add({
                 content: userMessage.content,
@@ -836,4 +839,4 @@ const styles = StyleSheet.create({
         backgroundColor: '#94a3b8',
         shadowOpacity: 0.1,
     },
-}); 
+});
